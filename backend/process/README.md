@@ -6,6 +6,7 @@ This module transforms raw SQLAlchemy rows into validated, normalized Pydantic s
 
 - `schema.py`: core Pydantic schemas used by processing.
 - `bills.py`, `motions.py`: map raw records into clean bill/motion DTOs.
+- `billtext.py`: normalize OCR text and cut a normative-body slice from known headings (used when loading bill documents).
 - `congresistas.py`, `organizations.py`, `bancadas.py`: process reference entities and memberships.
 - `votes.py`: vote-related parsing helpers.
 - `utils.py`: shared processing utilities.
