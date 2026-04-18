@@ -531,3 +531,24 @@ class Ley(Base):
     id = Column(String, primary_key=True, nullable=False)
     title = Column(String, nullable=False)
     bill_id = Column(String, nullable=False)
+
+
+# Add near other bill models; adjust imports (Text, ForeignKey, Index, etc.)
+
+
+class BillText(Base):
+    """
+    Extracted normative body text from a bill PDF (anchor-based slice of OCR text).
+    One row per bill document (archivo_id aligns with bill_documents).
+    """
+
+    __tablename__ = "billtext"
+
+    archivo_id = Column(
+        Integer, ForeignKey("bill_documents.archivo_id"), primary_key=True
+    )
+    bill_id = Column(String, ForeignKey("bills.id"), nullable=False)
+    step_date = Column(DateTime, nullable=False)
+    seguimiento_id = Column(String, nullable=False)
+    text = Column(String, nullable=True)  # NULL if no anchor matched
+    __table_args__ = (Index("ix_billtext_bill_id", "bill_id"),)
