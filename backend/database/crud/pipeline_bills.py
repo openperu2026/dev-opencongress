@@ -158,3 +158,32 @@ def upsert_bill_document(
     existing.vote_doc = vote_doc
     db.flush()
     return existing
+
+
+def upsert_bill_text(
+    db: Session,
+    *,
+    archivo_id: int,
+    bill_id: str,
+    step_date,
+    seguimiento_id: str,
+    text: str | None,
+) -> db_models.BillText:
+    existing = db.get(db_models.BillText, archivo_id)
+    if existing is None:
+        row = db_models.BillText(
+            archivo_id=archivo_id,
+            bill_id=bill_id,
+            step_date=step_date,
+            seguimiento_id=seguimiento_id,
+            text=text,
+        )
+        db.add(row)
+        db.flush()
+        return row
+    existing.bill_id = bill_id
+    existing.step_date = step_date
+    existing.seguimiento_id = seguimiento_id
+    existing.text = text
+    db.flush()
+    return existing
