@@ -12,7 +12,7 @@ OpenPeru helps solve this problem by turning complex and fragmented congressiona
 
 At its current stage, OpenPeru focuses on the legislative core of Congress and integrates data across multiple dimensions:
 
-- **Bills and motions**: proposals, authorship, legislative status, procedural steps, and bill PDF text trimmed to the main body when standard headings are found
+- **Bills and motions**: proposals, authorship, legislative status, and procedural steps
 - **Voting records and attendance**: individual‑level and aggregate vote outcomes
 - **Congress members (congresistas)**: identities, party affiliations, and memberships over time
 - **Political organizations**: parties, parliamentary groups, and committees

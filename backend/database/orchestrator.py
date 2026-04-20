@@ -37,7 +37,6 @@ from backend.process.bills import (
     process_bill_document,
     process_bill_steps,
 )
-from backend.process.billtext import extract_bill_body
 from backend.process.congresistas import process_memberships, process_profile_content
 from backend.process.motions import (
     process_motion,
@@ -639,15 +638,6 @@ class OpenPeruOrchestrator:
                                 doc.url,
                                 doc.text,
                                 doc.vote_doc,
-                            )
-                            body = extract_bill_body(raw_doc.text)
-                            crud_bills.upsert_bill_text(
-                                db,
-                                archivo_id=doc.archivo_id,  # from process_bill_document / raw_doc
-                                bill_id=bill_schema.id,
-                                step_date=raw_doc.step_date,
-                                seguimiento_id=str(raw_doc.seguimiento_id),
-                                text=body,
                             )
                             raw_doc.processed = True
 

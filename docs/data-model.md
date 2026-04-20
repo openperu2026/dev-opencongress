@@ -214,7 +214,7 @@ Represents a bill (proyecto de ley).
 | title | String | | Bill title |
 | summary | String | | Bill summary |
 | observations | String | | Observations |
-| complete_text | String | | Bill-level text from the site (often empty). PDF-derived normative text is stored per document in `billtext`. |
+| complete_text | String | | Full text |
 | status | String | | Current status |
 | proponent | Enum(Proponents) | | Proponent type |
 | author_id | Integer (nullable) | FK → congresistas.id | Primary author |
@@ -265,18 +265,6 @@ Stores extracted text from PDF documents linked to specific bill steps. Unique o
 | url | String | | Document URL |
 | text | String | | Extracted text |
 | vote_doc | Boolean | | Whether this document is a vote record |
-
-### BillText
-
-Normative body text derived from each bill PDF: the pipeline finds a known heading (for example “PROYECTO DE LEY” or “EXPOSICIÓN DE MOTIVOS”) in the normalized text and stores the slice from that point onward. One row per document; `archivo_id` matches `bill_documents`.
-
-| Column | Type | Key | Description |
-|---|---|---|---|
-| archivo_id | Integer | PK, FK → bill_documents.archivo_id | Same file as in `bill_documents` |
-| bill_id | String | FK → bills.id, IX | Bill |
-| step_date | DateTime | | Event date (from raw document) |
-| seguimiento_id | String | | Event identifier |
-| text | String (nullable) | | Normalized slice, or null if no heading matched |
 
 ### Motion
 
