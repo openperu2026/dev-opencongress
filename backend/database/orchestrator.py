@@ -623,6 +623,8 @@ class OpenPeruOrchestrator:
                             step_schema.step_date,
                             step_schema.step_detail,
                             step_schema.step_status,
+                            step_schema.vote_step,
+                            step_schema.vote_id,
                         )
 
                     if include_documents:
@@ -703,6 +705,8 @@ class OpenPeruOrchestrator:
                             step_date=step_schema.step_date,
                             step_detail=step_schema.step_detail,
                             step_status=step_schema.step_status,
+                            vote_step=step_schema.vote_step,
+                            vote_id=step_schema.vote_id,
                         )
 
                     if include_documents:

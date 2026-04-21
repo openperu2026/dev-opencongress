@@ -15,7 +15,6 @@ from backend import (
     VoteResult,
     MajorityType,
     AttendanceStatus,
-    BillStepType,
     RoleTypeBill,
     LegPeriod,
     Legislature,
@@ -25,7 +24,6 @@ from backend import (
     TypeOrganization,
     TypeCommittee,
     MotionType,
-    MotionStepType,
 )
 from sqlalchemy.orm import declarative_base
 
@@ -233,17 +231,21 @@ class BillStep(Base):
     Attributes:
         id (int): A unique identifier for each step record.
         bill_id (str): The identifier of the bill associated with this step.
-        step_type (str): The type of step record (e.g. "Vote", "Assigned to Committee", "Presented", etc.)
+        vote_step (bool): Records if the step is a vote or not.
+        vote_event_id (str): Id of the vote event.
         step_date (datetime): The date and time when the step occured.
+        step_status (str): Status category of the step
         step_detail (str): The details on the step
     """
 
     __tablename__ = "bill_steps"
 
     id = Column(Integer, primary_key=True)
-    bill_id = Column(String, ForeignKey("bills.id"), nullable=True)
-    step_type = Column(Enum(BillStepType, name="type_step"), nullable=False)
+    bill_id = Column(String, ForeignKey("bills.id"), nullable=False)
+    vote_step = Column(Boolean, nullable=False)
+    vote_event_id = Column(String, ForeignKey("vote_events.id"), nullable=True)
     step_date = Column(DateTime, nullable=False)
+    step_type = Column(String, nullable=False)
     step_detail = Column(String, nullable=False)
 
     __table_args__ = (Index("ix_billstep_bill_id", "bill_id"),)
@@ -470,6 +472,7 @@ class MotionStep(Base):
         id (int): A unique identifier for each step record.
         motion_id (str): The identifier of the motion associated with this step.
         vote_step (bool): Records if the step is a vote or not.
+        vote_event_id (str): Id of the vote event.
         step_date (datetime): The date and time when the step occured.
         step_detail (str): The details on the step
         step_url (str): The url associated to the step
@@ -479,7 +482,9 @@ class MotionStep(Base):
 
     id = Column(Integer, primary_key=True)
     motion_id = Column(String, ForeignKey("motions.id"), nullable=True)
-    step_type = Column(Enum(MotionStepType, name="type_step"), nullable=False)
+    vote_step = Column(Boolean, nullable=False)
+    vote_event_id = Column(String, ForeignKey("vote_events.id"), nullable=True)
+    step_type = Column(String, nullable=False)
     step_date = Column(DateTime, nullable=False)
     step_detail = Column(String, nullable=False)
 
