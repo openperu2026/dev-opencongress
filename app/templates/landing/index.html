@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="landing-container">
+    <div class="content-container">
+        <h1 class="landing-title">OPEN CONGRESS</h1>
+        <p class="landing-subtitle">
+            Information portal about the Congress of the Republic of Peru
+        </p>
+
+        <div class="menu">
+            {% for item in menu_items %}
+                <div class="menu-card">
+                    <a href="{{ item.url }}">
+                        {{ item.name }}
+                    </a>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
