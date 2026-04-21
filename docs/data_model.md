@@ -122,7 +122,7 @@ Tracks the procedural history of a bill.
 
 ### BillText
 
-Stores the content body of the bill in different steps of the legislative process.
+Normative body sliced from each bill PDF: from the first matched heading (e.g. “PROYECTO DE LEY”, “EXPOSICIÓN DE MOTIVOS”) to the first trailing marker (e.g. “CONSEJO DIRECTIVO DEL CONGRESO”), if any. Heading/marker search is uppercase-only, so original casing and accents are preserved. Stores the content body of the bill in different steps of the legislative process.
 
 | Column | Type | Key | Description |
 |---|---|---|---|

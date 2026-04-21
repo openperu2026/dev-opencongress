@@ -57,4 +57,4 @@ This allows process stages to focus on records that still need clean-table updat
 
 ## Bill PDF text
 
-When bill processing runs **with documents** (default; use `--no-documents` to skip), each bill PDF’s raw text is loaded into `bill_documents`, and a heading-based slice is written to the `billtext` table. See `docs/data-model.md` (`BillText`).
+When bills are processed **with documents** (default; skip with `--no-documents`), each PDF's raw text is stored in `bill_documents` and a heading-based slice is stored in `billtext`. See `docs/data-model.md` (`BillText`).
