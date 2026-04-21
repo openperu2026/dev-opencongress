@@ -8,6 +8,9 @@ from backend.process.schema import (
     MotionStep,
     MotionDocument,
 )
+from backend.core.parsers import classify_motion_des_estado
+from backend.core.enums import MotionStepType
+from backend.process.utils import create_vote_ids
 
 VOTE_PATTERN = re.compile(
     r"\bSI\s*\+{2,}.*?\bNO\s*-{2,}|\bNO\s*-{2,}.*?\bSI\s*\+{2,}",
@@ -99,35 +102,29 @@ def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep] | None:
 
     if steps:
         final_steps = []
-        vote_step_counter = 0
 
         for step in steps:
             # Extracting information from each step
             id = step.get("seguimientoId")
             date = step.get("fecSeguimiento")
-            status = step.get("desEstadoMocion")
             details = step.get("detalle") or ""
-            files = step.get("adjuntos") or []
-            vote_step = any(
-                vote_word in details.lower() for vote_word in ["votacion", "votación"]
-            )
-            vote_id = None
+            status = classify_motion_des_estado(
+                step.get("desEstadoMocion"), details
+            ).value
+            vote_step = status == MotionStepType.VOTACION_O_DECISION.value
 
+            files = step.get("adjuntos") or []
             file_ids = [
                 file.get("seguimientoAdjuntoId")
                 for file in files
                 if file and file.get("seguimientoAdjuntoId") is not None
             ]
 
-            if vote_step:
-                vote_step_counter += 1
-                vote_id = f"{raw_motion.id}_{vote_step_counter}"
-
             motion_step = MotionStep(
                 id=id,
                 motion_id=raw_motion.id,
                 vote_step=vote_step,
-                vote_id=vote_id,
+                vote_id=None,
                 step_date=date,
                 step_status=status,
                 step_detail=details,
@@ -136,7 +133,7 @@ def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep] | None:
 
             final_steps.append(motion_step)
 
-        return final_steps
+        return create_vote_ids(final_steps)
 
     else:
         return None

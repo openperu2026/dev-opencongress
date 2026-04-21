@@ -3,10 +3,12 @@ import json
 import polars as pl
 from datetime import datetime
 from sqlalchemy.orm import Session
+from operator import attrgetter
 
 from backend import PARTY_ALIASES, LegislativeYear
 from backend.config import directories
 from backend.database.raw_models import RawBill, RawMotion
+from backend.process.schema import BillStep, MotionStep
 
 
 def extract_text(text: str, initial: str = None, final: str = None) -> str:
@@ -78,3 +80,23 @@ def get_current_leg_year(timestamp: str) -> LegislativeYear:
     else:
         # After 28th July
         return LegislativeYear(str(year))
+
+
+def create_vote_ids(
+    step_list: list[BillStep | MotionStep],
+) -> list[BillStep | MotionStep]:
+    sorted_list = sorted(step_list, key=attrgetter("step_date"))
+    final_list = []
+    vote_step_counter = 0
+    for step in sorted_list:
+        if step.vote_step:
+            vote_step_counter += 1
+            if isinstance(step, BillStep):
+                vote_id = f"{step.bill_id}_{vote_step_counter}"
+            elif isinstance(step, MotionStep):
+                vote_id = f"{step.motion_id}_{vote_step_counter}"
+            step.vote_id = vote_id
+
+        final_list.append(step)
+
+    return final_list
