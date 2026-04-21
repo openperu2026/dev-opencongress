@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 import backend.process.organizations as mod
-from backend import find_leg_period
+from backend import RoleOrganization, find_leg_period
 from datetime import datetime
 
 
@@ -127,11 +127,11 @@ def test_process_org_membership_creates_memberships_with_year_window(
     assert len(out) == 2
 
     assert out[0].nombre == "Juan Pérez"
-    assert out[0].role == "presidente"
+    assert out[0].role == RoleOrganization.PRESIDENTE
     assert out[0].start_date == datetime(2025, 7, 28)
     assert out[0].end_date == datetime(2026, 7, 28)
 
     assert out[1].nombre == "Maria Lopez"
-    assert out[1].role == "miembro"
+    assert out[1].role == RoleOrganization.MIEMBRO
     assert out[1].start_date == datetime(2025, 7, 28)
     assert out[1].end_date == datetime(2026, 7, 28)

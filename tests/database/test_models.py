@@ -18,7 +18,6 @@ from backend.database.models import (
     Membership,
     VoteOption,
     AttendanceStatus,
-    BillStepType,
     RoleTypeBill,
     Proponents,
     LegPeriod,
@@ -30,6 +29,7 @@ from backend.database.models import (
     VoteResult,
     MajorityType,
 )
+from backend import BillStepType
 
 
 @pytest.fixture()
@@ -103,7 +103,7 @@ def test_create_vote_event_and_vote(session):
         bill_or_motion="Bill",
         bill_motion_id="B001",
         date=datetime.now(),
-        result=VoteResult.APPROVED,
+        result=VoteResult.APROBADO,
         majority_type=MajorityType.SIMPLE,
     )
     session.add(vote_event)
@@ -124,13 +124,15 @@ def test_bill_step(session):
     step = BillStep(
         id=1,
         bill_id="B001",
-        step_type=BillStepType.VOTE,
+        vote_step=True,
+        vote_event_id=None,
+        step_type=BillStepType.VOTACION,
         step_date=datetime.now(),
         step_detail="Votación en pleno",
     )
     session.add(step)
     session.commit()
-    assert step.step_type == BillStepType.VOTE
+    assert step.step_type == BillStepType.VOTACION
 
 
 def test_membership_validation(session):
