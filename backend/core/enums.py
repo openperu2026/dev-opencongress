@@ -2,34 +2,29 @@ from enum import Enum
 
 
 class MajorityType(str, Enum):
-    SIMPLE = "simple"
-    ABSOLUTE = "absolute"
-    QUALIFIED = "qualified"
+    SIMPLE = "Simple"
+    ABSOLUTA = "Absoluta"
+    CALIFICADA = "Calificada"
 
 
 class VoteResult(str, Enum):
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    TIED = "tied"
-    NO_QUORUM = "no_quorum"
-    SUSPENDED = "suspended"  # cuarto intermedio
-    RETURNED_TO_COMMITTEE = "returned_to_committee"
-    FILED = "filed"
-    WITHDRAWN = "withdrawn"
+    APROBADO = "Aprobado"
+    RECHAZADO = "Rechazado"
+    NO_QUORUM = "No hay quorum"
 
 
 class VoteOption(str, Enum):
-    SI = "si"
-    NO = "no"
-    ABSTENCION = "abstencion"
-    SIN_RESPUESTA = "sin respuesta"
+    SI = "Sí"
+    NO = "No"
+    ABSTENCION = "Abstención"
+    SIN_RESPUESTA = "Sin respuesta"
 
 
 class AttendanceStatus(str, Enum):
-    PRESENTE = "presente"
-    AUSENTE = "ausente"
-    LICENCIA = "con licencia"
-    SUSPENDIDO = "suspendido"
+    PRESENTE = "Presente"
+    AUSENTE = "Ausente"
+    LICENCIA = "Con licencia"
+    SUSPENDIDO = "Suspendido"
 
 
 class MotionType(str, Enum):
@@ -50,67 +45,61 @@ class MotionType(str, Enum):
 
 
 class MotionStepType(str, Enum):
-    UNKNOWN = "unknown"
-
-    # Intake / start
-    PRESENTED = "presented"
-    ADMITTED = "admitted to debate"
-
-    # Routing / admin handling
-    ASSIGNED = "assigned"
-    INTERNAL_ROUTE = "internal routing"
-    AGENDA = "agenda"
-
-    # Deliberation
-    DEBATE = "debate"
-    VOTE = "vote"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-
-    # Reconsideration
-    RECONSIDERATION = "reconsideration"
-
-    # Text / documents
-    TEXT_UPDATE = "text update"
-    OFFICIAL_COMMUNICATION = "official communication"
-
-    # Attendance / appearances (minister, etc.)
-    APPEARANCE = "appearance"
-
-    # Other outcomes
-    WITHDRAWN = "withdrawn"
-    ARCHIVED = "archived"
-    PUBLISHED = "published"
-    RESIGNATION = "resignation"
-    DISCIPLINE_OR_ORDER = "question of order"
-    REQUIREMENTS_BLOCK = "requirements not met"
+    PRESENTADO = "Presentado"
+    ADMISION = "Admisión a debate"
+    ETAPA_EN_COMISION = "En comisión"
+    ACUERDO_CD = "Acuerdo de Consejo Directivo"
+    ACUERDO_JP = "Acuerdo de la Junta de Portavocez"
+    AGENDA_CD = "En Agenda del Consejo Directivo"
+    AGENDA_DEL_PLENO = "En Agenda del Pleno"
+    ANUNCIO_O_DACION_DE_CUENTA = "Anunciado en el Pleno"
+    FUNDAMENTACION = "Fundamentada la Moción"
+    DEBATE = "En debate"
+    VOTACION_O_DECISION = "Votación"
+    REVISION_DE_TEXTO = "Revisión o cambio de texto"
+    COMUNICACION_OFICIAL = "Comunicación Oficial"
+    ASISTENCIA_O_COMPARECENCIA = "Asistencia de Ministro"
+    RECONSIDERACION = "Reconsideración"
+    RETIRADO = "Retirado"
+    ARCHIVADO = "Archivado"
+    PUBLICADO = "Publicado"
+    RENUNCIA = "Renuncia"
+    CUESTION_DE_ORDEN = "Cuestión de orden"
+    BLOQUEO_POR_REQUISITOS = "Incumplimiento de requisitos"
+    CUARTO_INTERMEDIO = "Cuarto intermedio"
+    FE_DE_ERRATAS_O_CORRECCION = "Fe de Erratas"
+    SIN_CATEGORIA = "Sin categoría"
 
 
 class BillStepType(str, Enum):
-    UNKNOWN = "unknown"
-    PRESENTED = "presented"
-    ASSIGNED = "assigned to committee"
-    COMMITTEE_STAGE = "committee stage"
-    AGENDA = "agenda"
-    DEBATE = "debate"
-    VOTE = "vote"
-    RECONSIDERATION = "reconsideration"
-    APPROVED = "approved"
-    REJECTED = "rejected"
-    TEXT_UPDATE = "text update"
-    WITHDRAWN = "withdrawn"
-    ARCHIVED = "archived"
-    PROMULGATED = "promulgated"
-    PUBLISHED = "published"
-    CLARIFICATION = "clarification"
-    INTERNAL_ROUTE = "internal routing"
-    EXEMPTION = "exemption"
+    PRESENTADO = "Presentado"
+    EN_COMISION = "En Comisión"
+    DICTAMEN_O_ACUERDO_DE_COMISION = "Dictamen o Acuerdo de Comisión"
+    EXONERACION_DE_DICTAMEN = "Exoneración de Dictamen"
+    AGENDA_DEL_CONSEJO_DIRECTIVO = "En Agenda del Consejo Directivo"
+    AGENDA_DEL_PLENO = "En Agenda del Pleno"
+    AGENDA_DE_LA_COMISION_PERMANENTE = "En Agenda de la Comisión Permanente"
+    DEBATE_EN_EL_PLENO = "Debate en el Pleno"
+    DEBATE_EN_LA_COMISION_PERMANENTE = "Debate en la Comisión Permanente"
+    VOTACION = "Votación"
+    TEXTO_SUSTITUTORIO_O_REVISION = "Revisión o cambio de texto"
+    AUTOGRAFA = "Autógrafa"
+    RECONSIDERACION = "Reconsideración"
+    RETIRADO = "Retirado"
+    ARCHIVADO = "Al Archivo"
+    PROMULGADO = "Promulgado"
+    PUBLICADO = "Publicado"
+    CUARTO_INTERMEDIO = "Cuarto Intermedio"
+    ACUMULADO = "Acumulado en Sala"
+    ACLARACION = "Aclaración"
+    RECHAZADO = "Rechazado"
+    SIN_CATEGORIA = "Sin categoría"
 
 
 class RoleTypeBill(str, Enum):
-    AUTHOR = "author"
-    COAUTHOR = "coauthor"
-    ADHERENTE = "adherente"
+    AUTHOR = "Autor"
+    COAUTHOR = "Coautor"
+    ADHERENTE = "Adherente"
 
 
 class Proponents(str, Enum):
@@ -182,16 +171,16 @@ class LegislativeYear(str, Enum):
 
 class RoleOrganization(str, Enum):
     # For Bancadas | Partidos
-    VOCERO = "vocero"
-    MIEMBRO = "miembro"
+    VOCERO = "Vocero"
+    MIEMBRO = "Miembro"
 
     # For Comisiones, Mesa Directiva, Junta de Portavoces
-    PRESIDENTE = "presidente"
-    VICEPRESIDENTE = "vicepresidente"
-    SECRETARIO = "secretario"
-    TITULAR = "titular"
-    SUPLENTE = "suplente"
-    ACCESITARIO = "accesitario"
+    PRESIDENTE = "Presidente"
+    VICEPRESIDENTE = "Vicepresidente"
+    SECRETARIO = "Secretario"
+    TITULAR = "Titular"
+    SUPLENTE = "Suplente"
+    ACCESITARIO = "Accesitario"
 
 
 class TypeOrganization(str, Enum):
