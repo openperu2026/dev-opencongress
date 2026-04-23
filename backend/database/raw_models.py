@@ -60,6 +60,28 @@ class RawBase(Base):
     __hash__ = None
 
 
+class RawBancada(RawBase):
+    """
+    Represents a raw scraped of all bancadas in the peruvian parliament with its
+    congressmembers that belongs to them.
+
+    Attributes:
+        id (str): Unique identifier for the bancada.
+        leg_period (str): Legislative period
+        raw_html (str): Html text
+        timestamp (datetime): timestamp of the scraping task
+        last_update (bool): Column that indicates if this tuple is the last update for the bill_id
+        changed (bool): Column that indicates if the last update has any difference from the previous update
+        processed (bool): Column that indicates if the last update with changes have been updated
+    """
+
+    __tablename__ = "raw_bancadas"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    legislative_period = Column(String, nullable=False)
+    raw_html = Column(String, nullable=False)
+
+
 class RawBill(RawBase):
     """
     Represents a raw scraped bill in the peruvian parliament.
@@ -136,6 +158,30 @@ class RawBillDocument(RawBase):
     local_path = Column(String, nullable=True)
 
 
+class RawBillPage(RawBase):
+    __tablename__ = "raw_bill_pages"
+
+    bill_id = Column(String, primary_key=True)
+    step_id = Column(String, primary_key=True)
+    archivo_id = Column(String, primary_key=True)
+    page_num = Column(Integer, primary_key=True)
+    text = Column(String, nullable=False)
+    model = Column(String, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "ix_raw_bills_pages_pipeline",
+            "bill_id",
+            "step_id",
+            "archivo_id",
+            "page_num",
+            "last_update",
+            "changed",
+            "processed",
+        ),
+    )
+
+
 class RawCommittee(RawBase):
     """
     Represents a raw scraped committee in the peruvian parliament.
@@ -192,6 +238,25 @@ class RawCongresista(RawBase):
             "processed",
         ),
     )
+
+
+class RawLey(RawBase):
+    """
+    Represents a raw law extracted from the Peruvian congress web page.
+
+    Attributes:
+        id (str): Unique identifier for the organization.
+        data (str): raw data xml information related to the law
+        timestamp (datetime): timestamp of the scraping task
+        last_update (bool): Column that indicates if this tuple is the last update for the bill_id
+        changed (bool): Column that indicates if the last update has any difference from the previous update
+        processed (bool): Column that indicates if the last update with changes have been updated
+    """
+
+    __tablename__ = "raw_leyes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    data = Column(String, nullable=False)
 
 
 class RawMotion(RawBase):
@@ -268,26 +333,28 @@ class RawMotionDocument(RawBase):
     )
 
 
-class RawBancada(RawBase):
-    """
-    Represents a raw scraped of all bancadas in the peruvian parliament with its
-    congressmembers that belongs to them.
+class RawMotionPage(RawBase):
+    __tablename__ = "raw_motion_pages"
 
-    Attributes:
-        id (str): Unique identifier for the bancada.
-        leg_period (str): Legislative period
-        raw_html (str): Html text
-        timestamp (datetime): timestamp of the scraping task
-        last_update (bool): Column that indicates if this tuple is the last update for the bill_id
-        changed (bool): Column that indicates if the last update has any difference from the previous update
-        processed (bool): Column that indicates if the last update with changes have been updated
-    """
+    motion_id = Column(String, primary_key=True)
+    step_id = Column(String, primary_key=True)
+    archivo_id = Column(String, primary_key=True)
+    page_num = Column(Integer, primary_key=True)
+    text = Column(String, nullable=False)
+    model = Column(String, nullable=False)
 
-    __tablename__ = "raw_bancadas"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    legislative_period = Column(String, nullable=False)
-    raw_html = Column(String, nullable=False)
+    __table_args__ = (
+        Index(
+            "ix_raw_motions_pages_pipeline",
+            "motion_id",
+            "step_id",
+            "archivo_id",
+            "page_num",
+            "last_update",
+            "changed",
+            "processed",
+        ),
+    )
 
 
 class RawOrganization(RawBase):
@@ -315,68 +382,22 @@ class RawOrganization(RawBase):
     raw_html = Column(String, nullable=False)
 
 
-class RawLey(RawBase):
+class ScraperRun(Base):
     """
-    Represents a raw law extracted from the Peruvian congress web page.
+    Stores the metadata on the scrapers jobs for future analysis and future pipeline automations.
 
     Attributes:
-        id (str): Unique identifier for the organization.
-        data (str): raw data xml information related to the law
-        timestamp (datetime): timestamp of the scraping task
-        last_update (bool): Column that indicates if this tuple is the last update for the bill_id
-        changed (bool): Column that indicates if the last update has any difference from the previous update
-        processed (bool): Column that indicates if the last update with changes have been updated
+        run_id (int): Unique identifier of the scraper run
+        scraper_name (str): Name of the scraper file that ran
+        start_time (datetime): Time when the scraper started running
+        end_time (datetime): Time when the scraper stop running
+        scraped_rows (int): Number of rows scraped within the run
     """
 
-    __tablename__ = "raw_leyes"
+    __tablename__ = "scraper_runs"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    data = Column(String, nullable=False)
-
-
-class RawBillPage(RawBase):
-    __tablename__ = "raw_bill_pages"
-
-    bill_id = Column(String, primary_key=True)
-    step_id = Column(String, primary_key=True)
-    archivo_id = Column(String, primary_key=True)
-    page_num = Column(Integer, primary_key=True)
-    text = Column(String, nullable=False)
-    model = Column(String, nullable=False)
-
-    __table_args__ = (
-        Index(
-            "ix_raw_bills_pages_pipeline",
-            "bill_id",
-            "step_id",
-            "archivo_id",
-            "page_num",
-            "last_update",
-            "changed",
-            "processed",
-        ),
-    )
-
-
-class RawMotionPage(RawBase):
-    __tablename__ = "raw_motion_pages"
-
-    motion_id = Column(String, primary_key=True)
-    step_id = Column(String, primary_key=True)
-    archivo_id = Column(String, primary_key=True)
-    page_num = Column(Integer, primary_key=True)
-    text = Column(String, nullable=False)
-    model = Column(String, nullable=False)
-
-    __table_args__ = (
-        Index(
-            "ix_raw_motions_pages_pipeline",
-            "motion_id",
-            "step_id",
-            "archivo_id",
-            "page_num",
-            "last_update",
-            "changed",
-            "processed",
-        ),
-    )
+    run_id = Column(Integer, primary_key=True, autoincrement=True)
+    scraper_name = Column(String, nullable=False)
+    start_time = Column(DateTime, nullable=False)
+    end_time = Column(DateTime, nullable=False)
+    scraped_rows = Column(Integer, nullable=False)

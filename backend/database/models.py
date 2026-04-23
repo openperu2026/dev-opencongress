@@ -154,7 +154,7 @@ class Bill(Base):
         proponent (str): Type of proponent of the bill
         author_id (str): Unique identifier for the author of the bill.
         bancada_id (str): Unique identifier for the political group associated with the bill.
-        bill_approved (bool): Boolean indicating if the bill has been published
+        approved (bool): Boolean indicating if the bill has been published
     """
 
     __tablename__ = "bills"
@@ -171,7 +171,7 @@ class Bill(Base):
     proponent = Column(Enum(Proponents, name="proponent"), nullable=False)
     author_id = Column(Integer, ForeignKey("congresistas.id"), nullable=True)
     bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=True)
-    bill_approved = Column(Boolean, nullable=False)
+    approved = Column(Boolean, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("id", name="bill_unique"),
@@ -422,7 +422,7 @@ class Motion(Base):
         complete_text (str): Complete text of the motion.
         status (str): Current status of the motion.
         author_id (str): Unique identifier for the author of the motion.
-        motion_approved (bool): Boolean indicating if the motion has been published
+        approved (bool): Boolean indicating if the motion has been published
     """
 
     __tablename__ = "motions"
@@ -437,7 +437,7 @@ class Motion(Base):
     complete_text = Column(String, nullable=False)
     status = Column(String, nullable=False)
     author_id = Column(Integer, ForeignKey("congresistas.id"), nullable=True)
-    motion_approved = Column(Boolean, nullable=False, default=False)
+    approved = Column(Boolean, nullable=False, default=False)
 
 
 class MotionCongresistas(Base):
