@@ -3,7 +3,6 @@ from __future__ import annotations
 import time
 from datetime import datetime, timedelta
 from typing import Type, Callable
-from dataclasses import dataclass
 
 from loguru import logger
 from sqlalchemy import create_engine, func
@@ -12,11 +11,16 @@ from sqlalchemy.orm import sessionmaker
 from backend import find_leg_period
 from backend.config import settings
 from backend.database import models as db_models
-from backend.database.models import Bill, Motion
+from backend.database.models import Bill, Motion, Ley
 from backend.database.crud import (
     pipeline_bills as crud_bills,
     pipeline_core as crud_core,
     pipeline_motions as crud_motions,
+)
+from backend.database.crud.pipeline_core import (
+    ProcessStats,
+    ScraperStats,
+    upsert_scraper_runs,
 )
 from backend.database.raw_models import (
     RawBase,
@@ -63,20 +67,6 @@ from backend.scrapers.motions_documents import RawMotionDocumentScraper
 from backend.scrapers.organizations import RawOrganizationScraper
 
 
-@dataclass
-class StageStats:
-    processed: int = 0
-    skipped: int = 0
-    errors: int = 0
-
-
-@dataclass
-class ScraperRuns:
-    start_time: datetime
-    end_time: datetime
-    scrapped: int = 0
-
-
 class OpenPeruOrchestrator:
     """
     End-to-end ETL orchestrator:
@@ -120,8 +110,8 @@ class OpenPeruOrchestrator:
 
     def _get_ids_to_update(
         self,
-        raw_model: RawBill | RawMotion,
-        model: Bill | Motion,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        model: Type[Bill] | Type[Motion] | Type[Ley],
         days: int = 7,
     ) -> list[str] | None:
         """
@@ -163,12 +153,12 @@ class OpenPeruOrchestrator:
         motion_start: int | None = None,
         motion_end: int | None = None,
         scrape_documents: bool = False,
-    ) -> dict[str, ScraperRuns]:
+    ) -> None:
         """
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
         """
         logger.info("Starting processing pipeline")
-        scraper_results: dict[str, ScraperRuns] = dict()
+        scraper_results: dict[str, ScraperStats] = dict()
 
         if scrape_others:
             logger.info(
@@ -186,7 +176,7 @@ class OpenPeruOrchestrator:
                 scraped_congs = cong.extract_and_load_all(only_current=only_current)
                 end_time = datetime.now()
                 scraper_results[
-                    "congresistas.py" : ScraperRuns(
+                    "congresistas.py" : ScraperStats(
                         start_time, end_time, len(scraped_congs)
                     )
                 ]
@@ -202,7 +192,9 @@ class OpenPeruOrchestrator:
                 scraped_banc = banc.add_bancadas_to_db()
                 end_time = datetime.now()
                 scraper_results[
-                    "bancadas.py" : ScraperRuns(start_time, end_time, len(scraped_banc))
+                    "bancadas.py" : ScraperStats(
+                        start_time, end_time, len(scraped_banc)
+                    )
                 ]
 
             if self._recent_raw_exists(RawCommittee, days=others_days):
@@ -216,7 +208,7 @@ class OpenPeruOrchestrator:
                 end_time = datetime.now()
                 comm.add_committees_to_db()
                 scraper_results[
-                    "committees.py" : ScraperRuns(
+                    "committees.py" : ScraperStats(
                         start_time, end_time, len(scraped_comm)
                     )
                 ]
@@ -232,7 +224,7 @@ class OpenPeruOrchestrator:
                 end_time = datetime.now()
                 org.add_organizations_to_db()
                 scraper_results[
-                    "organizations.py" : ScraperRuns(
+                    "organizations.py" : ScraperStats(
                         start_time, end_time, len(scraped_orgs)
                     )
                 ]
@@ -295,12 +287,33 @@ class OpenPeruOrchestrator:
             scraper_results["motions_documents.py"] = doc_motion_run
 
         if scrape_leyes:
+            scraper = RawLeyesScraper()
             if all(v is not None for v in [ley_start, ley_end]):
-                self._scrape_leyes_range(int(ley_start), int(ley_end))
-            else:
-                RawLeyesScraper().scrape_pending_weekly(
-                    max_age_days=weekly_days, flush_every=100
+                scraper_results["leyes.py"] = self._scrape_range(
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_ley,
+                    buffer_attr="raw_leyes",
+                    load_fn=scraper.load_raw_leyes,
+                    year=None,
+                    start=int(ley_start),
+                    end=int(ley_end),
+                    flush_every=100,
+                    entity_name="Ley",
                 )
+            else:
+                scraper_results["leyes.py"] = self._scrape_pending_weekly(
+                    raw_model=RawLey,
+                    model=Ley,
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_ley,
+                    buffer_attr="raw_leyes",
+                    load_fn=scraper.load_raw_leyes,
+                    max_age_days=weekly_days,
+                    flush_every=100,
+                    entity_name="Ley",
+                )
+
+        upsert_scraper_runs(self.RawSession, scraper_results)
 
     def run_processing(
         self,
@@ -313,12 +326,12 @@ class OpenPeruOrchestrator:
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
-    ) -> dict[str, StageStats]:
+    ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
         """
         logger.info("Starting processing pipeline")
-        summary: dict[str, StageStats] = {}
+        summary: dict[str, ProcessStats] = {}
 
         if process_others:
             summary["organizations"] = self._process_organizations()
@@ -369,19 +382,22 @@ class OpenPeruOrchestrator:
         scrape_fn: Callable[[str, str], None],
         buffer_attr: str,
         load_fn: Callable[[], None],
-        year: int,
+        year: int | None,
         start: int,
         end: int,
         flush_every: int = 100,
         entity_name: str = "items",
-    ) -> ScraperRuns:
+    ) -> ScraperStats:
         logger.info(f"Scraping {entity_name} in range {year}_{start}..{year}_{end}")
 
         start_time = datetime.now()
         count = 0
 
         for number in range(start, end + 1):
-            scrape_fn(str(year), str(number))
+            if entity_name == "Ley":
+                scrape_fn(str(number))
+            else:
+                scrape_fn(str(year), str(number))
 
             current_length = len(getattr(scraper, buffer_attr))
 
@@ -396,19 +412,20 @@ class OpenPeruOrchestrator:
             load_fn()
 
         end_time = datetime.now()
-        return ScraperRuns(start_time, end_time, count)
+        return ScraperStats(start_time, end_time, count)
 
     def _scrape_pending_weekly(
         self,
-        raw_model: Type[RawBill] | Type[RawMotion],
-        model: Type[Bill] | Type[Motion],
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        model: Type[Bill] | Type[Motion] | Type[Ley],
         scraper,
         scrape_fn: Callable[[str, str], None],
         buffer_attr: str,
         load_fn: Callable[[], None],
         max_age_days: int = 7,
         flush_every: int = 100,
-    ) -> ScraperRuns:
+        entity_name: str = "items",
+    ) -> ScraperStats:
         pending_ids = self._get_ids_to_update(raw_model, model, max_age_days)
         start_time = datetime.now()
         count = 0
@@ -416,7 +433,10 @@ class OpenPeruOrchestrator:
         for idx, item_id in enumerate(pending_ids, start=1):
             year, number = item_id.split("_", 1)
 
-            scrape_fn(year, number)
+            if entity_name == "Ley":
+                scrape_fn(str(number))
+            else:
+                scrape_fn(str(year), str(number))
 
             current_length = len(getattr(scraper, buffer_attr))
 
@@ -434,9 +454,9 @@ class OpenPeruOrchestrator:
             load_fn()
 
         end_time = datetime.now()
-        return ScraperRuns(start_time, end_time, count)
+        return ScraperStats(start_time, end_time, count)
 
-    def _scrape_pending_documents(self) -> tuple[ScraperRuns, ScraperRuns]:
+    def _scrape_pending_documents(self) -> tuple[ScraperStats, ScraperStats]:
         logger.info("Scraping pending bill and motion documents")
 
         bill_docs = RawBillDocumentScraper()
@@ -447,7 +467,7 @@ class OpenPeruOrchestrator:
             count += len(bill_docs.documents)
             bill_docs.load_raw_documents()
         end_time = datetime.now()
-        doc_bill_run = ScraperRuns(start_time, end_time, count)
+        doc_bill_run = ScraperStats(start_time, end_time, count)
 
         motion_docs = RawMotionDocumentScraper()
         start_time = datetime.now()
@@ -459,25 +479,36 @@ class OpenPeruOrchestrator:
             count += len(motion_docs.documents)
             motion_docs.load_raw_documents()
         end_time = datetime.now()
-        doc_motion_run = ScraperRuns(start_time, end_time, count)
+        doc_motion_run = ScraperStats(start_time, end_time, count)
 
         return doc_bill_run, doc_motion_run
 
-    def _scrape_leyes_range(self, ley_start: int, ley_end: int, flush_every: int = 100):
+    def _scrape_leyes_range(
+        self, ley_start: int, ley_end: int, flush_every: int = 100
+    ) -> ScraperStats:
         logger.info(f"Scraping leyes in range {ley_start}..{ley_end}")
         scraper = RawLeyesScraper()
+        start_time = datetime.now()
+        count = 0
         for ley_number in range(ley_start, ley_end + 1):
             scraper.scrape_ley(ley_number)
-            if len(scraper.raw_leyes) >= flush_every:
+            count_leyes = len(scraper.raw_leyes)
+            if count_leyes >= flush_every:
+                count += count_leyes
                 scraper.load_raw_leyes()
-        if scraper.raw_leyes:
+
+        remaining = len(scraper.raw_leyes)
+        if remaining:
+            count += remaining
             scraper.load_raw_leyes()
+        end_time = datetime.now()
+        return ScraperStats(start_time, end_time, count)
 
     # -----------------------------
     # Processing internals
     # -----------------------------
-    def _process_congresistas(self) -> StageStats:
-        stats = StageStats()
+    def _process_congresistas(self) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -548,8 +579,8 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_organizations(self) -> StageStats:
-        stats = StageStats()
+    def _process_organizations(self) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -660,8 +691,8 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_bancadas(self) -> StageStats:
-        stats = StageStats()
+    def _process_bancadas(self) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -732,8 +763,8 @@ class OpenPeruOrchestrator:
 
     def _process_bills(
         self, *, include_documents: bool, limit: int | None
-    ) -> StageStats:
-        stats = StageStats()
+    ) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -826,8 +857,8 @@ class OpenPeruOrchestrator:
 
     def _process_motions(
         self, *, include_documents: bool, limit: int | None
-    ) -> StageStats:
-        stats = StageStats()
+    ) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -906,8 +937,8 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_leyes(self, *, limit: int | None) -> StageStats:
-        stats = StageStats()
+    def _process_leyes(self, *, limit: int | None) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
