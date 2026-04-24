@@ -1,29 +1,20 @@
 import json
 import base64
-import time
+import boto3
 from loguru import logger
 from datetime import datetime
+from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, tuple_, select
-
+from sqlalchemy import create_engine, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.config import settings, directories, stop_logging_to_console
-from backend.scrapers.utils import render_pdf
-from backend.database.raw_models import RawBillDocument, RawBill
+from backend.config import settings, directories
+from backend.scrapers.utils import render_pdf, get_url
+from backend.database.raw_models import RawBillDocument, RawBill, RawBillPage
 
 BASE_URL = "https://wb2server.congreso.gob.pe/spley-portal-service/"
 RAW_DB_PATH = settings.RAW_DB_URL
-PRIORITIES = set(
-    [
-        "Publicada en el Diario Oficial El Peruano",
-        "AUT\u00d3GRAFA",
-        "APROBADO",
-        "EN DEBATE - PLENO",
-        "APROBADO 1ERA. VOTACI\u00d3N",
-    ]
-)
 
 
 class RawBillDocumentScraper:
@@ -36,7 +27,8 @@ class RawBillDocumentScraper:
         self.engine = create_engine(RAW_DB_PATH)
         self.Session = sessionmaker(bind=self.engine)
 
-        self.documents = []
+        self.documents: list[RawBillDocument] = []
+        self.pages: list[RawBillPage] = []
 
     def get_bills_pending_documents(self) -> list[str]:
         with self.Session() as session:
@@ -59,19 +51,23 @@ class RawBillDocumentScraper:
                 .all()
             )
 
-            seguimiento_ids = {int(step.step_id) for step in n_steps_in_db}
+            step_ids = {int(step.step_id) for step in n_steps_in_db}
 
         return [
             step
             for step in extracted_steps
-            if step["seguimientoPleyId"] not in seguimiento_ids
+            if step["seguimientoPleyId"] not in step_ids
         ]
 
     def get_bill_documents(
-        self, bill_id: str, update: bool = False, prioritize: bool = True
-    ) -> list[RawBillDocument]:
+        self,
+        bill_id: str,
+        update: bool = False,
+        download_local: bool = False,
+        upload_s3: bool = False,
+    ) -> tuple[list[RawBillDocument], list[RawBillPage]] | None:
         """
-        Extract the urls from a RawBill's files and extract the text from each of them
+        Extract the urls from a RawBill's files and extract the text from each of its pages
         """
         with self.Session() as session:
             bill = (
@@ -88,10 +84,6 @@ class RawBillDocumentScraper:
         if not update:
             steps = self.filter_steps(steps, bill_id)
 
-        if prioritize:
-            logger.info(f"Total number of steps: {len(steps)}")
-            steps = [step for step in steps if step.get("desEstado") in PRIORITIES]
-
         if len(steps) == 0:
             logger.info(f"No steps found for bill {bill_id}")
             return None
@@ -107,81 +99,50 @@ class RawBillDocumentScraper:
 
             for file in files:
                 file_id = file["proyectoArchivoId"]
-                seguimiento_id = file["seguimientoPleyId"]
+                step_id = file["seguimientoPleyId"]
 
                 b64_id = base64.b64encode(str(file_id).encode()).decode()
                 url = f"{BASE_URL}/archivo/{b64_id}/pdf"
                 logger.info(f"Extracting document {ix + 1}/{len(steps)} at url: {url}")
-                extracted_text = render_pdf(url)
+                pages_text = render_pdf(url)
                 logger.success(f"Successfully extracted text from {url}")
 
+                file_name = self._build_filename(bill_id, step_id, file_id)
+                dest_path = directories.BILL_DOCUMENTS / file_name
+
+                if download_local:
+                    self._download_to_path(url, dest_path)
+
+                s3_key = None
+                if upload_s3:
+                    s3_key = self._build_s3_key("bills", file_name)
+
                 new_doc = RawBillDocument(
-                    timestamp=datetime.now(),
                     bill_id=bill_id,
+                    step_id=step_id,
+                    file_id=file_id,
                     step_date=datetime.strptime(step_date, "%Y-%m-%dT%H:%M:%S.%f%z"),
-                    seguimiento_id=seguimiento_id,
-                    archivo_id=file_id,
                     url=url,
-                    text=extracted_text,
+                    s3_key=s3_key,
+                    local_path=dest_path,
+                    timestamp=datetime.now(),
                     processed=False,
                     last_update=True,
                 )
+
+                for page_num, text in pages_text.items():
+                    self.pages.append(
+                        RawBillPage(
+                            bill_id=bill_id,
+                            step_id=step_id,
+                            file_id=file_id,
+                            page_num=page_num,
+                            text=text,
+                            model="Tesseract",
+                        )
+                    )
+
                 self.documents.append(new_doc)
-
-    def _track_documents(self, session, documents: list[RawBillDocument]) -> None:
-        """
-        For each new doc:
-          - mark it as last_update=True
-          - set changed based on comparison with latest existing doc for same natural key
-          - set previous latest doc's last_update=False
-        Runs in one DB session, no commits here (caller commits).
-        """
-
-        if not documents:
-            return None
-
-        # Natural key for "same document across versions"
-        def key(d: RawBillDocument):
-            return (d.bill_id, d.archivo_id, d.seguimiento_id)
-
-        keys = list({(d.bill_id, d.archivo_id, d.seguimiento_id) for d in documents})
-
-        # Fetch current latest versions (we assume last_update=True means latest)
-        existing_latest = (
-            session.query(RawBillDocument)
-            .filter(
-                RawBillDocument.last_update.is_(True),
-                tuple_(
-                    RawBillDocument.bill_id,
-                    RawBillDocument.archivo_id,
-                    RawBillDocument.seguimiento_id,
-                ).in_(keys),
-            )
-            .all()
-        )
-
-        latest_by_key = {key(d): d for d in existing_latest}
-
-        # Define what "changed" means (avoid relying on __eq__/__ne__)
-        def is_changed(new: RawBillDocument, old: RawBillDocument) -> bool:
-            return (
-                new.url != old.url
-                or new.step_date != old.step_date
-                or new.text != old.text
-            )
-
-        for new_doc in documents:
-            new_doc.last_update = True
-            prev = latest_by_key.get(key(new_doc))
-
-            if prev is None:
-                new_doc.changed = True
-                new_doc.processed = False
-            else:
-                new_doc.changed = is_changed(new_doc, prev)
-                new_doc.processed = not new_doc.changed
-                prev.last_update = False
-                session.add(prev)  # stage update of old latest
 
     def add_documents_to_db(self) -> bool:
         """
@@ -193,12 +154,7 @@ class RawBillDocumentScraper:
 
         with self.Session() as session:
             try:
-                # tracking + mark previous last_update=False in same transaction
-                self._track_documents(session, self.documents)
-
-                # Use add_all (safer than bulk_save_objects when you update other rows too)
                 session.add_all(self.documents)
-
                 session.commit()
                 logger.success(
                     f"Added {len(self.documents)} documents to Raw Bill Documents table"
@@ -212,33 +168,82 @@ class RawBillDocumentScraper:
                 session.rollback()
                 return False
 
+    def add_pages_to_db(self) -> bool:
+        """
+        Add the pages to the database.
+        Returns True on success, False on failure.
+        """
+
+        assert self.pages, "Pages must be scraped before it can be saved"
+
+        with self.Session() as session:
+            try:
+                session.add_all(self.pages)
+                session.commit()
+                logger.success(
+                    f"Added {len(self.pages)} documents to Raw Bill Pages table"
+                )
+                return True
+
+            except SQLAlchemyError as e:
+                logger.error(
+                    f"Failed to add pages from bill {self.pages[0].bill_id}: {e}"
+                )
+                session.rollback()
+                return False
+
     def load_raw_documents(self):
         if self.documents:
             self.add_documents_to_db()
+            self.add_pages_to_db()
             self.documents = []
+            self.pages = []
         else:
             return None
 
+    @staticmethod
+    def _build_filename(bill_id: str, step_id: str, file_id: str) -> str:
+        return f"{bill_id}-{step_id}-{file_id}.pdf"
 
-if __name__ == "__main__":
-    logger.info("Starting Scraper")
-    scraper = RawBillDocumentScraper()
+    @staticmethod
+    def _build_s3_key(kind: str, filename: str) -> str:
+        parts = []
+        if settings.AWS_S3_PREFIX:
+            parts.append(settings.AWS_S3_PREFIX.strip("/"))
+        parts.extend(["documents", kind, filename])
+        return "/".join(parts)
 
-    pending_bills = scraper.get_bills_pending_documents()
+    @staticmethod
+    def _upload_file_to_s3(path: Path, key: str) -> None:
+        bucket = settings.AWS_S3_BUCKET_NAME
+        if not bucket:
+            raise RuntimeError("AWS_S3_BUCKET_NAME is not configured.")
 
-    # bill = 5779
-    # year = 2021
+        if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+            session = boto3.session.Session(
+                aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+                aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+                region_name=settings.AWS_REGION,
+            )
+            client = session.client("s3")
+        else:
+            client = boto3.client("s3", region_name=settings.AWS_REGION)
 
-    stop_logging_to_console(filename=directories.LOGS / "scrape_bills_documents.log")
-    for bill in pending_bills:
+        client.upload_file(path.as_posix(), bucket, key)
+
+    @staticmethod
+    def _download_to_path(url: str, dest: Path) -> bool:
+        response = get_url(url)
+        if response is None:
+            logger.warning(f"Failed to fetch document: {url}")
+            return False
+
         try:
-            scraper.get_bill_documents(bill_id=bill, update=False, prioritize=True)
-            scraper.load_raw_documents()
-        except TypeError as e:
-            print(e)
-            break
-        except AttributeError as e:
-            print(e)
-            time.sleep(3)
-            continue
-        time.sleep(3)
+            response.raise_for_status()
+        except Exception as exc:
+            logger.warning(f"Non-200 response fetching {url}: {exc}")
+            return False
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(response.content)
+        return True
