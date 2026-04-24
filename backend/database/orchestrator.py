@@ -32,11 +32,6 @@ from backend.database.raw_models import (
     RawMotion,
     RawOrganization,
 )
-from backend.documents.downloader import (
-    DownloadStats,
-    download_bill_documents,
-    download_motion_documents,
-)
 from backend.process.bancadas import process_bancada
 from backend.process.bills import (
     get_committees,
@@ -352,27 +347,6 @@ class OpenPeruOrchestrator:
 
         return summary
 
-    def run_document_downloads(
-        self,
-        *,
-        download_bills: bool = True,
-        download_motions: bool = True,
-        update: bool = False,
-        upload_s3: bool = False,
-        limit: int | None = None,
-    ) -> dict[str, DownloadStats]:
-        summary: dict[str, DownloadStats] = {}
-        with self.RawSession() as raw_db:
-            if download_bills:
-                summary["bill_documents"] = download_bill_documents(
-                    raw_db, update=update, upload_s3=upload_s3, limit=limit
-                )
-            if download_motions:
-                summary["motion_documents"] = download_motion_documents(
-                    raw_db, update=update, upload_s3=upload_s3, limit=limit
-                )
-        return summary
-
     # -----------------------------
     # Scraping internals
     # -----------------------------
@@ -463,7 +437,9 @@ class OpenPeruOrchestrator:
         start_time = datetime.now()
         count = 0
         for bill_id in bill_docs.get_bills_pending_documents():
-            bill_docs.get_bill_documents(bill_id=bill_id, update=False, prioritize=True)
+            bill_docs.get_bill_documents(
+                bill_id=bill_id, update=False, download_local=True, upload_s3=False
+            )
             count += len(bill_docs.documents)
             bill_docs.load_raw_documents()
         end_time = datetime.now()
@@ -474,7 +450,7 @@ class OpenPeruOrchestrator:
         count = 0
         for motion_id in motion_docs.get_motions_pending_documents():
             motion_docs.get_motion_documents(
-                motion_id=motion_id, update=False, prioritize=True
+                motion_id=motion_id, update=False, download_local=True, upload_s3=False
             )
             count += len(motion_docs.documents)
             motion_docs.load_raw_documents()

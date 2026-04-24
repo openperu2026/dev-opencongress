@@ -1,4 +1,12 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Index
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    DateTime,
+    Boolean,
+    Index,
+    PrimaryKeyConstraint,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import expression
 from sqlalchemy.inspection import inspect
@@ -10,7 +18,7 @@ class RawBase(Base):
     __abstract__ = True
 
     # Common columns for all the tables
-    timestamp = Column(DateTime, primary_key=True)
+    timestamp = Column(DateTime, nullable=False)
     last_update = Column(
         Boolean, nullable=False, server_default=expression.false(), default=False
     )
@@ -100,13 +108,14 @@ class RawBill(RawBase):
 
     __tablename__ = "raw_bills"
 
-    id = Column(String, primary_key=True)
+    id = Column(String, nullable=False)
     general = Column(String, nullable=True)
     committees = Column(String, nullable=True)
     congresistas = Column(String, nullable=True)
     steps = Column(String, nullable=True)
 
     __table_args__ = (
+        PrimaryKeyConstraint("id", "timestamp", name="pk_raw_bills"),
         Index(
             "ix_raw_bills_pipeline",
             "id",
@@ -124,7 +133,7 @@ class RawBillDocument(RawBase):
     Attributes:
         bill_id (str): Unique identifier for the bill.
         step_id (str): Event to which the document is related to.
-        archivo_id (str): id related to the document
+        file_id (str): id related to the document
         step_date (datetime): date of the event related to the document
         url (str): complete document's url (congress website).
         s3_key (str): s3_key that maps the location of the document on the AWS S3 Bucket
@@ -142,7 +151,7 @@ class RawBillDocument(RawBase):
             "ix_raw_bills_documents_pipeline",
             "bill_id",
             "step_id",
-            "archivo_id",
+            "file_id",
             "last_update",
             "changed",
             "processed",
@@ -151,7 +160,7 @@ class RawBillDocument(RawBase):
 
     bill_id = Column(String, primary_key=True)
     step_id = Column(String, primary_key=True)
-    archivo_id = Column(String, primary_key=True)
+    file_id = Column(String, primary_key=True)
     step_date = Column(DateTime, nullable=False)
     url = Column(String, nullable=False)
     s3_key = Column(String, nullable=True)
@@ -163,7 +172,7 @@ class RawBillPage(RawBase):
 
     bill_id = Column(String, primary_key=True)
     step_id = Column(String, primary_key=True)
-    archivo_id = Column(String, primary_key=True)
+    file_id = Column(String, primary_key=True)
     page_num = Column(Integer, primary_key=True)
     text = Column(String, nullable=False)
     model = Column(String, nullable=False)
@@ -173,7 +182,7 @@ class RawBillPage(RawBase):
             "ix_raw_bills_pages_pipeline",
             "bill_id",
             "step_id",
-            "archivo_id",
+            "file_id",
             "page_num",
             "last_update",
             "changed",
@@ -276,12 +285,13 @@ class RawMotion(RawBase):
 
     __tablename__ = "raw_motions"
 
-    id = Column(String, primary_key=True)
+    id = Column(String, nullable=False)
     general = Column(String, nullable=True)
     congresistas = Column(String, nullable=True)
     steps = Column(String, nullable=True)
 
     __table_args__ = (
+        PrimaryKeyConstraint("id", "timestamp", name="pk_raw_motions"),
         Index(
             "ix_raw_motions_pipeline",
             "id",
@@ -299,7 +309,7 @@ class RawMotionDocument(RawBase):
     Attributes:
         motion_id (str): Unique identifier for the motion.
         step_id (str): Event to which the document is related to.
-        archivo_id (str): id related to the document
+        file_id (str): id related to the document
         step_date (datetime): date of the event related to the document
         url (str): complete document's url.
         s3_key (str): s3_key that maps the location of the document on the AWS S3 Bucket
@@ -314,7 +324,7 @@ class RawMotionDocument(RawBase):
 
     motion_id = Column(String, primary_key=True)
     step_id = Column(String, primary_key=True)
-    archivo_id = Column(String, primary_key=True)
+    file_id = Column(String, primary_key=True)
     step_date = Column(DateTime, nullable=False)
     url = Column(String, nullable=False)
     s3_key = Column(String, nullable=True)
@@ -325,7 +335,7 @@ class RawMotionDocument(RawBase):
             "ix_raw_motion_documents_pipeline",
             "motion_id",
             "step_id",
-            "archivo_id",
+            "file_id",
             "last_update",
             "changed",
             "processed",
@@ -338,7 +348,7 @@ class RawMotionPage(RawBase):
 
     motion_id = Column(String, primary_key=True)
     step_id = Column(String, primary_key=True)
-    archivo_id = Column(String, primary_key=True)
+    file_id = Column(String, primary_key=True)
     page_num = Column(Integer, primary_key=True)
     text = Column(String, nullable=False)
     model = Column(String, nullable=False)
@@ -348,7 +358,7 @@ class RawMotionPage(RawBase):
             "ix_raw_motions_pages_pipeline",
             "motion_id",
             "step_id",
-            "archivo_id",
+            "file_id",
             "page_num",
             "last_update",
             "changed",
