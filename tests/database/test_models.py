@@ -90,7 +90,7 @@ def test_create_bill(session):
         proponent=Proponents.CONGRESO,
         author_id=1,
         bancada_id=10,
-        bill_approved=False,
+        approved=False,
     )
     session.add(bill)
     session.commit()
