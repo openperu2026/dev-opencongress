@@ -59,7 +59,7 @@ class RawBillDocumentScraper:
                 .all()
             )
 
-            seguimiento_ids = {int(step.seguimiento_id) for step in n_steps_in_db}
+            seguimiento_ids = {int(step.step_id) for step in n_steps_in_db}
 
         return [
             step
