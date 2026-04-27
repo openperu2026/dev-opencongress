@@ -201,7 +201,7 @@ def _rank_steps(steps):
     ranked.sort(
         key=lambda item: (
             -item["score"],
-            item["step"].step_date,
+            datetime.max - (item["step"].step_date or datetime.min),
             item["type"],
         )
     )
@@ -228,20 +228,11 @@ def _paragraph_one(bill_id: str, bill, steps) -> str:
         bill.presentation_date if bill.presentation_date else steps[0].step_date
     )
     title = _clean_text(bill.title)
-    title_lower = title.lower()
     start_month_year = _format_month_year(start_date)
 
-    if "cuestión de confianza" in title_lower:
-        sentence_one = (
-            f"El Proyecto {bill_id}, "
-            f"presentado en {start_month_year}, "
-            "propone regular la cuestión de confianza en la Constitución "
-            "peruana."
-        )
-    else:
-        sentence_one = (
-            f"El Proyecto {bill_id}, presentado en {start_month_year}, aborda {title}."
-        )
+    sentence_one = (
+        f"El Proyecto {bill_id}, presentado en {start_month_year}, aborda la {title}."
+    )
 
     ranked_steps = _rank_steps(steps)
 
