@@ -108,7 +108,7 @@ def test_format_elapsed_time_behavior(days, expected):
     assert summarization._format_elapsed_time(days) == expected
 
 
-def test_rank_steps_prefers_higher_score_then_earlier_date(step_factory):
+def test_rank_steps_prefers_higher_score_then_newer_date(step_factory):
     steps = [
         step_factory(step_type="approved", step_date=datetime(2021, 5, 2)),
         step_factory(step_type="published", step_date=datetime(2021, 5, 3)),
@@ -119,8 +119,8 @@ def test_rank_steps_prefers_higher_score_then_earlier_date(step_factory):
 
     assert ranked[0]["type"] == "published"
     assert ranked[1]["type"] == "approved"
-    assert ranked[1]["step"].step_date == datetime(2021, 5, 1)
-    assert ranked[2]["step"].step_date == datetime(2021, 5, 2)
+    assert ranked[1]["step"].step_date == datetime(2021, 5, 2)
+    assert ranked[2]["step"].step_date == datetime(2021, 5, 1)
 
 
 def test_find_ranked_step_filters_by_needles(step_factory):
