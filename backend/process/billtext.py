@@ -8,45 +8,42 @@ _HEADINGS = (
     """EL CONGRESO DE LA REPÚBLICA
 HA DADO LA LEY SIGUIENTE""",
     """EL CONGRESO DE LA REPÚBLICA
-Ha dado la Ley siguiente:""",
-    """El Congreso de la República
-Ha dado la siguiente Ley"""
-    """El Congreso de la República,
-Ha dado la siguiente Ley:""",
+HA DADO LA LEY SIGUIENTE:""",
+    """EL CONGRESO DE LA REPÚBLICA
+HA DADO LA SIGUIENTE LEY""",
+    """EL CONGRESO DE LA REPÚBLICA,
+HA DADO LA SIGUIENTE LEY:""",
     """EL CONGRESO DE LA REPÚBLICA;
-Ha dado la Ley siguiente:""",
-    """El Congreso de la República;
-Ha dado la Ley siguiente:""",
+HA DADO LA LEY SIGUIENTE:""",
     """EL CONGRESO DE LA REPÚBLICA;
-Ha dado la Resolución Legislativa del Congreso
-siguiente:""",
+HA DADO LA RESOLUCIÓN LEGISLATIVA DEL CONGRESO
+SIGUIENTE:""",
     """EL CONGRESO DE LA REPÚBLICA;
-Ha dado la Resolución Legislativa del Congreso
-siguiente""",
-    """FÓRMULA LEGAL""",
+HA DADO LA RESOLUCIÓN LEGISLATIVA DEL CONGRESO
+SIGUIENTE""",
+    "FÓRMULA LEGAL",
+    "FORMULA LEGAL",
     "PROYECTO DE RESOLUCION LEGISLATIVA",
     "PROYECTO DE RESOLUCIÓN LEGISLATIVA",
-    "FORMULA LEGAL",
-    "FÓRMULA LEGAL",
     """EL CONGRESO DE LA REPÚBLICA,
-Ha dado la Ley siguiente:""",
-    """El Congreso de la República
-Ha dado la Ley siguiente: """,
+HA DADO LA LEY SIGUIENTE:""",
+    """EL CONGRESO DE LA REPÚBLICA
+HA DADO LA LEY SIGUIENTE: """,
     """EL CONGRESO DE LA REPÚBLICА;
-Ha dado la Ley siguiente:""",
+HA DADO LA LEY SIGUIENTE:""",
 )
 
 _END_MARKERS = (
     "COMUNIQUESE AL SEÑOR PRESIDENTE DE LA REPUBLICA PARA SU PROMULGACIÓN",
-    "Comuníquese al señor Presidente de la República para su promulgación."
-    "Lima DD de MMMM YYYY (*) EXPOSICIÓN DE MOTIVOS"
-    """Comuníquese al señor Presidente de la República
-para su promulgación."""
-    """Comuniquese al señor presidente de la República para su promulgación.""",
-    """Comuníquese al señor Presidente de la República
-para su promulgación""",
-    """Comuníquese al señor Presidente de la República para su promulgación. """,
-    """Lima, DD de MMMM de YYYY (*) EXPOSICIÓN DE MOTIVOS""",
+    "COMUNÍQUESE AL SEÑOR PRESIDENTE DE LA REPÚBLICA PARA SU PROMULGACIÓN.",
+    "LIMA DD DE MMMM YYYY (*) EXPOSICIÓN DE MOTIVOS",
+    """COMUNÍQUESE AL SEÑOR PRESIDENTE DE LA REPÚBLICA
+PARA SU PROMULGACIÓN.""",
+    "COMUNIQUESE AL SEÑOR PRESIDENTE DE LA REPÚBLICA PARA SU PROMULGACIÓN.",
+    """COMUNÍQUESE AL SEÑOR PRESIDENTE DE LA REPÚBLICA
+PARA SU PROMULGACIÓN""",
+    "COMUNÍQUESE AL SEÑOR PRESIDENTE DE LA REPÚBLICA PARA SU PROMULGACIÓN. ",
+    "LIMA, DD DE MMMM DE YYYY (*) EXPOSICIÓN DE MOTIVOS",
 )
 
 
