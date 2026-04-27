@@ -5,23 +5,48 @@ from __future__ import annotations
 # marker; slice returned from the original raw text.
 
 _HEADINGS = (
-    "PROYECTO DE LEY",
+    """EL CONGRESO DE LA REPÚBLICA
+HA DADO LA LEY SIGUIENTE""",
+    """EL CONGRESO DE LA REPÚBLICA
+Ha dado la Ley siguiente:""",
+    """El Congreso de la República
+Ha dado la siguiente Ley"""
+    """El Congreso de la República,
+Ha dado la siguiente Ley:""",
+    """EL CONGRESO DE LA REPÚBLICA;
+Ha dado la Ley siguiente:""",
+    """El Congreso de la República;
+Ha dado la Ley siguiente:""",
+    """EL CONGRESO DE LA REPÚBLICA;
+Ha dado la Resolución Legislativa del Congreso
+siguiente:""",
+    """EL CONGRESO DE LA REPÚBLICA;
+Ha dado la Resolución Legislativa del Congreso
+siguiente""",
+    """FÓRMULA LEGAL""",
     "PROYECTO DE RESOLUCION LEGISLATIVA",
     "PROYECTO DE RESOLUCIÓN LEGISLATIVA",
-    "EXPOSICION DE MOTIVOS",
-    "EXPOSICIÓN DE MOTIVOS",
     "FORMULA LEGAL",
     "FÓRMULA LEGAL",
-    "ARTICULO 1",
-    "ARTÍCULO 1",
-    "ARTICULO PRIMERO",
-    "ARTÍCULO PRIMERO",
+    """EL CONGRESO DE LA REPÚBLICA,
+Ha dado la Ley siguiente:""",
+    """El Congreso de la República
+Ha dado la Ley siguiente: """,
+    """EL CONGRESO DE LA REPÚBLICА;
+Ha dado la Ley siguiente:""",
 )
 
 _END_MARKERS = (
-    "CONSEJO DIRECTIVO DEL CONGRESO",
-    "EN SESION DE LA FECHA, TOMO CONOCIMIENTO DEL DICTAMEN",
-    "EN SESIÓN DE LA FECHA, TOMÓ CONOCIMIENTO DEL DICTAMEN",
+    "COMUNIQUESE AL SEÑOR PRESIDENTE DE LA REPUBLICA PARA SU PROMULGACIÓN",
+    "Comuníquese al señor Presidente de la República para su promulgación."
+    "Lima DD de MMMM YYYY (*) EXPOSICIÓN DE MOTIVOS"
+    """Comuníquese al señor Presidente de la República
+para su promulgación."""
+    """Comuniquese al señor presidente de la República para su promulgación.""",
+    """Comuníquese al señor Presidente de la República
+para su promulgación""",
+    """Comuníquese al señor Presidente de la República para su promulgación. """,
+    """Lima, DD de MMMM de YYYY (*) EXPOSICIÓN DE MOTIVOS""",
 )
 
 
@@ -33,6 +58,7 @@ def normalize_bill_text(s: str) -> str:
 def _earliest_match(
     haystack: str, needles: tuple[str, ...], min_pos: int = 0
 ) -> int | None:
+    """This function searches for needles in a haystack. In other words, we search for a START or END sequence in a bill."""
     hits = [i for i in (haystack.find(n) for n in needles) if i >= min_pos]
     return min(hits) if hits else None
 
