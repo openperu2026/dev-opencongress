@@ -45,8 +45,24 @@ def normalize_party_name(name: str) -> str:
 
 
 def gen_congresistas_df(session: Session) -> None:
-    bills_congresistas = session.query(RawBill.congresistas).distinct().all()
-    motions_congresistas = session.query(RawMotion.congresistas).distinct().all()
+    """
+    Extracts additional information from congresistas that are not in their
+    profile page, but in the bills responses.
+
+    Saves a JSON file at the processed directory.
+
+    Args:
+        session (Session): database Session
+    """
+    bills_congresistas = (
+        session.query(RawBill.congresistas).filter(RawBill.last_update).distinct().all()
+    )
+    motions_congresistas = (
+        session.query(RawMotion.congresistas)
+        .filter(RawBill.last_update)
+        .distinct()
+        .all()
+    )
 
     all_cong = []
 
@@ -70,9 +86,14 @@ def gen_congresistas_df(session: Session) -> None:
 
 
 def get_current_leg_year(timestamp: str) -> LegislativeYear:
+    """
+    Maps a timestamp into a LegislativeYear
+    """
     dt = datetime.fromisoformat(timestamp)
     year = dt.year
 
+    # This cutoff relates to the Peruvian parliament dynamic: a legislative year
+    # starts and ends on 28th of July of each year.
     cutoff = datetime(year, 7, 28)
     if dt < cutoff:
         # Before 28th July
@@ -85,10 +106,28 @@ def get_current_leg_year(timestamp: str) -> LegislativeYear:
 def create_vote_ids(
     step_list: list[BillStep | MotionStep],
 ) -> list[BillStep | MotionStep]:
+    """
+    Generate deterministic vote event IDs for a bill.
+
+    Vote steps are first sorted by date. Each vote event is then assigned an ID
+    using the format `<bill_id>_<n>`, where `n` represents the vote event's
+    position in the sorted sequence.
+
+    Args:
+        step_list (list[BillStep | MotionStep]): Steps associated with a bill
+        or motion.
+
+    Returns:
+        list[BillStep | MotionStep]: Sorted steps, with vote event IDs assigned
+        to vote steps.
+    """
+    # Sorting steps based on step date
     sorted_list = sorted(step_list, key=attrgetter("step_date"))
+
     final_list = []
     vote_step_counter = 0
     for step in sorted_list:
+        # In case is a vote_step, then it creates their vote_event_id
         if step.vote_step:
             vote_step_counter += 1
             if isinstance(step, BillStep):
