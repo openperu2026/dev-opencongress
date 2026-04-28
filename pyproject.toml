@@ -43,5 +43,6 @@ backend = { path = "backend" }
 
 [dependency-groups]
 dev = [
+    "zensical>=0.0.34",
     "openpyxl>=3.1.5",
 ]
