@@ -8,8 +8,7 @@ from loguru import logger
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
-from backend import find_leg_period
-from backend.config import settings
+from backend.config import settings, directories
 from backend.database import models as db_models
 from backend.database.models import Bill, Motion, Ley
 from backend.database.crud import (
@@ -39,7 +38,11 @@ from backend.process.bills import (
     process_bill_document,
     process_bill_steps,
 )
-from backend.process.congresistas import process_memberships, process_profile_content
+from backend.process.congresistas import (
+    process_memberships,
+    process_profile_content,
+    get_cong_data,
+)
 from backend.process.motions import (
     process_motion,
     process_motion_document,
@@ -487,6 +490,10 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
+
+        CONG_JSON = directories.PROCESSED_DATA / "cong_info_2021_2026.json"
+
+        dict_cong_data = get_cong_data(CONG_JSON)
         with self.RawSession() as raw_db, self.DBSession() as db:
             rows = (
                 raw_db.query(RawCongresista)
@@ -506,11 +513,10 @@ class OpenPeruOrchestrator:
                         raw_cong.processed = False
                         stats.skipped += 1
                         continue
-                    cong_schema = process_profile_content(raw_cong)
+                    cong_schema = process_profile_content(raw_cong, dict_cong_data)
                     pre = crud_core.find_congresista(
                         db,
-                        name=cong_schema.nombre,
-                        leg_period=cong_schema.leg_period,
+                        name=cong_schema.full_name,
                         website=cong_schema.website,
                     )
                     cong = crud_core.upsert_congresista(db, cong_schema)
@@ -637,7 +643,6 @@ class OpenPeruOrchestrator:
                         cong = crud_core.find_congresista(
                             db,
                             name=ms.nombre,
-                            leg_period=ms.leg_period,
                             website=ms.web_page,
                         )
                         if cong is None:
@@ -707,7 +712,6 @@ class OpenPeruOrchestrator:
                         cong = crud_core.find_congresista(
                             db,
                             name=ms.cong_name,
-                            leg_period=find_leg_period(str(leg_year_value)),
                             website=ms.website,
                         )
                         bancada = bancadas_index.get(
@@ -765,7 +769,6 @@ class OpenPeruOrchestrator:
                         cong = crud_core.find_congresista(
                             db,
                             name=cong_rel.nombre,
-                            leg_period=cong_rel.leg_period,
                             website=cong_rel.web_page,
                         )
                         if cong is None:
@@ -859,7 +862,6 @@ class OpenPeruOrchestrator:
                         cong = crud_core.find_congresista(
                             db,
                             name=cong_rel.nombre,
-                            leg_period=cong_rel.leg_period,
                             website=cong_rel.web_page,
                         )
                         if cong is None:

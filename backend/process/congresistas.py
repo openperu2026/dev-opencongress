@@ -1,34 +1,90 @@
 from backend import normalize_membership_role
 from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership
+from backend.process.utils import gen_congresistas_df
+from backend.database.session import get_db
 
 import json
+from pathlib import Path
 from datetime import datetime, timezone
-from lxml.html import fromstring
+from lxml.html import fromstring, HtmlElement
 
 
-def xpath2(xpath_query, parse):
+def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
+    if not json_path.exists():
+        gen_congresistas_df(next(get_db), True)
+
+    with open(json_path, "r") as file:
+        data = json.load(file)
+
+    final_dict = dict()
+    for cong in data:
+        data_cong = _process_cong_data(cong)
+        final_dict[data_cong["website"]] = data_cong
+
+    return final_dict
+
+
+def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
+    last_name, first_name = [sub.strip() for sub in cong_dict["nombre"].split(",")]
+    full_name = f"{first_name} {last_name}"
+
+    if cong_dict["dni"] == "07202572":
+        # This is due to an error in the website, where it points to HernandoGarcia
+        # which it doesn't exist
+        website = "https://www3.congreso.gob.pe/congresistas2021/HernandoGuerraGarcia/"
+    else:
+        website = cong_dict["pagWeb"]
+
+    return {
+        "first_name": first_name,
+        "last_name": last_name,
+        "full_name": full_name,
+        "dni": cong_dict["dni"],
+        "gender": "Masculino" if cong_dict["sexo"] == "M" else "Femenino",
+        "website": website,
+    }
+
+
+def xpath2(xpath_query: str, parse: HtmlElement):
     result = parse.xpath(xpath_query)
     return result[0].text if result else None
 
 
-def process_profile_content(raw_cong: RawCongresista) -> Congresista:
+def process_profile_content(
+    raw_cong: RawCongresista, dict_cong_data: dict[str, dict]
+) -> Congresista:
     html = fromstring(raw_cong.profile_content)
-
-    return Congresista(
-        nombre=xpath2('//*[@class="nombres"]/span[2]', html),
-        leg_period=raw_cong.leg_period,
-        party_name=xpath2('//*[@class="grupo"]/span[2]', html),
-        current_bancada=xpath2('//*[@class="bancada"]/span[2]', html),
-        votes_in_election=int(
-            xpath2('//*[@class="votacion"]/span[2]', html).replace(",", "")
-        ),
-        dist_electoral=xpath2('//*[@class="representa"]/span[2]', html),
-        condicion=xpath2('//*[@class="condicion"]/span[2]', html),
-        website=raw_cong.url,
-        photo_url="https://www.congreso.gob.pe"
-        + html.xpath('//*[@class="foto"]/img/@src')[0],
+    photo_url = (
+        f"https://www.congreso.gob.pe{html.xpath('//*[@class="foto"]/img/@src')[0]}"
     )
+    website = raw_cong.website
+    data_cong = dict_cong_data.get(website)
+
+    if data_cong and raw_cong.leg_period == "Parlamentario 2021 - 2026":
+        return Congresista(
+            full_name=data_cong.get("full_name"),
+            first_name=data_cong.get("first_name"),
+            last_name=data_cong.get("last_name"),
+            dni=data_cong.get("dni"),
+            gender=data_cong.get("gender"),
+            photo_url=photo_url,
+            website=data_cong.get("website"),
+        )
+    print(f"Not found for: {raw_cong.website}")
+    return Congresista(
+        full_name=xpath2('//*[@class="nombres"]/span[2]', html),
+        photo_url=photo_url,
+        website=raw_cong.website,
+    )
+    # TODO: Add it to Membership?
+    # party_name=xpath2('//*[@class="grupo"]/span[2]', html),
+    # current_bancada=xpath2('//*[@class="bancada"]/span[2]', html),
+    # votes_in_election=int(
+    #     xpath2('//*[@class="votacion"]/span[2]', html).replace(",", "")
+    # ),
+    # dist_electoral=xpath2('//*[@class="representa"]/span[2]', html),
+    # condicion=xpath2('//*[@class="condicion"]/span[2]', html),
 
 
 def process_memberships(

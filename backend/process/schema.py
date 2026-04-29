@@ -453,36 +453,36 @@ class Congresista(PrintableModel):
     Represents a member of the peruvian parliament
 
     Attributes:
-        nombre (str): Name of the person.
-        leg_period (str): Legislative period.
-        party_name (str): Name of the party from where the person was elected.
-        current_bancada (str): Name of the current bancada.
-        votes_in_election (int): Number of votes obtain in elections
-        dist_electoral (str): Electoral district.
-        condicion (str): Condition of the congressperson, e.g., 'active', 'inactive'.
-        website (str): Official website of the congressperson.
+        full_name (str): Full name of the person.
+        first_name (str): First name of the person.
+        last_name (str): Last name of the person.
+        dni (str): DNI of the person.
+        gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
+        website (str): Official website of the congressperson.
     """
 
-    # Attributes that fit in Popolo structure
-    nombre: str
-    leg_period: LegPeriod
-    party_name: str
-    current_bancada: str
-    votes_in_election: int
-    dist_electoral: Optional[str]
-    condicion: str
-    website: str
+    full_name: str
+    first_name: str | None = None
+    last_name: str | None = None
+    dni: str | None = None
+    gender: str | None = None
     photo_url: str
+    website: str
 
-    @field_validator("leg_period", mode="before")
+    @field_validator("gender", mode="before")
     @classmethod
-    def validate_leg_period(cls, v):
-        if isinstance(v, LegPeriod):
+    def validate_gender(cls, v):
+        if v in ("Masculino", "Femenino"):
             return v
-        return parse_leg_period(v)
+        return None
 
-    model_config = ConfigDict(use_enum_values=False)
+    @field_validator("dni", mode="before")
+    @classmethod
+    def validate_dni(cls, v):
+        if len(v) == 8 and isinstance(v, str):
+            return v
+        return None
 
 
 class Bancada(PrintableModel):

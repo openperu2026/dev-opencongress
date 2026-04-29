@@ -25,7 +25,7 @@ from backend import (
     TypeCommittee,
     MotionType,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 
 Base = declarative_base()
 
@@ -285,33 +285,32 @@ class Congresista(Base):
 
     Attributes:
         id (str): Unique identifier for the person.
-        nombre (str): Name of the person.
-        leg_period (str): Legislative period.
-        party_name (str): Name of the party.
-        current_bancada (str): Name of the bancada.
-        votes_in_election (int): Number of votes obtain in elections
-        dist_electoral (str): Electoral district.
-        condicion (str): Condition of the congressperson, e.g., 'active', 'inactive'.
-        website (str): Official website of the congressperson.
+        full_name (str): Full name of the person.
+        first_name (str): First name of the person.
+        last_name (str): Last name of the person.
+        dni (str): DNI of the person.
+        gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
+        website (str): Official website of the congressperson.
     """
 
     __tablename__ = "congresistas"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    nombre = Column(String, nullable=False)
-    leg_period = Column(Enum(LegPeriod, name="leg_period"), nullable=False)
-    party_name = Column(String, nullable=False)
-    current_bancada = Column(String, nullable=False)
-    votes_in_election = Column(Integer, nullable=False)
-    dist_electoral = Column(String, nullable=True)
-    condicion = Column(String, nullable=False)
-    website = Column(String, nullable=False)
-    photo_url = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    full_name: Mapped[str] = mapped_column(nullable=False)
+    first_name: Mapped[str] = mapped_column(nullable=True)
+    last_name: Mapped[str] = mapped_column(nullable=True)
+    dni: Mapped[str] = mapped_column(nullable=True)
+    gender: Mapped[str] = mapped_column(nullable=True)
+    photo_url: Mapped[str] = mapped_column(nullable=False)
+    website: Mapped[str] = mapped_column(nullable=False)
 
-    __table_args__ = (
-        UniqueConstraint("nombre", "leg_period", name="congresista_uniq"),
-    )
+    # TODO: This info should go into a Membership
+    # party_name = Column(String, nullable=False)
+    # current_bancada = Column(String, nullable=False)
+    # votes_in_election = Column(Integer, nullable=False)
+    # dist_electoral = Column(String, nullable=True)
+    # condicion = Column(String, nullable=False)
 
 
 class Bancada(Base):
