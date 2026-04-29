@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+import time
 from datetime import datetime, timedelta
+from typing import Type, Callable
 
 from loguru import logger
 from sqlalchemy import create_engine, func
@@ -10,10 +11,16 @@ from sqlalchemy.orm import sessionmaker
 from backend import find_leg_period
 from backend.config import settings
 from backend.database import models as db_models
+from backend.database.models import Bill, Motion, Ley
 from backend.database.crud import (
     pipeline_bills as crud_bills,
     pipeline_core as crud_core,
     pipeline_motions as crud_motions,
+)
+from backend.database.crud.pipeline_core import (
+    ProcessStats,
+    ScraperStats,
+    upsert_scraper_runs,
 )
 from backend.database.raw_models import (
     RawBase,
@@ -24,11 +31,6 @@ from backend.database.raw_models import (
     RawLey,
     RawMotion,
     RawOrganization,
-)
-from backend.documents.downloader import (
-    DownloadStats,
-    download_bill_documents,
-    download_motion_documents,
 )
 from backend.process.bancadas import process_bancada
 from backend.process.bills import (
@@ -58,13 +60,6 @@ from backend.scrapers.leyes import RawLeyesScraper
 from backend.scrapers.motions import RawMotionScraper
 from backend.scrapers.motions_documents import RawMotionDocumentScraper
 from backend.scrapers.organizations import RawOrganizationScraper
-
-
-@dataclass
-class StageStats:
-    processed: int = 0
-    skipped: int = 0
-    errors: int = 0
 
 
 class OpenPeruOrchestrator:
@@ -103,6 +98,37 @@ class OpenPeruOrchestrator:
             last_ts = raw_db.query(func.max(raw_model.timestamp)).scalar()
             return bool(last_ts and last_ts >= cutoff)
 
+    def _get_approved_ids(self, model: Bill | Motion) -> list[str]:
+        with self.DBSession() as db:
+            ids = db.query(model.id).filter(model.approved).all()
+        return ids
+
+    def _get_ids_to_update(
+        self,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        model: Type[Bill] | Type[Motion] | Type[Ley],
+        days: int = 7,
+    ) -> list[str] | None:
+        """
+        Return ids that should be refreshed this week:
+          - latest snapshot is older than `max_age_days`
+          - latest snapshot is not approved
+        """
+        cutoff = datetime.now() - timedelta(days=days)
+
+        with self.RawSession() as raw_db:
+            latest_rows = raw_db.query(raw_model).filter(raw_model.last_update).all()
+            pending_ids: list[str] = []
+
+            for row in latest_rows:
+                if row.timestamp > cutoff:
+                    continue
+                if row.id in self._get_approved_ids(model):
+                    continue
+                pending_ids.append(row.id)
+
+            return pending_ids
+
     def run_scrapers(
         self,
         *,
@@ -127,6 +153,7 @@ class OpenPeruOrchestrator:
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
         """
         logger.info("Starting processing pipeline")
+        scraper_results: dict[str, ScraperStats] = dict()
 
         if scrape_others:
             logger.info(
@@ -139,8 +166,15 @@ class OpenPeruOrchestrator:
                 )
             else:
                 cong = RawCongresistasScraper()
+                start_time = datetime.now()
                 cong.get_dict_periodos()
-                cong.extract_and_load_all(only_current=only_current)
+                scraped_congs = cong.extract_and_load_all(only_current=only_current)
+                end_time = datetime.now()
+                scraper_results[
+                    "congresistas.py" : ScraperStats(
+                        start_time, end_time, len(scraped_congs)
+                    )
+                ]
 
             if self._recent_raw_exists(RawBancada, days=others_days):
                 logger.info(
@@ -148,8 +182,15 @@ class OpenPeruOrchestrator:
                 )
             else:
                 banc = RawBancadaScraper()
+                start_time = datetime.now()
                 banc.get_raw_bancadas(only_current=only_current)
-                banc.add_bancadas_to_db()
+                scraped_banc = banc.add_bancadas_to_db()
+                end_time = datetime.now()
+                scraper_results[
+                    "bancadas.py" : ScraperStats(
+                        start_time, end_time, len(scraped_banc)
+                    )
+                ]
 
             if self._recent_raw_exists(RawCommittee, days=others_days):
                 logger.info(
@@ -157,8 +198,15 @@ class OpenPeruOrchestrator:
                 )
             else:
                 comm = RawCommitteeScraper()
-                comm.get_raw_committees(only_current=only_current)
+                start_time = datetime.now()
+                scraped_comm = comm.get_raw_committees(only_current=only_current)
+                end_time = datetime.now()
                 comm.add_committees_to_db()
+                scraper_results[
+                    "committees.py" : ScraperStats(
+                        start_time, end_time, len(scraped_comm)
+                    )
+                ]
 
             if self._recent_raw_exists(RawOrganization, days=others_days):
                 logger.info(
@@ -166,37 +214,101 @@ class OpenPeruOrchestrator:
                 )
             else:
                 org = RawOrganizationScraper()
-                org.get_raw_organizations(only_current=only_current)
+                start_time = datetime.now()
+                scraped_orgs = org.get_raw_organizations(only_current=only_current)
+                end_time = datetime.now()
                 org.add_organizations_to_db()
+                scraper_results[
+                    "organizations.py" : ScraperStats(
+                        start_time, end_time, len(scraped_orgs)
+                    )
+                ]
 
         if scrape_bills:
+            scraper = RawBillScraper()
             if all(v is not None for v in [bill_year, bill_start, bill_end]):
-                self._scrape_bill_range(int(bill_year), int(bill_start), int(bill_end))
+                scraper_results["bills.py"] = self._scrape_range(
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_bill,
+                    buffer_attr="raw_bills",
+                    load_fn=scraper.load_raw_bills,
+                    year=int(bill_year),
+                    start=int(bill_start),
+                    end=int(bill_end),
+                    flush_every=100,
+                    entity_name="Bills",
+                )
             else:
-                RawBillScraper().scrape_pending_weekly(
-                    max_age_days=weekly_days, flush_every=100
+                scraper_results["bills.py"] = self._scrape_pending_weekly(
+                    raw_model=RawBill,
+                    model=Bill,
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_bill,
+                    buffer_attr="raw_bills",
+                    load_fn=scraper.load_raw_bills,
+                    max_age_days=weekly_days,
+                    flush_every=100,
                 )
 
         if scrape_motions:
+            scraper = RawMotionScraper()
             if all(v is not None for v in [motion_year, motion_start, motion_end]):
-                self._scrape_motion_range(
-                    int(motion_year), int(motion_start), int(motion_end)
+                scraper_results["motions.py"] = self._scrape_range(
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_motion,
+                    buffer_attr="raw_motions",
+                    load_fn=scraper.load_raw_motions,
+                    year=int(motion_year),
+                    start=int(motion_start),
+                    end=int(motion_end),
+                    flush_every=100,
+                    entity_name="Motions",
                 )
             else:
-                RawMotionScraper().scrape_pending_weekly(
-                    max_age_days=weekly_days, flush_every=100
+                scraper_results["motions.py"] = self._scrape_pending_weekly(
+                    raw_model=RawMotion,
+                    model=Motion,
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_motion,
+                    buffer_attr="raw_motions",
+                    load_fn=scraper.load_raw_motions,
+                    max_age_days=weekly_days,
+                    flush_every=100,
                 )
 
         if scrape_documents and (scrape_bills or scrape_motions):
-            self._scrape_pending_documents()
+            doc_bill_run, doc_motion_run = self._scrape_pending_documents()
+            scraper_results["bills_documents.py"] = doc_bill_run
+            scraper_results["motions_documents.py"] = doc_motion_run
 
         if scrape_leyes:
+            scraper = RawLeyesScraper()
             if all(v is not None for v in [ley_start, ley_end]):
-                self._scrape_leyes_range(int(ley_start), int(ley_end))
-            else:
-                RawLeyesScraper().scrape_pending_weekly(
-                    max_age_days=weekly_days, flush_every=100
+                scraper_results["leyes.py"] = self._scrape_range(
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_ley,
+                    buffer_attr="raw_leyes",
+                    load_fn=scraper.load_raw_leyes,
+                    year=None,
+                    start=int(ley_start),
+                    end=int(ley_end),
+                    flush_every=100,
+                    entity_name="Ley",
                 )
+            else:
+                scraper_results["leyes.py"] = self._scrape_pending_weekly(
+                    raw_model=RawLey,
+                    model=Ley,
+                    scraper=scraper,
+                    scrape_fn=scraper.scrape_ley,
+                    buffer_attr="raw_leyes",
+                    load_fn=scraper.load_raw_leyes,
+                    max_age_days=weekly_days,
+                    flush_every=100,
+                    entity_name="Ley",
+                )
+
+        upsert_scraper_runs(self.RawSession, scraper_results)
 
     def run_processing(
         self,
@@ -209,12 +321,12 @@ class OpenPeruOrchestrator:
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
-    ) -> dict[str, StageStats]:
+    ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
         """
         logger.info("Starting processing pipeline")
-        summary: dict[str, StageStats] = {}
+        summary: dict[str, ProcessStats] = {}
 
         if process_others:
             summary["organizations"] = self._process_organizations()
@@ -235,84 +347,144 @@ class OpenPeruOrchestrator:
 
         return summary
 
-    def run_document_downloads(
-        self,
-        *,
-        download_bills: bool = True,
-        download_motions: bool = True,
-        update: bool = False,
-        upload_s3: bool = False,
-        limit: int | None = None,
-    ) -> dict[str, DownloadStats]:
-        summary: dict[str, DownloadStats] = {}
-        with self.RawSession() as raw_db:
-            if download_bills:
-                summary["bill_documents"] = download_bill_documents(
-                    raw_db, update=update, upload_s3=upload_s3, limit=limit
-                )
-            if download_motions:
-                summary["motion_documents"] = download_motion_documents(
-                    raw_db, update=update, upload_s3=upload_s3, limit=limit
-                )
-        return summary
-
     # -----------------------------
     # Scraping internals
     # -----------------------------
-    def _scrape_bill_range(
-        self, year: int, start: int, end: int, flush_every: int = 100
-    ) -> None:
-        logger.info(f"Scraping bills in range {year}_{start}..{year}_{end}")
-        scraper = RawBillScraper()
-        for bill_number in range(start, end + 1):
-            scraper.scrape_bill(str(year), str(bill_number))
-            if len(scraper.raw_bills) >= flush_every:
-                scraper.load_raw_bills()
-        if scraper.raw_bills:
-            scraper.load_raw_bills()
+    def _scrape_range(
+        self,
+        scraper,
+        scrape_fn: Callable[[str, str], None],
+        buffer_attr: str,
+        load_fn: Callable[[], None],
+        year: int | None,
+        start: int,
+        end: int,
+        flush_every: int = 100,
+        entity_name: str = "items",
+    ) -> ScraperStats:
+        logger.info(f"Scraping {entity_name} in range {year}_{start}..{year}_{end}")
 
-    def _scrape_motion_range(
-        self, year: int, start: int, end: int, flush_every: int = 100
-    ) -> None:
-        logger.info(f"Scraping motions in range {year}_{start}..{year}_{end}")
-        scraper = RawMotionScraper()
-        for motion_number in range(start, end + 1):
-            scraper.scrape_motion(str(year), str(motion_number))
-            if len(scraper.raw_motions) >= flush_every:
-                scraper.load_raw_motions()
-        if scraper.raw_motions:
-            scraper.load_raw_motions()
+        start_time = datetime.now()
+        count = 0
 
-    def _scrape_pending_documents(self) -> None:
+        for number in range(start, end + 1):
+            if entity_name == "Ley":
+                scrape_fn(str(number))
+            else:
+                scrape_fn(str(year), str(number))
+
+            current_length = len(getattr(scraper, buffer_attr))
+
+            if current_length >= flush_every:
+                count += current_length
+                load_fn()
+
+        remaining = len(getattr(scraper, buffer_attr))
+
+        if remaining:
+            count += remaining
+            load_fn()
+
+        end_time = datetime.now()
+        return ScraperStats(start_time, end_time, count)
+
+    def _scrape_pending_weekly(
+        self,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        model: Type[Bill] | Type[Motion] | Type[Ley],
+        scraper,
+        scrape_fn: Callable[[str, str], None],
+        buffer_attr: str,
+        load_fn: Callable[[], None],
+        max_age_days: int = 7,
+        flush_every: int = 100,
+        entity_name: str = "items",
+    ) -> ScraperStats:
+        pending_ids = self._get_ids_to_update(raw_model, model, max_age_days)
+        start_time = datetime.now()
+        count = 0
+
+        for idx, item_id in enumerate(pending_ids, start=1):
+            year, number = item_id.split("_", 1)
+
+            if entity_name == "Ley":
+                scrape_fn(str(number))
+            else:
+                scrape_fn(str(year), str(number))
+
+            current_length = len(getattr(scraper, buffer_attr))
+
+            if current_length >= flush_every:
+                count += current_length
+                load_fn()
+
+            if idx % 10 == 0:
+                time.sleep(2)
+
+        remaining = len(getattr(scraper, buffer_attr))
+
+        if remaining:
+            count += remaining
+            load_fn()
+
+        end_time = datetime.now()
+        return ScraperStats(start_time, end_time, count)
+
+    def _scrape_pending_documents(self) -> tuple[ScraperStats, ScraperStats]:
         logger.info("Scraping pending bill and motion documents")
 
         bill_docs = RawBillDocumentScraper()
+        start_time = datetime.now()
+        count = 0
         for bill_id in bill_docs.get_bills_pending_documents():
-            bill_docs.get_bill_documents(bill_id=bill_id, update=False, prioritize=True)
+            bill_docs.get_bill_documents(
+                bill_id=bill_id, update=False, download_local=True, upload_s3=False
+            )
+            count += len(bill_docs.documents)
             bill_docs.load_raw_documents()
+        end_time = datetime.now()
+        doc_bill_run = ScraperStats(start_time, end_time, count)
 
         motion_docs = RawMotionDocumentScraper()
+        start_time = datetime.now()
+        count = 0
         for motion_id in motion_docs.get_motions_pending_documents():
             motion_docs.get_motion_documents(
-                motion_id=motion_id, update=False, prioritize=True
+                motion_id=motion_id, update=False, download_local=True, upload_s3=False
             )
+            count += len(motion_docs.documents)
             motion_docs.load_raw_documents()
+        end_time = datetime.now()
+        doc_motion_run = ScraperStats(start_time, end_time, count)
 
-    def _scrape_leyes_range(self, ley_start: int, ley_end: int, flush_every: int = 100):
+        return doc_bill_run, doc_motion_run
+
+    def _scrape_leyes_range(
+        self, ley_start: int, ley_end: int, flush_every: int = 100
+    ) -> ScraperStats:
         logger.info(f"Scraping leyes in range {ley_start}..{ley_end}")
         scraper = RawLeyesScraper()
+        start_time = datetime.now()
+        count = 0
         for ley_number in range(ley_start, ley_end + 1):
             scraper.scrape_ley(ley_number)
-            if len(scraper.raw_leyes) >= flush_every:
+            count_leyes = len(scraper.raw_leyes)
+            if count_leyes >= flush_every:
+                count += count_leyes
                 scraper.load_raw_leyes()
-        if scraper.raw_leyes:
+
+        remaining = len(scraper.raw_leyes)
+        if remaining:
+            count += remaining
             scraper.load_raw_leyes()
+        end_time = datetime.now()
+        return ScraperStats(start_time, end_time, count)
 
     # -----------------------------
     # Processing internals
     # -----------------------------
-    def _process_congresistas(self) -> StageStats:
-        stats = StageStats()
+    def _process_congresistas(self) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -383,8 +555,8 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_organizations(self) -> StageStats:
-        stats = StageStats()
+    def _process_organizations(self) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -495,8 +667,8 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_bancadas(self) -> StageStats:
-        stats = StageStats()
+    def _process_bancadas(self) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -567,8 +739,8 @@ class OpenPeruOrchestrator:
 
     def _process_bills(
         self, *, include_documents: bool, limit: int | None
-    ) -> StageStats:
-        stats = StageStats()
+    ) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -623,6 +795,8 @@ class OpenPeruOrchestrator:
                             step_schema.step_date,
                             step_schema.step_detail,
                             step_schema.step_status,
+                            step_schema.vote_step,
+                            step_schema.vote_id,
                         )
 
                     if include_documents:
@@ -659,8 +833,8 @@ class OpenPeruOrchestrator:
 
     def _process_motions(
         self, *, include_documents: bool, limit: int | None
-    ) -> StageStats:
-        stats = StageStats()
+    ) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
@@ -703,6 +877,8 @@ class OpenPeruOrchestrator:
                             step_date=step_schema.step_date,
                             step_detail=step_schema.step_detail,
                             step_status=step_schema.step_status,
+                            vote_step=step_schema.vote_step,
+                            vote_id=step_schema.vote_id,
                         )
 
                     if include_documents:
@@ -737,8 +913,8 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_leyes(self, *, limit: int | None) -> StageStats:
-        stats = StageStats()
+    def _process_leyes(self, *, limit: int | None) -> ProcessStats:
+        stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:

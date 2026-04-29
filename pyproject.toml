@@ -27,7 +27,7 @@ dependencies = [
     "pre-commit>=4.2.0",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
-    "pymupdf>=1.25.5",
+    "pymupdf>=1.27.2.2",
     "pytesseract>=0.3.13",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
@@ -44,5 +44,6 @@ backend = { path = "backend" }
 
 [dependency-groups]
 dev = [
+    "zensical>=0.0.34",
     "openpyxl>=3.1.5",
 ]

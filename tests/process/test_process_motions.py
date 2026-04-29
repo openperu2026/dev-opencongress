@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 from datetime import datetime
 import backend.process.motions as mod
+from backend import RoleTypeBill
 
 
 def _raw_motion(
@@ -96,10 +97,10 @@ def test_process_motion_with_firmantes_sets_author_and_cong_list():
     assert congs[0].motion_id == "MO_999"
     assert congs[0].nombre == "Juan Perez"
     assert congs[0].leg_period == "2021-2026"
-    assert congs[0].role_type == "author"
+    assert congs[0].role_type == RoleTypeBill.AUTHOR
 
     assert congs[1].nombre == "Maria Lopez"
-    assert congs[1].role_type == "coauthor"
+    assert congs[1].role_type == RoleTypeBill.COAUTHOR
 
 
 def test_process_motion_sets_motion_approved_true_only_for_published_state():
@@ -137,18 +138,21 @@ def test_process_motion_steps_vote_detection_and_vote_id_increment():
         {
             "seguimientoId": 123,
             "fecSeguimiento": "2026-01-01",
+            "desEstadoMocion": "En Comisión",
             "detalle": "Pasa a comisión",
             "adjuntos": [{"seguimientoAdjuntoId": 1}],
         },
         {
             "seguimientoId": 234,
             "fecSeguimiento": "2026-01-02",
+            "desEstadoMocion": "Aprobada la Moción",
             "detalle": "Se realiza VOTACIÓN en el pleno",
             "adjuntos": [{"seguimientoAdjuntoId": 2}, {"seguimientoAdjuntoId": 3}],
         },
         {
             "seguimientoId": 345,
             "fecSeguimiento": "2026-01-03",
+            "desEstadoMocion": "Rechazada",
             "detalle": "Otra votacion en comisión (segunda)",
             "adjuntos": [],
         },

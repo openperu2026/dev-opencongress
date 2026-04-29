@@ -4,7 +4,6 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session
 
-from backend import classify_motion_des_estado
 from backend.database import models as db_models
 from backend.database.crud.pipeline_core import find_congresista
 from backend.database.raw_models import RawMotionDocument
@@ -74,14 +73,17 @@ def upsert_motion_step(
     step_date,
     step_detail: str,
     step_status: str | None = None,
+    vote_step: bool = False,
+    vote_id: str | None = None,
 ) -> db_models.MotionStep:
-    step_type = classify_motion_des_estado(step_status or step_detail)
     existing = db.get(db_models.MotionStep, step_id)
     if existing is None:
         obj = db_models.MotionStep(
             id=step_id,
             motion_id=motion_id,
-            step_type=step_type,
+            vote_step=vote_step,
+            vote_event_id=vote_id,
+            step_type=step_status,
             step_date=step_date,
             step_detail=step_detail,
         )
@@ -90,7 +92,9 @@ def upsert_motion_step(
         return obj
 
     existing.motion_id = motion_id
-    existing.step_type = step_type
+    existing.vote_step = vote_step
+    existing.vote_event_id = vote_id
+    existing.step_type = step_status
     existing.step_date = step_date
     existing.step_detail = step_detail
     db.flush()
