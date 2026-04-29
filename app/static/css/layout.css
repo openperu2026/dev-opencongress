@@ -1,29 +1,34 @@
+body {
+/*Format of the body*/
+    margin: 0;
+    background-color: #f5eeee;
+    color: #344452;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
 .landing-container {
+/*background of one first container*/
+/*This should be body/page background*/
     display: flex;
     justify-content: center;
     align-items: flex-start;
     padding: 40px 20px;
-    background-color: #eef2f7;
+    background-color: #f7f4ee;
     min-height: 100vh;
 }
 
 .content-container {
+/*Background of the conteiner of the buttons*/
     width: 100%;
     max-width: 600px;
-    background: white;
+    background: rgb(241, 237, 237);
     border-radius: 16px;
     padding: 30px 20px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
     text-align: center;
 }
 
-.searching-container {
-    margin-top: 30px;
-    display: flex;
-    justify-content: center;
-}
-
-/* Title */
+/* Format of the text of the Title of the page Open Congress */
 .landing-title {
     font-size: 24px;
     font-weight: 700;
@@ -32,6 +37,7 @@
 }
 
 .landing-subtitle {
+    /*format of the text of the subtitle*/
     font-size: 14px;
     color: #666;
     margin-bottom: 30px;
@@ -44,15 +50,18 @@
 }
 
 /* Menu */
+/*whats this exactly?*/
 .menu {
     display: flex;
     flex-direction: column;
     gap: 15px;
 }
 
+/*Format of the bottons*/
 .menu-card a {
     display: block;
     padding: 12px;
+    /*this a gradeint pf colors*/
     background: linear-gradient(90deg, #6a5af9, #7b6cf6);
     color: white;
     text-decoration: none;
@@ -60,7 +69,7 @@
     font-weight: 500;
     transition: all 0.2s ease;
 }
-
+/*effect when put the mouse overt a button*/
 .menu-card a:hover {
     opacity: 0.9;
     transform: translateY(-2px);
@@ -69,3 +78,54 @@
 
 
 
+
+
+
+/*Formats of:*/
+/*Text of title of the sections
+title{*/
+
+/*Text of subtitles or descriptions
+subtitle{*/
+
+/*Format of input boxes and select boxes
+form-control{*/
+
+/*Format of labels above inputs
+form-label{*/
+
+/*Format of bordered information boxes
+panel{*/
+
+/*Format of links
+link{*/
+
+/*Format of green status text
+text-success{*/
+
+/*Format of red status text
+text-danger{*/
+
+/*Format of yellow status text
+text-warning{*/
+
+/*Format of blue information text
+text-info{*/
+
+/*Format of numbers and statistics
+stat{*/
+
+/*Format of timeline for bill steps
+timeline{*/
+
+/*Format of each item in a timeline
+timeline-item{*/
+
+/*Format of profile information blocks
+profile-summary{*/
+
+/*Format of lists of bills or votings
+item-list{*/
+
+/*Format of source and download links
+source-list{*/
