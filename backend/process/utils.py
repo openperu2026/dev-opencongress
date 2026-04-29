@@ -59,11 +59,10 @@ def gen_congresistas_df(session: Session) -> None:
     )
     motions_congresistas = (
         session.query(RawMotion.congresistas)
-        .filter(RawBill.last_update)
+        .filter(RawMotion.last_update)
         .distinct()
         .all()
     )
-
     all_cong = []
 
     for (json_str,) in bills_congresistas + motions_congresistas:
@@ -75,7 +74,9 @@ def gen_congresistas_df(session: Session) -> None:
             continue
 
     unique_by_congresista = {
-        d["congresistaId"]: d for d in all_cong if "congresistaId" in d
+        d["congresistaId"]: d
+        for d in all_cong
+        if ("congresistaId" in d) and ("dni" in d)
     }
 
     df = pl.DataFrame(list(unique_by_congresista.values()))
