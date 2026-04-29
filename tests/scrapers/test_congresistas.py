@@ -134,7 +134,7 @@ def test_create_raw_congresista_old_period(monkeypatch):
 
     assert isinstance(raw, RawCongresista)
     assert raw.leg_period == period
-    assert raw.url == "https://example.com/perfil/old"
+    assert raw.website == "https://example.com/perfil/old"
     assert raw.profile_content == "PROFILE_HTML"
     assert raw.memberships_content is None
 
@@ -188,7 +188,7 @@ def test_create_raw_congresista_modern_success(monkeypatch):
 
     raw = cong_scraper.create_raw_congresista("Congresistas 2021-2026", "/perfil/123")
 
-    assert raw.url == "https://example.com/perfil/123"
+    assert raw.website == "https://example.com/perfil/123"
     assert raw.profile_content == "<html>PROFILE</html>"
     assert raw.memberships_content == '{"ok": true}'
 
@@ -225,7 +225,7 @@ def test_create_raw_congresista_partial_failure(monkeypatch):
 
     assert isinstance(raw, RawCongresista)
     assert raw.leg_period == "Congresistas 2016-2021"
-    assert raw.url == "https://example.com/perfil/abc"
+    assert raw.website == "https://example.com/perfil/abc"
     assert raw.profile_content == "PROFILE"
     # and because it fails to find the iframe / membership:
     assert raw.memberships_content is None
@@ -304,7 +304,7 @@ def test_add_congresistas_to_db_persists(monkeypatch):
     cong = RawCongresista(
         timestamp=datetime(2021, 1, 1),
         leg_period="Periodo Test",
-        url="https://example.com",
+        website="https://example.com",
         profile_content="<html></html>",
         memberships_content="{}",
     )
@@ -317,7 +317,7 @@ def test_add_congresistas_to_db_persists(monkeypatch):
         assert count == 1
         db_cong = session.query(RawCongresista).first()
         assert db_cong.leg_period == "Periodo Test"
-        assert db_cong.url == "https://example.com"
+        assert db_cong.website == "https://example.com"
 
 
 def test_add_congresistas_to_db_asserts_when_empty():
@@ -334,7 +334,7 @@ def test_add_congresistas_to_db_handles_sqlalchemy_error(monkeypatch):
         RawCongresista(
             timestamp=datetime.now(),
             leg_period="Periodo",
-            url="https://example.com",
+            website="https://example.com",
             profile_content="HTML",
             memberships_content=None,
         )

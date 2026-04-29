@@ -2,6 +2,7 @@ import json
 from types import SimpleNamespace
 import pytest
 import backend.process.congresistas as mod
+from backend import RoleOrganization
 from datetime import datetime
 
 
@@ -73,7 +74,9 @@ def test_process_profile_content_parses_fields_and_votes_int(profile_html):
 def test_process_memberships_all_branches(monkeypatch):
     # Normalize role is external logic: mock it for deterministic tests
     monkeypatch.setattr(
-        mod, "normalize_membership_role", lambda s: (s or "").strip().lower()
+        mod,
+        "normalize_membership_role",
+        lambda s: RoleOrganization((s or "").strip().title()),
     )
 
     memberships_payload = {
@@ -124,7 +127,7 @@ def test_process_memberships_all_branches(monkeypatch):
     m0 = out[0]
     assert m0.nombre == "Juan Pérez"
     assert m0.leg_period == "2021-2026"
-    assert m0.role == "presidente"
+    assert m0.role == RoleOrganization.PRESIDENTE
     assert m0.org_name == "Subcomisión de Acusaciones Constitucionales"
     assert m0.org_type == "Subcomisión de Acusaciones Constitucionales"
     assert m0.comm_type == "Subcomisión de Acusaciones Constitucionales"
@@ -133,7 +136,7 @@ def test_process_memberships_all_branches(monkeypatch):
 
     # 2) type_org != ''
     m1 = out[1]
-    assert m1.role == "miembro"
+    assert m1.role == RoleOrganization.MIEMBRO
     assert m1.org_name == "Comisión de Economía"
     assert m1.org_type == "Comisión"
     assert m1.comm_type == "Comisión Ordinaria"
@@ -142,7 +145,7 @@ def test_process_memberships_all_branches(monkeypatch):
 
     # 3) type_org == ''
     m2 = out[2]
-    assert m2.role == "secretario"
+    assert m2.role == RoleOrganization.SECRETARIO
     assert m2.org_name == "Mesa Directiva"
     assert m2.org_type == "Mesa Directiva"
     assert m2.comm_type is None

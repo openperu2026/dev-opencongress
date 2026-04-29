@@ -2,10 +2,27 @@ from __future__ import annotations
 
 from sqlalchemy import func, tuple_
 from sqlalchemy.orm import Session
+from datetime import datetime
+from dataclasses import dataclass
 
 from backend import find_leg_period
 from backend.database import models as db_models
 from backend.process import schema
+from backend.database.raw_models import ScraperRun
+
+
+@dataclass
+class ProcessStats:
+    processed: int = 0
+    skipped: int = 0
+    errors: int = 0
+
+
+@dataclass
+class ScraperStats:
+    start_time: datetime
+    end_time: datetime
+    scrapped: int = 0
 
 
 def _normalize_leg_year(leg_year) -> str:
@@ -273,7 +290,6 @@ def upsert_bancada_memberships_bulk(db: Session, rows: list[tuple]) -> int:
 
 
 def upsert_ley(db: Session, schema: schema.Ley) -> db_models.Ley:
-
     payload = {
         "id": schema.id,
         "title": schema.title,
@@ -291,3 +307,13 @@ def upsert_ley(db: Session, schema: schema.Ley) -> db_models.Ley:
         setattr(existing, key, value)
     db.flush()
     return existing
+
+
+def upsert_scraper_runs(raw_db: Session, runs: dict[str, ScraperStats]):
+    runs_list = [
+        ScraperRun(scraper, stats.start_time, stats.end_time, stats.scrapped)
+        for scraper, stats in runs.items()
+    ]
+    raw_db.add_all(runs_list)
+    raw_db.flush()
+    return len(runs_list)

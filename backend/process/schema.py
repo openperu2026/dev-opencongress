@@ -265,8 +265,11 @@ class BillStep(PrintableModel):
         id (int): A unique identifier for each step record.
         bill_id (str): The identifier of the bill associated with this step.
         vote_step (bool): Records if the step is a vote or not.
+        vote_id (str): Id of the vote.
         step_date (datetime): The date and time when the step occured.
+        step_status (str): Status category of the step
         step_detail (str): The details on the step
+        step_files (list[int]): list of files related to this step
     """
 
     id: int

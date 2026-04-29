@@ -59,7 +59,7 @@ def sample_vote_event(sample_votes, sample_attendance):
         bill_or_motion="Motion",
         bill_motion_id="123",
         date=datetime.now(),
-        result=VoteResult.APPROVED,
+        result=VoteResult.APROBADO,
         majority_type=MajorityType.SIMPLE,
         votes=sample_votes,
         attendance=sample_attendance,

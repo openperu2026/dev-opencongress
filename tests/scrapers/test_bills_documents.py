@@ -40,22 +40,24 @@ def test_filter_steps_filters_existing(monkeypatch):
         session.add_all(
             [
                 RawBillDocument(
-                    timestamp=datetime.now(timezone.utc),
                     bill_id="2021_1",
+                    step_id=1,
+                    file_id=111,
                     step_date=datetime.now(timezone.utc),
-                    seguimiento_id=1,
-                    archivo_id=111,
                     url="http://example.com/a",
-                    text="A",
+                    s3_key="some_aws_s3_key",
+                    local_path="~/some/local/path",
+                    timestamp=datetime.now(timezone.utc),
                 ),
                 RawBillDocument(
-                    timestamp=datetime.now(timezone.utc),
                     bill_id="2021_1",
+                    step_id=3,
+                    file_id=333,
                     step_date=datetime.now(timezone.utc),
-                    seguimiento_id=3,
-                    archivo_id=333,
                     url="http://example.com/c",
-                    text="C",
+                    s3_key="some_aws_s3_key",
+                    local_path="~/some/local/path",
+                    timestamp=datetime.now(timezone.utc),
                 ),
             ]
         )
@@ -129,7 +131,7 @@ def test_get_bill_documents_populates_documents_and_calls_render_pdf(monkeypatch
 
     def fake_render_pdf(url):
         calls.append(url)
-        return f"TEXT_FROM_{url}"
+        return {1: f"TEXT_FROM_{url}_page_1", 2: f"TEXT_FROM_{url}_page_2"}
 
     monkeypatch.setattr("backend.scrapers.bills_documents.render_pdf", fake_render_pdf)
 
@@ -145,10 +147,9 @@ def test_get_bill_documents_populates_documents_and_calls_render_pdf(monkeypatch
     assert len(scraper.documents) == 1
     doc = scraper.documents[0]
     assert doc.bill_id == bill_id
-    assert doc.archivo_id == 111
-    assert doc.seguimiento_id == 10
+    assert doc.file_id == 111
+    assert doc.step_id == 10
     assert doc.url == expected_url
-    assert doc.text == f"TEXT_FROM_{expected_url}"
     # step_date parsed correctly
     assert isinstance(doc.step_date, datetime)
 
@@ -189,7 +190,7 @@ def test_get_bill_documents_respects_update_flag(monkeypatch):
     # Patch render_pdf to avoid network
     monkeypatch.setattr(
         "backend.scrapers.bills_documents.render_pdf",
-        lambda url: "OK",
+        lambda url: {1: f"TEXT_FROM_{url}_page_1", 2: f"TEXT_FROM_{url}_page_2"},
     )
 
     # Case 1: update=False and filter_steps returns empty -> no URLs
@@ -221,13 +222,14 @@ def test_add_documents_to_db_persists(monkeypatch):
 
     bill_id = "2021_3"
     doc = RawBillDocument(
-        timestamp=datetime.now(timezone.utc),
-        bill_id=bill_id,
+        bill_id="2021_3",
+        step_id="1",
+        file_id="111",
         step_date=datetime.now(timezone.utc),
-        seguimiento_id=1,
-        archivo_id=123,
-        url="http://example.com/doc.pdf",
-        text="SOME TEXT",
+        url="http://example.com/a",
+        s3_key="some_aws_s3_key",
+        local_path="~/some/local/path",
+        timestamp=datetime.now(timezone.utc),
     )
     scraper.documents = [doc]
 
@@ -238,8 +240,7 @@ def test_add_documents_to_db_persists(monkeypatch):
         assert count == 1
         db_doc = session.query(RawBillDocument).first()
         assert db_doc.bill_id == bill_id
-        assert db_doc.archivo_id == "123"
-        assert db_doc.text == "SOME TEXT"
+        assert db_doc.file_id == "111"
 
 
 def test_add_documents_to_db_asserts_when_empty():
@@ -254,13 +255,14 @@ def test_add_documents_to_db_handles_sqlalchemy_error():
     scraper = RawBillDocumentScraper()
     scraper.documents = [
         RawBillDocument(
-            timestamp=datetime.now(timezone.utc),
-            bill_id="2021_4",
+            bill_id="2021_1",
+            step_id=1,
+            file_id=111,
             step_date=datetime.now(timezone.utc),
-            seguimiento_id=1,
-            archivo_id=1,
-            url="http://example.com",
-            text="TEXT",
+            url="http://example.com/a",
+            s3_key="some_aws_s3_key",
+            local_path="~/some/local/path",
+            timestamp=datetime.now(timezone.utc),
         )
     ]
 
@@ -320,8 +322,10 @@ def test_load_raw_documents_calls_add_and_clears(monkeypatch):
         return True
 
     monkeypatch.setattr(scraper, "add_documents_to_db", fake_add)
+    monkeypatch.setattr(scraper, "add_pages_to_db", fake_add)
 
     scraper.load_raw_documents()
 
     assert calls["added"] is True
     assert scraper.documents == []
+    assert scraper.pages == []

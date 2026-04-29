@@ -87,18 +87,15 @@ def extract_text_from_page(page):
     return text
 
 
-def render_pdf(pdf_url: str) -> str:
+def render_pdf(pdf_url: str) -> dict[int, str]:
     """
     Extract text from a PDF file using PyMuPDF and Tesseract OCR.
     """
     response = get_url(pdf_url)
     response.raise_for_status()  # Ensure we raise an error for bad responses
     pdf_file = BytesIO(response.content)
-    pdf_text = ""
     with fitz.open(stream=pdf_file, filetype="pdf") as pdf:
-        for page in pdf:
-            pdf_text += " " + extract_text_from_page(page)
-    return pdf_text
+        return {idx: extract_text_from_page(page) for idx, page in enumerate(pdf)}
 
 
 def url_to_cache_file(url: str, cache_dir: Path) -> Path:

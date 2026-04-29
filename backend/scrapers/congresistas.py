@@ -129,7 +129,7 @@ class RawCongresistasScraper:
             return RawCongresista(
                 timestamp=datetime.now(),
                 leg_period=period,
-                url=website,
+                website=website,
                 profile_content=profile_content,
                 memberships_content=None,
             )
@@ -140,7 +140,7 @@ class RawCongresistasScraper:
                 return RawCongresista(
                     timestamp=datetime.now(),
                     leg_period=period,
-                    url=website,
+                    website=website,
                     profile_content=profile_content,
                     memberships_content=None,
                 )
@@ -161,7 +161,7 @@ class RawCongresistasScraper:
             return RawCongresista(
                 timestamp=datetime.now(),
                 leg_period=period,
-                url=website,
+                website=website,
                 profile_content=profile_content,
                 memberships_content=None,
             )
@@ -171,7 +171,7 @@ class RawCongresistasScraper:
         raw_congresista = RawCongresista(
             timestamp=datetime.now(),
             leg_period=period,
-            url=website,
+            website=website,
             profile_content=profile_content,
             memberships_content=memberships_content,
         )
