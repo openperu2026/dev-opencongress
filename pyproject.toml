@@ -9,6 +9,7 @@ dependencies = [
     "boto3>=1.35.0",
     "coverage>=7.13.5",
     "httpx[http2]>=0.28.1",
+    "img2table>=1.4.2",
     "ipykernel>=6.29.5",
     "ipython>=9.0.2",
     "jellyfish>=1.2.0",
