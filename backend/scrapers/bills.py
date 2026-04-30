@@ -1,6 +1,5 @@
 import json
-import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from loguru import logger
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
@@ -190,74 +189,3 @@ class RawBillScraper:
     def load_raw_bills(self):
         self.add_bills_to_db()
         self.raw_bills = []
-
-    @staticmethod
-    def _is_approved_from_general(general_raw: str | None) -> bool:
-        if not general_raw:
-            return False
-
-        try:
-            general = json.loads(general_raw)
-        except (TypeError, json.JSONDecodeError):
-            return False
-
-        status = (general.get("desEstado") or "").strip().lower()
-        return status == "publicada en el diario oficial el peruano"
-
-    def get_ids_pending_weekly_refresh(self, max_age_days: int = 7) -> list[str]:
-        """
-        Return ids that should be refreshed this week:
-          - latest snapshot is older than `max_age_days`
-          - latest snapshot is not approved
-        """
-        cutoff = datetime.now() - timedelta(days=max_age_days)
-        session = self.session or self.Session()
-
-        try:
-            latest_rows = session.query(RawBill).filter(RawBill.last_update).all()
-            pending_ids: list[str] = []
-
-            for row in latest_rows:
-                if row.timestamp > cutoff:
-                    continue
-                if self._is_approved_from_general(row.general):
-                    continue
-                pending_ids.append(row.id)
-
-            return pending_ids
-        finally:
-            if self.session is None:
-                session.close()
-
-    def scrape_pending_weekly(
-        self, max_age_days: int = 7, flush_every: int = 100
-    ) -> list[str]:
-        """
-        Re-scrape pending, non-approved bill ids that are stale.
-        """
-        pending_ids = self.get_ids_pending_weekly_refresh(max_age_days=max_age_days)
-
-        for idx, bill_id in enumerate(pending_ids, start=1):
-            year, number = bill_id.split("_", 1)
-            self.scrape_bill(year, number)
-
-            if len(self.raw_bills) >= flush_every:
-                self.load_raw_bills()
-
-            if idx % 10 == 0:
-                time.sleep(2)
-
-        if self.raw_bills:
-            self.load_raw_bills()
-
-        logger.info(f"Weekly bill refresh processed {len(pending_ids)} ids")
-        return pending_ids
-
-
-def main():
-    scraper = RawBillScraper()
-    scraper.scrape_pending_weekly(max_age_days=7, flush_every=100)
-
-
-if __name__ == "__main__":
-    main()

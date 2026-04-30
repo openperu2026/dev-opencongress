@@ -9,6 +9,9 @@ from backend.process.schema import (
     BillStep,
     BillDocument,
 )
+from backend.core.parsers import classify_des_estado
+from backend.core.enums import BillStepType
+from backend.process.utils import create_vote_ids
 
 VOTE_PATTERN = re.compile(
     r"\bSI\s*\+{2,}.*?\bNO\s*-{2,}|\bNO\s*-{2,}.*?\bSI\s*\+{2,}",
@@ -105,18 +108,14 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
 
     if steps:
         final_steps = []
-        vote_step_counter = 0
 
         for step in steps:
             # Extracting information from each step
             id = step.get("seguimientoPleyId")
             date = step.get("fecha")
-            status = step.get("desEstado")
             details = step.get("detalle") or ""
-            vote_step = any(
-                vote_word in details.lower() for vote_word in ["votacion", "votación"]
-            )
-            vote_id = None
+            status = classify_des_estado(step.get("desEstado"), details).value
+            vote_step = status == BillStepType.VOTACION.value
 
             files = step.get("archivos") or []
             file_ids = [
@@ -125,15 +124,11 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
                 if file and file.get("proyectoArchivoId") is not None
             ]
 
-            if vote_step:
-                vote_step_counter += 1
-                vote_id = f"{raw_bill.id}_{vote_step_counter}"
-
             bill_step = BillStep(
                 id=id,
                 bill_id=raw_bill.id,
                 vote_step=vote_step,
-                vote_id=vote_id,
+                vote_id=None,
                 step_date=date,
                 step_status=status,
                 step_detail=details,
@@ -142,7 +137,7 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
 
             final_steps.append(bill_step)
 
-        return final_steps
+        return create_vote_ids(final_steps)
 
     else:
         return None

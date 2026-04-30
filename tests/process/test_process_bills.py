@@ -1,6 +1,7 @@
 import json
 from types import SimpleNamespace
 import backend.process.bills as mod
+from backend import RoleTypeBill
 
 
 def _raw_bill(
@@ -95,10 +96,10 @@ def test_process_bill_with_firmantes_sets_author_and_cong_list():
     assert congs[0].bill_id == "PL_999"
     assert congs[0].nombre == "Juan Perez"
     assert congs[0].leg_period == "2021-2026"
-    assert congs[0].role_type == "author"
+    assert congs[0].role_type == RoleTypeBill.AUTHOR
 
     assert congs[1].nombre == "Maria Lopez"
-    assert congs[1].role_type == "coauthor"
+    assert congs[1].role_type == RoleTypeBill.COAUTHOR
 
 
 def test_process_bill_without_firmantes_sets_author_none_and_empty_cong_list():
@@ -142,18 +143,21 @@ def test_process_bill_steps_vote_detection_and_vote_id_increment():
         {
             "seguimientoPleyId": 1,
             "fecha": "2026-01-01",
+            "desEstado": "En Comisión",
             "detalle": "Pasa a comisión",
             "archivos": [{"proyectoArchivoId": 1}],
         },
         {
             "seguimientoPleyId": 2,
             "fecha": "2026-01-02",
+            "desEstado": "APROBADO 1ERA. VOTACIÓN",
             "detalle": "Se realiza VOTACIÓN en el pleno",
             "archivos": [{"proyectoArchivoId": 2}, {"proyectoArchivoId": 3}],
         },
         {
             "seguimientoPleyId": 3,
             "fecha": "2026-01-03",
+            "desEstado": "No alcanzó Nº de votos",
             "detalle": "Otra votacion en comisión (segunda)",
             "archivos": [],
         },

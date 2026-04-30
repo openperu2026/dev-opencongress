@@ -43,6 +43,12 @@ body {
     margin-bottom: 30px;
 }
 
+.search-title {
+    font-size: 16px;
+    color: #333;
+    margin-right: 10px;
+}
+
 /* Menu */
 /*whats this exactly?*/
 .menu {
@@ -68,6 +74,11 @@ body {
     opacity: 0.9;
     transform: translateY(-2px);
 }
+
+
+
+
+
 
 
 /*Formats of:*/

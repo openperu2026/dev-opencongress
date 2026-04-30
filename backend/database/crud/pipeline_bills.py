@@ -4,7 +4,6 @@ from typing import Iterable
 
 from sqlalchemy.orm import Session
 
-from backend import classify_des_estado
 from backend.database import models as db_models
 from backend.database.crud.pipeline_core import find_congresista
 from backend.database.raw_models import RawBillDocument
@@ -93,14 +92,17 @@ def upsert_bill_step(
     step_date,
     step_detail: str,
     step_status: str | None = None,
+    vote_step: bool = False,
+    vote_id: str | None = None,
 ) -> db_models.BillStep:
-    step_type = classify_des_estado(step_status or step_detail)
     existing = db.get(db_models.BillStep, step_id)
     if existing is None:
         obj = db_models.BillStep(
             id=step_id,
             bill_id=bill_id,
-            step_type=step_type,
+            vote_step=vote_step,
+            vote_event_id=vote_id,
+            step_type=step_status,
             step_date=step_date,
             step_detail=step_detail,
         )
@@ -109,7 +111,9 @@ def upsert_bill_step(
         return obj
 
     existing.bill_id = bill_id
-    existing.step_type = step_type
+    existing.vote_step = vote_step
+    existing.vote_event_id = vote_id
+    existing.step_type = step_status
     existing.step_date = step_date
     existing.step_detail = step_detail
     db.flush()
@@ -156,5 +160,34 @@ def upsert_bill_document(
     existing.url = url
     existing.text = text
     existing.vote_doc = vote_doc
+    db.flush()
+    return existing
+
+
+def upsert_bill_text(
+    db: Session,
+    *,
+    archivo_id: int,
+    bill_id: str,
+    step_date,
+    seguimiento_id: str,
+    text: str | None,
+) -> db_models.BillText:
+    existing = db.get(db_models.BillText, archivo_id)
+    if existing is None:
+        row = db_models.BillText(
+            archivo_id=archivo_id,
+            bill_id=bill_id,
+            step_date=step_date,
+            seguimiento_id=seguimiento_id,
+            text=text,
+        )
+        db.add(row)
+        db.flush()
+        return row
+    existing.bill_id = bill_id
+    existing.step_date = step_date
+    existing.seguimiento_id = seguimiento_id
+    existing.text = text
     db.flush()
     return existing
