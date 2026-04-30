@@ -21,11 +21,10 @@ from backend import (
     LegislativeYear,
     Proponents,
     RoleOrganization,
-    TypeOrganization,
-    TypeCommittee,
     MotionType,
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
+from datetime import date
 
 Base = declarative_base()
 
@@ -313,21 +312,21 @@ class Congresista(Base):
     # condicion = Column(String, nullable=False)
 
 
-class Bancada(Base):
-    """
-    Represent a Bancada (Grupo Parlamentario) in the peruvian parliament
+# class Bancada(Base):
+#     """
+#     Represent a Bancada (Grupo Parlamentario) in the peruvian parliament
 
-    Attributes:
-        leg_year (str): Year period of the bancada
-        bancada_id (int): Unique identifier for the bancada
-        bancada_name (str): Name of the bancada
-    """
+#     Attributes:
+#         leg_year (str): Year period of the bancada
+#         bancada_id (int): Unique identifier for the bancada
+#         bancada_name (str): Name of the bancada
+#     """
 
-    __tablename__ = "bancadas"
+#     __tablename__ = "bancadas"
 
-    bancada_id = Column(Integer, primary_key=True, autoincrement=True)
-    leg_year = Column(Enum(LegislativeYear, name="leg_period"), nullable=False)
-    bancada_name = Column(String, nullable=False)
+#     bancada_id = Column(Integer, primary_key=True, autoincrement=True)
+#     leg_year = Column(Enum(LegislativeYear, name="leg_period"), nullable=False)
+#     bancada_name = Column(String, nullable=False)
 
 
 class Organization(Base):
@@ -336,8 +335,6 @@ class Organization(Base):
 
     Attributes:
         org_id (int): Unique identifier for the organization.
-        leg_period (str): Legislative period.
-        leg_year (str): Legislative year.
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
         comm_type (str): Type of committee (e.g. ordinaria, especial, etc)
@@ -347,19 +344,18 @@ class Organization(Base):
 
     __tablename__ = "organizations"
 
-    org_id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
-    leg_period = Column(Enum(LegPeriod, name="leg_period"), nullable=False)
-    leg_year = Column(Enum(LegislativeYear, name="leg_year"), nullable=False)
-    org_name = Column(String, nullable=False)
-    org_type = Column(Enum(TypeOrganization, name="type_organization"), nullable=False)
-    comm_type = Column(Enum(TypeCommittee, name="type_committee"), nullable=True)
-    org_link = Column(String, nullable=False)
-
-    __table_args__ = (
-        UniqueConstraint(
-            "leg_period", "leg_year", "org_name", "org_type", name="org_uniq"
-        ),
+    org_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    org_name: Mapped[str] = mapped_column(nullable=False)
+    org_type: Mapped[str] = mapped_column(nullable=False)
+    org_subtype: Mapped[str] = mapped_column(nullable=True)
+    org_link: Mapped[str] = mapped_column(nullable=False)
+    parent_org_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
     )
+    date_founding: date | None = None
+    date_dissolution: date | None = None
+
+    __table_args__ = (UniqueConstraint("org_name", "org_type", name="org_uniq"),)
 
 
 class Membership(Base):

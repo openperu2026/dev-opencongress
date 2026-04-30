@@ -1,4 +1,4 @@
-from pydantic import BaseModel, field_validator, ConfigDict
+from pydantic import BaseModel, field_validator, ConfigDict, model_validator
 from backend import (
     VoteOption,
     VoteResult,
@@ -12,6 +12,7 @@ from backend import (
     TypeOrganization,
     RoleOrganization,
     TypeCommittee,
+    TypeAdmin,
     MotionType,
     parse_leg_period,
     parse_legislature,
@@ -20,7 +21,7 @@ from backend import (
     parse_motion_type,
 )
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 class PrintableModel(BaseModel):
@@ -505,29 +506,54 @@ class Organization(PrintableModel):
     Represents a legislative organization inside the parliament, such as a committee.
 
     Attributes:
-        leg_period (str): Legislative period.
-        leg_year (str): Legislative year.
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
         comm_type (str): Type of committee (e.g. ordinaria, especial, etc)
         org_link (str): Url of the organization's website.
     """
 
-    leg_period: LegPeriod
-    leg_year: LegislativeYear
-
     # Attributes that fit in Popolo structure
     org_name: str
     org_type: TypeOrganization
-    comm_type: TypeCommittee | None
+    org_subtype: TypeCommittee | TypeAdmin | None = None
     org_link: str
+    parent_org_name: str | None = None
+    parent_org_type: TypeOrganization | None = None
+    date_founding: date | None = None
+    date_dissolution: date | None = None
 
-    @field_validator("leg_period", mode="before")
-    @classmethod
-    def validate_leg_period(cls, v):
-        if isinstance(v, LegPeriod):
-            return v
-        return parse_leg_period(v)
+    @model_validator(mode="after")
+    def validate_org_subtype(self):
+        if self.org_type == TypeOrganization.COMMITTEE:
+            if not isinstance(self.org_subtype, TypeCommittee):
+                self.org_subtype = None
+
+        elif self.org_type == TypeOrganization.ADMINISTRATIVE:
+            if not isinstance(self.org_subtype, TypeAdmin):
+                self.org_subtype = None
+
+        else:
+            self.org_subtype = None
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_dates(self):
+        if (
+            self.date_founding is not None
+            and self.date_dissolution is not None
+            and self.date_dissolution < self.date_founding
+        ):
+            raise ValueError("date_dissolution cannot be earlier than date_founding")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_parent(self):
+        if self.parent_org_name is None or self.parent_org_type is None:
+            raise ValueError("If there is a parent, it should have name and org_type")
+
+        return self
 
     model_config = ConfigDict(use_enum_values=False)
 

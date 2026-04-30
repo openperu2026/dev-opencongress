@@ -184,16 +184,21 @@ class RoleOrganization(str, Enum):
 
 
 class TypeOrganization(str, Enum):
-    COMISON = "Comisión"
+    COMMITTEE = "Comisión"
+    CHAMBER = "Cámara"
+    BANCADA = "Bancada"
+    PARTY = "Partido"
+    ADMINISTRATIVE = "Administrativo"
+
+
+class TypeAdmin(str, Enum):
     JUNTA_DE_PORTAVOCES = "Junta de Portavoces"
     MESA_DIRECTIVA = "Mesa Directiva"
     COMISION_PERMANENTE = "Comisión Permanente"
     CONSEJO_DIRECTIVO = "Consejo Directivo"
-    SUBCOM_ACUSACIONES = "Subcomisión de Acusaciones Constitucionales"
 
 
 class TypeCommittee(str, Enum):
-    # For Committees
     COM_INVESTIGADORA = "Comisiones Investigadoras"
     GRUPO_TRABAJO = "Grupo de Trabajo"
     SUBCOM_AC = "Subcomisión de Acusaciones Constitucionales"
