@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="congress-detail-page">
+    <section class="congress-profile">
+        <h1>{{ congresista.nombre }}</h1>
+
+        <div class="congress-profile-summary">
+            <div class="congress-photo-wrap">
+                <img
+                    class="congress-photo"
+                    src="{{ congresista.photo_url }}"
+                    alt="Photo of {{ congresista.nombre }}"
+                >
+            </div>
+
+            <dl class="congress-info">
+                <div>
+                    <dt>Region</dt>
+                    <dd>{{ congresista.dist_electoral or "Not available" }}</dd>
+                </div>
+                <div>
+                    <dt>Party</dt>
+                    <dd>{{ congresista.party_name }}</dd>
+                </div>
+                <div>
+                    <dt>Bancada</dt>
+                    <dd>{{ congresista.current_bancada }}</dd>
+                </div>
+                <div>
+                    <dt>Status</dt>
+                    <dd>{{ congresista.condicion }}</dd>
+                </div>
+                <div>
+                    <dt>Legislative Period</dt>
+                    <dd>{{ congresista.leg_period }}</dd>
+                </div>
+                <div>
+                    <dt>Election Votes</dt>
+                    <dd>{{ "{:,}".format(congresista.votes_in_election) }}</dd>
+                </div>
+            </dl>
+        </div>
+
+        <div class="congress-stats">
+            <article>
+                <h2>Assistance Rate</h2>
+                <strong>{{ profile_stats.assistance_rate }}</strong>
+            </article>
+            <article>
+                <h2>Bills Authored</h2>
+                <strong>{{ profile_stats.bills_authored }}</strong>
+            </article>
+            <article>
+                <h2>Rate of Successful</h2>
+                <strong>{{ profile_stats.success_rate }}</strong>
+            </article>
+        </div>
+
+        <section class="congress-section">
+            <h2>Committee Membership</h2>
+            {% if memberships %}
+                <ul>
+                    {% for membership in memberships %}
+                        <li>
+                            {{ membership.org_name }}
+                            <span>({{ membership.role }})</span>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No committee membership records found.</p>
+            {% endif %}
+        </section>
+
+        <section class="congress-section">
+            <h2>Recent Bills Authored</h2>
+            {% if bills_authored %}
+                <ul>
+                    {% for bill in bills_authored %}
+                        <li>
+                            <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">
+                                {{ bill.id }} - {{ bill.title }}
+                            </a>
+                        </li>
+                    {% endfor %}
+                </ul>
+            {% else %}
+                <p>No authored bills found.</p>
+            {% endif %}
+        </section>
+
+        <section class="congress-section">
+            <h2>Last Votings</h2>
+            {% for vote in recent_votes %}
+                <article class="congress-vote">
+                    <strong>{{ vote.position }}</strong>
+                    <p>{{ vote.bill }}: {{ vote.description }}</p>
+                </article>
+            {% endfor %}
+        </section>
+
+        <p class="congress-source">
+            <a href="{{ congresista.website }}" target="_blank" rel="noopener noreferrer">
+                Official congress profile
+            </a>
+        </p>
+    </section>
+</div>
+{% endblock %}

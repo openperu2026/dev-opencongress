@@ -1,44 +1,102 @@
+:root {
+    --color-frame: #1D5D6D;
+    --color-background: #F1F7ED;
+    --color-highlight: #B33951;
+    --color-black: #2A0800;
+}
+
 body {
 /*Format of the body*/
     margin: 0;
-    background-color: #f5eeee;
+    background-color: var(--color-background);
     color: #344452;
     font-family: Arial, Helvetica, sans-serif;
 }
 
-.landing-container {
+.navbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    padding: 14px 24px;
+    background:  var(--color-frame);
+    border-bottom: 1px solid var(--color-frame);
+}
+
+.nav-brand {
+    font-size: 18px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.nav-logo {
+    display: block;
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+}
+
+.landing-logo {
+    display: block;
+    width: 75%;
+    height: 200px;
+    object-fit: contain;
+    margin: 0 auto 20px;
+}
+
+.nav-links {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.nav-links a,
+.menu-toggle {
+    color: #ffffff;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.menu-toggle,
+.menu-close {
+    display: none;
+}
+
+.page-container {
 /*background of one first container*/
 /*This should be body/page background*/
     display: flex;
     justify-content: center;
     align-items: flex-start;
     padding: 40px 20px;
-    background-color: #f7f4ee;
+    background-color: var(--color-background);
     min-height: 100vh;
 }
 
 .content-container {
 /*Background of the conteiner of the buttons*/
     width: 100%;
-    max-width: 600px;
-    background: rgb(241, 237, 237);
+    background: var(--color-background);
     border-radius: 16px;
     padding: 30px 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 10px 30px var(--color-background);
     text-align: center;
 }
 
 /* Format of the text of the Title of the page Open Congress */
 .landing-title {
-    font-size: 24px;
+    font-size: 48px;
     font-weight: 700;
     letter-spacing: 1px;
     margin-bottom: 10px;
 }
 
-.landing-subtitle {
+.page-subtitle {
     /*format of the text of the subtitle*/
-    font-size: 14px;
+    font-size: 20px;
     color: #666;
     margin-bottom: 30px;
 }
@@ -49,25 +107,28 @@ body {
     margin-right: 10px;
 }
 
-/* Menu */
-/*whats this exactly?*/
-.menu {
-    display: flex;
-    flex-direction: column;
-    gap: 15px;
-}
 
+/* Menu landing*/
+.menu-landing {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
 /*Format of the bottons*/
 .menu-card a {
     display: block;
     padding: 12px;
+    flex: 1;
     /*this a gradeint pf colors*/
-    background: linear-gradient(90deg, #6a5af9, #7b6cf6);
+    background: linear-gradient(90deg, var(--color-highlight), var(--color-highlight));
     color: white;
     text-decoration: none;
     border-radius: 8px;
     font-weight: 500;
     transition: all 0.2s ease;
+    width: 180px;
 }
 /*effect when put the mouse overt a button*/
 .menu-card a:hover {
@@ -76,6 +137,145 @@ body {
 }
 
 
+
+/*footer and menu hamurger*/
+
+
+/* FOOTER */
+.footer {
+  background:var(--color-frame);
+  color: #fff;
+  padding: 26px 0;
+}
+
+.footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+
+
+.footer-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  gap: 16px;
+}
+
+.footer-links a {
+  color: #fff;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.footer-links a:hover {
+  text-decoration: underline;
+}
+
+/*MENU*/
+
+.nav-isotipo {
+    display: block;
+    height: 42px;
+    width: auto;
+    filter: invert(1);
+}
+@media (max-width: 500px) {
+    /* NAVBAR */
+  .navbar {
+    flex-direction: column;
+    align-items: flex-start;
+    height: auto;
+    padding: 12px 20px;
+    gap: 10px;
+  }
+
+  .nav-links {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Footer */
+  .footer-row {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 12px;
+  }
+
+  .footer-links {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+
+}
+
+
+@media (max-width: 500px) {
+  .nav-links {
+    display: none;
+  }
+}
+
+
+@media (max-width: 500px) {
+
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* For showing when URL ends in #menu */
+  .nav-links:target {
+    display: flex;
+  }
+}
+
+
+
+.menu-toggle {
+  display: none;
+  font-size: 22px;
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+@media (max-width: 500px) {
+
+  /* To show hamburger */
+  .menu-toggle {
+    display: block;
+    font-size: 26px;
+    color: #fff;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  /* to hide the navigation by default */
+  .nav-links {
+    display: none;
+    flex-direction: column;
+    width: 100%;
+    background: var(--color-frame);
+    padding: 20px;
+    gap: 14px;
+  }
+ 
+  .menu-close {
+    text-align: right;
+  }
+  .menu-close a {
+    color: #fff;
+    font-size: 20px;
+    text-decoration: none;
+  }
+}
 
 
 
