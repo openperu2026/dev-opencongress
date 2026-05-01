@@ -10,7 +10,7 @@ This module defines raw/clean DB schemas and orchestrates persistence.
 - `orchestrator.py`: end-to-end ETL runner (scrape + process + load).
 - `crud/`: DB helper functions for upserts and lookups used by the orchestrator.
   - `pipeline_core.py`
-  - `pipeline_bills.py`
+  - `pipeline_bills.py` (bills, steps, documents, and `billtext` rows)
   - `pipeline_motions.py`
 
 ## Databases
@@ -54,3 +54,7 @@ For each latest raw record:
 - changed new version: `last_update = True`, `changed=True`, `processed=False`
 
 This allows process stages to focus on records that still need clean-table updates.
+
+## Bill PDF text
+
+When bills are processed **with documents** (default; skip with `--no-documents`), each PDF's raw text is stored in `bill_documents` and a heading-based slice is stored in `billtext`. See `docs/data-model.md` (`BillText`).
