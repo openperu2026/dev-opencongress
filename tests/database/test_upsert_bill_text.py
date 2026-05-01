@@ -11,11 +11,11 @@ from backend.database.models import (
     BillDocument,
     BillStep,
     BillText,
-    BillStepType,
     LegPeriod,
     Legislature,
     Proponents,
 )
+from backend import BillStepType
 
 
 @pytest.fixture()
@@ -46,14 +46,16 @@ def _minimal_bill_and_document(db, bill_id: str, step_id: int, archivo_id: int):
             proponent=Proponents.CONGRESO,
             author_id=None,
             bancada_id=None,
-            bill_approved=False,
+            approved=False,
         )
     )
     db.add(
         BillStep(
             id=step_id,
             bill_id=bill_id,
-            step_type=BillStepType.VOTE,
+            vote_step=False,
+            vote_event_id=None,
+            step_type=BillStepType.VOTACION,
             step_date=datetime(2024, 1, 2),
             step_detail="d",
         )
