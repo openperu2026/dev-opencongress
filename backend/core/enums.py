@@ -181,6 +181,8 @@ class RoleOrganization(str, Enum):
     TITULAR = "Titular"
     SUPLENTE = "Suplente"
     ACCESITARIO = "Accesitario"
+    SEGUNDO_VICE = "Segundo Vicepresidente"
+    TERCER_VICE = "Tercer Vicepresidente"
 
 
 class TypeOrganization(str, Enum):

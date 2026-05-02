@@ -1,7 +1,7 @@
 from backend import normalize_membership_role
 from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership
-from backend.process.utils import gen_congresistas_df
+from backend.process.utils import gen_congresistas_df, split_and_sort_name
 from backend.database.session import get_db
 
 import json
@@ -26,8 +26,7 @@ def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
 
 
 def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
-    last_name, first_name = [sub.strip() for sub in cong_dict["nombre"].split(",")]
-    full_name = f"{first_name} {last_name}"
+    full_name, first_name, last_name = split_and_sort_name(cong_dict["nombre"])
 
     if cong_dict["dni"] == "07202572":
         # This is due to an error in the website, where it points to HernandoGarcia

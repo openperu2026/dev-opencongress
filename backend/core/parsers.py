@@ -638,6 +638,9 @@ def normalize_membership_role(raw: str) -> RoleOrganization:
         "suplente": RoleOrganization.SUPLENTE,
         "accesitaria": RoleOrganization.ACCESITARIO,
         "accesitario": RoleOrganization.ACCESITARIO,
+        "presidente (e) del congreso de la república": RoleOrganization.PRESIDENTE,
+        "segundo vicepresidente": RoleOrganization.SEGUNDO_VICE,
+        "tercer vicepresidente": RoleOrganization.TERCER_VICE,
     }
 
     normalized_role = role_map.get(role)

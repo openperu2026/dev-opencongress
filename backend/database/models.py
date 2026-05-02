@@ -18,13 +18,11 @@ from backend import (
     RoleTypeBill,
     LegPeriod,
     Legislature,
-    LegislativeYear,
     Proponents,
-    RoleOrganization,
     MotionType,
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
-from datetime import date
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -304,11 +302,17 @@ class Congresista(Base):
     photo_url: Mapped[str] = mapped_column(nullable=False)
     website: Mapped[str] = mapped_column(nullable=False)
 
-    # TODO: This info should go into a Membership
+    # TODO: This info should go into a Organization(party)
     # party_name = Column(String, nullable=False)
-    # current_bancada = Column(String, nullable=False)
+
+    # TODO: This should go to Membership(Party)
     # votes_in_election = Column(Integer, nullable=False)
     # dist_electoral = Column(String, nullable=True)
+
+    # TODO: This should go to Membership(Bancada)
+    # current_bancada = Column(String, nullable=False)
+
+    # TODO: This should go to Membership(Camara)
     # condicion = Column(String, nullable=False)
 
 
@@ -334,12 +338,14 @@ class Organization(Base):
     Represents a legislative organization, such as a parliament or congress.
 
     Attributes:
-        org_id (int): Unique identifier for the organization.
+        org_id (int): Unique identification of the organization.
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
-        comm_type (str): Type of committee (e.g. ordinaria, especial, etc)
+        org_subtype (str): Subtype of organization (e.g. ordinaria, especial, etc)
         org_link (str): Url of the organization's website.
-
+        parent_org_id (int): Unique identification of the organization's parent
+        date_founding (date): Date of establishment of the organization
+        date_dissolution (date): Date of dissolution of the organization
     """
 
     __tablename__ = "organizations"
@@ -348,12 +354,12 @@ class Organization(Base):
     org_name: Mapped[str] = mapped_column(nullable=False)
     org_type: Mapped[str] = mapped_column(nullable=False)
     org_subtype: Mapped[str] = mapped_column(nullable=True)
-    org_link: Mapped[str] = mapped_column(nullable=False)
+    org_link: Mapped[str] = mapped_column(nullable=True)
     parent_org_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.id"), nullable=True
     )
-    date_founding: date | None = None
-    date_dissolution: date | None = None
+    date_founding: Mapped[datetime | None] = mapped_column(nullable=True)
+    date_dissolution: Mapped[datetime | None] = mapped_column(nullable=True)
 
     __table_args__ = (UniqueConstraint("org_name", "org_type", name="org_uniq"),)
 
@@ -363,43 +369,49 @@ class Membership(Base):
     Represents a person's role in an organization during a specific time period.
 
     Attributes:
-        id (int): Unique identifier for the membership relationship.
-        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        id (int): Unique identifier for the Membership
         person_id (int): Identifier for the person
         org_id (int): Identifier for the organization
+        leg_period (str): Legislative period.
+        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         start_date (datetime): Date of the beginning of the membership
         end_date (datetime): Date of the end of the membership
     """
 
     __tablename__ = "memberships"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    role = Column(Enum(RoleOrganization, name="role"), nullable=False)
-    person_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-    org_id = Column(Integer, ForeignKey("organizations.org_id"), nullable=False)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    person_id: Mapped[int] = mapped_column(
+        ForeignKey("congresistas.id"), nullable=False
+    )
+    org_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=False
+    )
+    leg_period: Mapped[str] = mapped_column(nullable=False)
+    org_type: Mapped[str] = mapped_column(nullable=False)
+    role: Mapped[str] = mapped_column(nullable=False)
+    start_date: Mapped[datetime] = mapped_column(nullable=False)
+    end_date: Mapped[datetime] = mapped_column(nullable=False)
 
-    __table_args__ = (UniqueConstraint("id", name="membership"),)
 
+# class BancadaMembership(Membership):
+#     """
+#     Represents a person's membership in a bancada during a specific time period.
 
-class BancadaMembership(Base):
-    """
-    Represents a person's membership in a bancada during a specific time period.
+#     Attributes:
+#         id (int): Unique identifier for the membership relationship.
+#         leg_year (str): Year period of the membership
+#         person_id (int): Identifier for the person
+#         bancada_id (int): Identifier for the bancada
+#     """
 
-    Attributes:
-        id (int): Unique identifier for the membership relationship.
-        leg_year (str): Year period of the membership
-        person_id (int): Identifier for the person
-        bancada_id (int): Identifier for the bancada
-    """
+#     __tablename__ = "bancada_memberships"
 
-    __tablename__ = "bancada_memberships"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    leg_year = Column(Enum(LegislativeYear, name="leg_year"), nullable=False)
-    person_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-    bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=False)
+#     id = Column(Integer, primary_key=True, autoincrement=True)
+#     leg_year = Column(Enum(LegislativeYear, name="leg_year"), nullable=False)
+#     person_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
+#     bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=False)
 
 
 class Motion(Base):

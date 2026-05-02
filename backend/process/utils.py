@@ -141,3 +141,12 @@ def create_vote_ids(
         final_list.append(step)
 
     return final_list
+
+
+def split_and_sort_name(name: str) -> tuple[str, str, str]:
+    try:
+        last_name, first_name = [sub.strip() for sub in name.split(",")]
+        full_name = f"{first_name} {last_name}"
+        return full_name, first_name, last_name
+    except ValueError:
+        return name, None, None
