@@ -13,7 +13,9 @@ def index():
 
     if q:
         with SessionProcessed() as db:
-            stmt = select(Congresista).where(Congresista.nombre.ilike(f"%{q}%")).limit(50)
+            stmt = (
+                select(Congresista).where(Congresista.nombre.ilike(f"%{q}%")).limit(50)
+            )
             congresistas = db.execute(stmt).scalars().all()
 
     return render_template("congress/search.html", q=q, congresistas=congresistas)
