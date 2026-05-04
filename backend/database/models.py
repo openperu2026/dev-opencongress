@@ -20,9 +20,10 @@ from backend import (
     Legislature,
     Proponents,
     MotionType,
+    TypeOrganization,
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
-from datetime import datetime
+from datetime import datetime, date
 
 Base = declarative_base()
 
@@ -43,7 +44,7 @@ class Vote(Base):
     vote_event_id = Column(String, ForeignKey("vote_events.id"), primary_key=True)
     voter_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
     option = Column(Enum(VoteOption, name="option"), nullable=False)
-    bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=False)
+    bancada_id = Column(Integer, ForeignKey("organizations.org_id"), nullable=False)
 
     __table_args__ = (
         UniqueConstraint("vote_event_id", "voter_id", name="uq_vote_event_voter"),
@@ -122,7 +123,7 @@ class VoteCounts(Base):
 
     vote_event_id = Column(String, ForeignKey("vote_events.id"), nullable=False)
     option = Column(Enum(VoteOption, name="option"), nullable=False)
-    bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=False)
+    bancada_id = Column(Integer, ForeignKey("organizations.org_id"), nullable=False)
     count = Column(Integer, nullable=False)
 
     __table_args__ = (
@@ -167,7 +168,7 @@ class Bill(Base):
     status = Column(String, nullable=False)
     proponent = Column(Enum(Proponents, name="proponent"), nullable=False)
     author_id = Column(Integer, ForeignKey("congresistas.id"), nullable=True)
-    bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=True)
+    bancada_id = Column(Integer, ForeignKey("organizations.org_id"), nullable=True)
     approved = Column(Boolean, nullable=False)
 
     __table_args__ = (
@@ -302,36 +303,6 @@ class Congresista(Base):
     photo_url: Mapped[str] = mapped_column(nullable=False)
     website: Mapped[str] = mapped_column(nullable=False)
 
-    # TODO: This info should go into a Organization(party)
-    # party_name = Column(String, nullable=False)
-
-    # TODO: This should go to Membership(Party)
-    # votes_in_election = Column(Integer, nullable=False)
-    # dist_electoral = Column(String, nullable=True)
-
-    # TODO: This should go to Membership(Bancada)
-    # current_bancada = Column(String, nullable=False)
-
-    # TODO: This should go to Membership(Camara)
-    # condicion = Column(String, nullable=False)
-
-
-# class Bancada(Base):
-#     """
-#     Represent a Bancada (Grupo Parlamentario) in the peruvian parliament
-
-#     Attributes:
-#         leg_year (str): Year period of the bancada
-#         bancada_id (int): Unique identifier for the bancada
-#         bancada_name (str): Name of the bancada
-#     """
-
-#     __tablename__ = "bancadas"
-
-#     bancada_id = Column(Integer, primary_key=True, autoincrement=True)
-#     leg_year = Column(Enum(LegislativeYear, name="leg_period"), nullable=False)
-#     bancada_name = Column(String, nullable=False)
-
 
 class Organization(Base):
     """
@@ -356,7 +327,7 @@ class Organization(Base):
     org_subtype: Mapped[str] = mapped_column(nullable=True)
     org_link: Mapped[str] = mapped_column(nullable=True)
     parent_org_id: Mapped[int | None] = mapped_column(
-        ForeignKey("organizations.id"), nullable=True
+        ForeignKey("organizations.org_id"), nullable=True
     )
     date_founding: Mapped[datetime | None] = mapped_column(nullable=True)
     date_dissolution: Mapped[datetime | None] = mapped_column(nullable=True)
@@ -373,10 +344,10 @@ class Membership(Base):
         person_id (int): Identifier for the person
         org_id (int): Identifier for the organization
         leg_period (str): Legislative period.
-        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        membership_type (str): Type of membership (e.g. bancada, partido, committee, etc)
         role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
-        start_date (datetime): Date of the beginning of the membership
-        end_date (datetime): Date of the end of the membership
+        start_date (date): Date of the beginning of the membership
+        end_date (date): Date of the end of the membership
     """
 
     __tablename__ = "memberships"
@@ -389,29 +360,129 @@ class Membership(Base):
         ForeignKey("organizations.org_id"), nullable=False
     )
     leg_period: Mapped[str] = mapped_column(nullable=False)
-    org_type: Mapped[str] = mapped_column(nullable=False)
+
+    membership_type: Mapped[str] = mapped_column(nullable=False)
     role: Mapped[str] = mapped_column(nullable=False)
-    start_date: Mapped[datetime] = mapped_column(nullable=False)
-    end_date: Mapped[datetime] = mapped_column(nullable=False)
+
+    start_date: Mapped[date] = mapped_column(nullable=False)
+    end_date: Mapped[date] = mapped_column(nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "person_id",
+            "org_id",
+            "leg_period",
+            "membership_type",
+            "role",
+            "start_date",
+            "end_date",
+            name="uq_membership_person_org_period_role_dates",
+        ),
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": membership_type,
+        "polymorphic_identity": "membership",
+    }
 
 
-# class BancadaMembership(Membership):
-#     """
-#     Represents a person's membership in a bancada during a specific time period.
+class ChamberMembership(Membership):
+    """
+    Represents a person's membership in a chamber during a specific time period.
 
-#     Attributes:
-#         id (int): Unique identifier for the membership relationship.
-#         leg_year (str): Year period of the membership
-#         person_id (int): Identifier for the person
-#         bancada_id (int): Identifier for the bancada
-#     """
+    Attributes:
+        id (int): Unique identifier for the Membership
+        person_id (int): Identifier for the person
+        org_id (int): Identifier for the organization
+        leg_period (str): Legislative period.
+        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        start_date (datetime): Date of the beginning of the membership
+        end_date (datetime): Date of the end of the membership
+        condicion (str): Current status of their membership into the
+    """
 
-#     __tablename__ = "bancada_memberships"
+    __tablename__ = "chamber_memberships"
 
-#     id = Column(Integer, primary_key=True, autoincrement=True)
-#     leg_year = Column(Enum(LegislativeYear, name="leg_year"), nullable=False)
-#     person_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-#     bancada_id = Column(Integer, ForeignKey("bancadas.bancada_id"), nullable=False)
+    id: Mapped[int] = mapped_column(
+        ForeignKey("memberships.id"),
+        primary_key=True,
+    )
+    condicion: Mapped[str | None] = mapped_column(nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": TypeOrganization.CHAMBER.value,
+    }
+
+
+class PartyMembership(Membership):
+    """
+    Represents a person's membership in a party during a specific time period.
+
+    Attributes:
+        id (int): Unique identifier for the Membership
+        person_id (int): Identifier for the person
+        org_id (int): Identifier for the organization
+        leg_period (str): Legislative period.
+        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        start_date (datetime): Date of the beginning of the membership
+        end_date (datetime): Date of the end of the membership
+        votes_in_election (int): Votes obtained in the election
+        dist_electoral (str): Electoral district
+    """
+
+    __tablename__ = "party_memberships"
+
+    id: Mapped[int] = mapped_column(
+        ForeignKey("memberships.id"),
+        primary_key=True,
+    )
+    votes_in_election: Mapped[int | None] = mapped_column(nullable=True)
+    dist_electoral: Mapped[str | None] = mapped_column(nullable=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": TypeOrganization.PARTY.value,
+    }
+
+
+class BancadaMembership(Membership):
+    __tablename__ = "bancada_memberships"
+
+    id: Mapped[int] = mapped_column(
+        ForeignKey("memberships.id"),
+        primary_key=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": TypeOrganization.BANCADA.value,
+    }
+
+
+class CommitteeMembership(Membership):
+    __tablename__ = "committee_memberships"
+
+    id: Mapped[int] = mapped_column(
+        ForeignKey("memberships.id"),
+        primary_key=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": TypeOrganization.COMMITTEE.value,
+    }
+
+
+class AdminMembership(Membership):
+    __tablename__ = "admin_memberships"
+
+    id: Mapped[int] = mapped_column(
+        ForeignKey("memberships.id"),
+        primary_key=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": TypeOrganization.ADMINISTRATIVE.value,
+    }
 
 
 class Motion(Base):

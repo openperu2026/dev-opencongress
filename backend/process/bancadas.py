@@ -25,19 +25,27 @@ def process_bancada(
     html = fromstring(raw_bancada.raw_html)
 
     rows = html.xpath('//*[@class="table-cng"]/tbody/tr')
-    leg_year = get_current_leg_year(str(raw_bancada.timestamp))
-    current_leg_period = find_leg_period(leg_year)
+    current_leg_year = get_current_leg_year(raw_bancada.timestamp)
+    current_leg_period = find_leg_period(current_leg_year)
 
-    membership_list = []
-    bancadas_lst = []
+    bancadas: list[Organization] = []
+    memberships: list[Membership] = []
+
+    current_bancada: str | None = None
+
     for row in rows:
         childs = row.getchildren()
+
         if len(childs) == 1:
             # Bancada
-            bancada = childs[0].xpath(".//h2")[0].text_content().title()
-            bancadas_lst.append(
+            bancada_nodes = childs[0].xpath(".//h2")
+            if not bancada_nodes:
+                continue
+
+            current_bancada = bancada_nodes[0].text_content().strip().title()
+            bancadas.append(
                 Organization(
-                    org_name=bancada,
+                    org_name=current_bancada,
                     org_type="Bancada",
                     # TODO: Update this when the new congress website address
                     # for different routes for committees in camara
@@ -46,20 +54,28 @@ def process_bancada(
                 )
             )
 
-        else:
-            # Congresista
-            name = row.xpath('.//*[@class="conginfo"]')[0].text
-            full_name, _, _ = split_and_sort_name(name)
+            continue
 
-            membership_list.append(
-                Membership(
-                    cong_name=full_name,
-                    org_name=bancada,
-                    org_type="Bancada",
-                    leg_period=current_leg_period,
-                    role=RoleOrganization.MIEMBRO,
-                    time_stamp=raw_bancada.timestamp,
-                )
+        if current_bancada is None:
+            raise ValueError("Found membership row before any bancada row.")
+
+        conginfo_nodes = row.xpath('.//*[@class="conginfo"]')
+        if not conginfo_nodes:
+            continue
+
+        # Congresista
+        name = conginfo_nodes[0].text_content().strip()
+        full_name, _, _ = split_and_sort_name(name)
+
+        memberships.append(
+            Membership(
+                cong_name=full_name,
+                org_name=current_bancada,
+                org_type="Bancada",
+                leg_period=current_leg_period,
+                role=RoleOrganization.MIEMBRO,
+                time_stamp=raw_bancada.timestamp,
             )
+        )
 
-    return bancadas_lst, membership_list
+    return bancadas, memberships

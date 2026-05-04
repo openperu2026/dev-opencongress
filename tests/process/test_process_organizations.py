@@ -2,8 +2,7 @@ from types import SimpleNamespace
 
 import pytest
 import backend.process.organizations as mod
-from backend import RoleOrganization, find_leg_period
-from datetime import datetime
+from backend import RoleOrganization, TypeAdmin, TypeCommittee, TypeOrganization
 
 
 def _raw_committee(*, raw_html: str, legislative_year: str = "2025"):
@@ -24,6 +23,7 @@ def _raw_org(
         type_org=type_org,
         org_link=org_link,
         web_page=web_page,
+        timestamp=f"{legislative_year}-08-01T00:00:00",
     )
 
 
@@ -79,14 +79,12 @@ def test_process_committee_builds_organizations(monkeypatch, committee_html_two_
 
     assert len(out) == 2
 
-    assert out[0].leg_year == "2025"
-    assert out[0].leg_period == find_leg_period("2025")
-    assert out[0].org_type == "Comisión"
-    assert out[0].comm_type == "Comisión Ordinaria"
+    assert out[0].org_type == TypeOrganization.COMMITTEE
+    assert out[0].org_subtype == TypeCommittee.COM_ORD
     assert out[0].org_name == "Comisión de Economía"
     assert out[0].org_link == "/comisiones/economia"
 
-    assert out[1].comm_type == "Comisiones Especiales"
+    assert out[1].org_subtype == TypeCommittee.COM_ESP
     assert out[1].org_name == "Comisión Especial de Salud"
     assert out[1].org_link == "/comisiones/salud"
 
@@ -102,11 +100,9 @@ def test_process_org_maps_fields(monkeypatch):
 
     org = mod.process_org(raw)
 
-    assert org.leg_year == "2024"
-    assert org.leg_period == find_leg_period("2024")
     assert org.org_name == "Mesa Directiva"
-    assert org.org_type == "Mesa Directiva"
-    assert org.comm_type is None
+    assert org.org_type == TypeOrganization.ADMINISTRATIVE
+    assert org.org_subtype == TypeAdmin.MESA_DIRECTIVA
     assert org.org_link == "/org/mesa"
 
 
@@ -126,12 +122,12 @@ def test_process_org_membership_creates_memberships_with_year_window(
 
     assert len(out) == 2
 
-    assert out[0].nombre == "Juan Pérez"
+    assert out[0].cong_name == "Juan Pérez"
     assert out[0].role == RoleOrganization.PRESIDENTE
-    assert out[0].start_date == datetime(2025, 7, 28)
-    assert out[0].end_date == datetime(2026, 7, 28)
+    assert out[0].start_date is None
+    assert out[0].end_date is None
 
-    assert out[1].nombre == "Maria Lopez"
+    assert out[1].cong_name == "Maria Lopez"
     assert out[1].role == RoleOrganization.MIEMBRO
-    assert out[1].start_date == datetime(2025, 7, 28)
-    assert out[1].end_date == datetime(2026, 7, 28)
+    assert out[1].start_date is None
+    assert out[1].end_date is None

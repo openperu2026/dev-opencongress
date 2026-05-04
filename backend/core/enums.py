@@ -155,24 +155,14 @@ class Legislature(str, Enum):
     LEGISLATURA_2016_2 = "2016-II"
 
 
-class LegislativeYear(str, Enum):
-    YEAR_2026_2027 = "2026"
-    YEAR_2025_2026 = "2025"
-    YEAR_2024_2025 = "2024"
-    YEAR_2023_2024 = "2023"
-    YEAR_2022_2023 = "2022"
-    YEAR_2021_2022 = "2021"
-    YEAR_2020_2021 = "2020"
-    YEAR_2019_2020 = "2019"
-    YEAR_2018_2019 = "2018"
-    YEAR_2017_2018 = "2017"
-    YEAR_2016_2017 = "2016"
-
-
 class RoleOrganization(str, Enum):
     # For Bancadas | Partidos
     VOCERO = "Vocero"
     MIEMBRO = "Miembro"
+
+    # For Cámaras
+    DIPUTADO = "Diputado"
+    SENADOR = "Senador"
 
     # For Comisiones, Mesa Directiva, Junta de Portavoces
     PRESIDENTE = "Presidente"

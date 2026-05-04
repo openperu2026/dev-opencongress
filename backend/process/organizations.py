@@ -74,8 +74,11 @@ def process_admin_org(
 
     final_lst = []
     html = fromstring(raw_org.raw_html)
-    leg_year = get_current_leg_year(str(raw_org.timestamp))
-    current_leg_period = find_leg_period(leg_year)
+    timestamp = getattr(
+        raw_org, "timestamp", f"{raw_org.legislative_year}-08-01T00:00:00"
+    )
+    current_leg_year = get_current_leg_year(timestamp)
+    current_leg_period = find_leg_period(current_leg_year)
 
     raw_lst = html.xpath('//*[@class="congresistas"]/tbody/tr')
 
@@ -101,3 +104,23 @@ def process_admin_org(
         )
 
     return org, final_lst
+
+
+def process_org(raw_org: RawOrganization) -> Organization:
+    org, _ = process_admin_org(raw_org)
+    return org
+
+
+def process_org_membership(
+    raw_org: RawOrganization, org: Organization | None = None
+) -> list[Membership]:
+    parsed_org, memberships = process_admin_org(raw_org)
+    if org is None:
+        return memberships
+    return [
+        membership.model_copy(
+            update={"org_name": org.org_name, "org_type": org.org_type}
+        )
+        for membership in memberships
+        if parsed_org.org_name == org.org_name
+    ]

@@ -51,6 +51,7 @@ def _raw_cong(
         memberships_content=json.dumps(memberships_content),
         leg_period=leg_period,
         website=website,
+        timestamp=datetime(2025, 8, 1),
     )
 
 
@@ -75,11 +76,15 @@ def test_process_profile_content_parses_fields_and_votes_int(
 ):
     raw = _raw_cong(profile_content=profile_html, leg_period="2021-2026")
 
-    cong = mod.process_profile_content(raw, dict_data_cong)
+    cong, orgs, memberships = mod.process_profile_content(raw, dict_data_cong)
 
     assert cong.full_name == "Juan Alberto Perez Quispe"
     assert cong.website == "https://www.congreso.gob.pe/congresista/juan"
     assert cong.photo_url == "https://www.congreso.gob.pe/FotosCongresista/juan.jpg"
+    assert [org.org_name for org in orgs] == ["Accion Popular", "Cámara de Diputados"]
+    assert memberships[0].org_name == "Accion Popular"
+    assert memberships[0].votes_in_election == 12345
+    assert memberships[1].org_name == "Cámara de Diputados"
 
 
 def test_process_memberships_all_branches(monkeypatch):
@@ -127,7 +132,9 @@ def test_process_memberships_all_branches(monkeypatch):
 
     raw = _raw_cong(memberships_content=memberships_payload, leg_period="2021-2026")
     cong = SimpleNamespace(
-        nombre="Juan Pérez", leg_period="2021-2026", website="www.congreso.gob.pe/juan"
+        full_name="Juan Pérez",
+        leg_period="2021-2026",
+        website="www.congreso.gob.pe/juan",
     )
 
     out = mod.process_memberships(raw, cong)
@@ -136,13 +143,12 @@ def test_process_memberships_all_branches(monkeypatch):
 
     # 1) Special case
     m0 = out[0]
-    assert m0.nombre == "Juan Pérez"
+    assert m0.cong_name == "Juan Pérez"
     assert m0.leg_period == "2021-2026"
     assert m0.role == RoleOrganization.PRESIDENTE
     assert m0.org_name == "Subcomisión de Acusaciones Constitucionales"
-    assert m0.org_type == "Subcomisión de Acusaciones Constitucionales"
-    assert m0.comm_type == "Subcomisión de Acusaciones Constitucionales"
-    assert m0.start_date == datetime.fromisoformat("2025-08-01")
+    assert m0.org_type == "Comisión"
+    assert m0.start_date == datetime.fromisoformat("2025-08-01").date()
     assert m0.end_date is None
 
     # 2) type_org != ''
@@ -150,18 +156,16 @@ def test_process_memberships_all_branches(monkeypatch):
     assert m1.role == RoleOrganization.MIEMBRO
     assert m1.org_name == "Comisión de Economía"
     assert m1.org_type == "Comisión"
-    assert m1.comm_type == "Comisión Ordinaria"
-    assert m1.start_date == datetime.fromisoformat("2025-08-02")
-    assert m1.end_date == datetime.fromisoformat("2025-12-31")
+    assert m1.start_date == datetime.fromisoformat("2025-08-02").date()
+    assert m1.end_date == datetime.fromisoformat("2025-12-31").date()
 
     # 3) type_org == ''
     m2 = out[2]
     assert m2.role == RoleOrganization.SECRETARIO
     assert m2.org_name == "Mesa Directiva"
-    assert m2.org_type == "Mesa Directiva"
-    assert m2.comm_type is None
-    assert m2.start_date == datetime.fromisoformat("2025-09-01")
-    assert m2.end_date == datetime.fromisoformat("2026-07-27")
+    assert m2.org_type == "Administrativo"
+    assert m2.start_date == datetime.fromisoformat("2025-09-01").date()
+    assert m2.end_date == datetime.fromisoformat("2026-07-27").date()
 
 
 def test_process_memberships_raises_if_data_is_none(monkeypatch):
@@ -172,7 +176,7 @@ def test_process_memberships_raises_if_data_is_none(monkeypatch):
     monkeypatch.setattr(mod, "normalize_membership_role", lambda s: s)
 
     raw = _raw_cong(memberships_content={"data": None})
-    cong = SimpleNamespace(nombre="X", leg_period="2021-2026")
+    cong = SimpleNamespace(full_name="X", leg_period="2021-2026")
 
     with pytest.raises(TypeError):
         mod.process_memberships(raw, cong)

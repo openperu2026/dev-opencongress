@@ -486,21 +486,6 @@ class Congresista(PrintableModel):
         return None
 
 
-# class Bancada(PrintableModel):
-#     """
-#     Represent a Bancada in the peruvian government
-
-#     Attributes:
-#         leg_year (str): Year period of the bancada
-#         bancada_name (str): Name of the bancada
-#     """
-
-#     leg_year: LegislativeYear
-#     bancada_name: str
-
-#     model_config = ConfigDict(use_enum_values=False)
-
-
 class Organization(PrintableModel):
     """
     Represents a legislative organization inside the parliament, such as a committee.
@@ -566,13 +551,17 @@ class Membership(PrintableModel):
     Represents a person's role in an organization during a specific time period.
 
     Attributes:
-        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
-        nombre (str): Name of the person.
-        leg_period (str): Legislative period.
+        cong_name (str): Name of the congresista.
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
-        comm_type (str): Type of committee (e.g. ordinaria, especial, etc)
+        leg_period (str): Legislative period.
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         time_stamp (datetime): Date of the scraped record.
+        start_date (datetime): Date of the beginning of the membership
+        end_date (datetime): Date of the end of the membership
+        condicion (str): Current status of their membership into the
+        votes_in_election (int): Votes obtained in the election
+        dist_electoral (str): Electoral district
     """
 
     # Attributes that fit in Popolo structure
@@ -582,7 +571,12 @@ class Membership(PrintableModel):
     leg_period: LegPeriod
     role: RoleOrganization
     time_stamp: datetime
-    website: str | None
+    website: str | None = None
+    start_date: date | datetime | None = None
+    end_date: date | datetime | None = None
+    condicion: str | None = None
+    votes_in_election: int | None = None
+    dist_electoral: str | None = None
 
     model_config = ConfigDict(use_enum_values=False)
 
@@ -593,22 +587,18 @@ class Membership(PrintableModel):
             return v
         return parse_leg_period(v)
 
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def validate_date_fields(cls, v):
+        if isinstance(v, datetime):
+            return v.date()
+        return v
 
-# class BancadaMembership(PrintableModel):
-#     """
-#     Represents a person's membership in a bancada during a specific time period.
-
-#     Attributes:
-#         leg_year (str): Year period of the membership
-#         cong_name (str): Name of the congresista
-#         website (str): Congresista's website
-#         bancada_name (str): Bancada's name
-#     """
-
-#     leg_year: LegislativeYear
-#     cong_name: str
-#     website: str
-#     bancada_name: str
+    @model_validator(mode="after")
+    def validate_dates(self) -> Self:
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("end_date cannot be earlier than start_date")
+        return self
 
 
 class Ley(PrintableModel):

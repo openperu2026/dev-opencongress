@@ -10,7 +10,6 @@ from backend.core.constants import (
 from backend.core.enums import (
     BillStepType,
     LegPeriod,
-    LegislativeYear,
     Legislature,
     MotionStepType,
     MotionType,
@@ -596,24 +595,22 @@ _MOTION_STEP_PRIORITY: dict[MotionStepType, int] = {
 }
 
 
-def find_leg_period(leg_year: LegislativeYear):
-    int_year = int(leg_year)
-
-    if int_year in range(2026, 2031):
+def find_leg_period(leg_year: int):
+    if leg_year in range(2026, 2031):
         return parse_leg_period("Parlamentario 2026 - 2031")
-    if int_year in range(2021, 2026):
+    if leg_year in range(2021, 2026):
         return parse_leg_period("Parlamentario 2021 - 2026")
-    if int_year in range(2016, 2021):
+    if leg_year in range(2016, 2021):
         return parse_leg_period("Parlamentario 2016 - 2021")
-    if int_year in range(2011, 2016):
+    if leg_year in range(2011, 2016):
         return parse_leg_period("Parlamentario 2011 - 2016")
-    if int_year in range(2006, 2011):
+    if leg_year in range(2006, 2011):
         return parse_leg_period("Parlamentario 2006 - 2011")
-    if int_year in range(2001, 2006):
+    if leg_year in range(2001, 2006):
         return parse_leg_period("Parlamentario 2001 - 2006")
-    if int_year in range(2000, 2001):
+    if leg_year in range(2000, 2001):
         return parse_leg_period("Parlamentario 2000 - 2001")
-    if int_year in range(1995, 2000):
+    if leg_year in range(1995, 2000):
         return parse_leg_period("Parlamentario 1995 - 2000")
     return parse_leg_period("CCD 1992 -1995")
 
@@ -641,6 +638,10 @@ def normalize_membership_role(raw: str) -> RoleOrganization:
         "presidente (e) del congreso de la república": RoleOrganization.PRESIDENTE,
         "segundo vicepresidente": RoleOrganization.SEGUNDO_VICE,
         "tercer vicepresidente": RoleOrganization.TERCER_VICE,
+        "diputado": RoleOrganization.DIPUTADO,
+        "diputada": RoleOrganization.DIPUTADO,
+        "senadora": RoleOrganization.SENADOR,
+        "senador": RoleOrganization.SENADOR,
     }
 
     normalized_role = role_map.get(role)

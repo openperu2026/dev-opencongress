@@ -15,21 +15,22 @@ from backend.database.models import (
     BillStep,
     Congresista,
     Organization,
-    Membership,
+    CommitteeMembership,
+)
+from backend import (
+    BillStepType,
+    RoleOrganization,
     VoteOption,
     AttendanceStatus,
     RoleTypeBill,
     Proponents,
     LegPeriod,
     Legislature,
-    LegislativeYear,
-    TypeOrganization,
-    RoleOrganization,
-    TypeCommittee,
     VoteResult,
     MajorityType,
+    TypeCommittee,
+    TypeOrganization,
 )
-from backend import BillStepType
 
 
 @pytest.fixture()
@@ -47,11 +48,9 @@ def session():
 
 def test_create_organization(session):
     org = Organization(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        leg_year=LegislativeYear.YEAR_2021_2022,
         org_name="Congreso del Perú",
-        org_type=TypeOrganization.COMISON,
-        comm_type=TypeCommittee.COM_ETICA,
+        org_type=TypeOrganization.COMMITTEE.value,
+        org_subtype=TypeCommittee.COM_ETICA.value,
         org_link="www.congreso.gob.pe/comision",
     )
     session.add(org)
@@ -134,11 +133,13 @@ def test_bill_step(session):
 
 
 def test_membership_validation(session):
-    membership = Membership(
+    membership = CommitteeMembership(
         id=1,
-        role=RoleOrganization.MIEMBRO,
         person_id=1,
         org_id=1,
+        leg_period=LegPeriod.PERIODO_2021_2026.value,
+        membership_type=TypeOrganization.COMMITTEE.value,
+        role=RoleOrganization.MIEMBRO.value,
         start_date=datetime.now() - timedelta(days=30),
         end_date=datetime.now(),
     )
@@ -172,11 +173,9 @@ def test_bill_congresistas(session):
 
 def test_bill_committees(session):
     committee = Organization(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        leg_year=LegislativeYear.YEAR_2021_2022,
         org_name="Congreso del Perú",
-        org_type=TypeOrganization.COMISON,
-        comm_type=TypeCommittee.COM_ETICA,
+        org_type=TypeOrganization.COMMITTEE.value,
+        org_subtype=TypeCommittee.COM_ETICA.value,
         org_link="www.congreso.gob.pe/comision",
     )
     session.add(committee)
