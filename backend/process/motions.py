@@ -124,7 +124,7 @@ def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep] | None:
                 id=id,
                 motion_id=raw_motion.id,
                 vote_step=vote_step,
-                vote_id=None,
+                vote_event_id=None,
                 step_date=date,
                 step_status=status,
                 step_detail=details,

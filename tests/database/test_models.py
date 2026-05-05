@@ -11,7 +11,7 @@ from backend.database.models import (
     Attendance,
     Bill,
     BillCongresistas,
-    BillCommittees,
+    BillOrganization,
     BillStep,
     Congresista,
     Organization,
@@ -25,7 +25,6 @@ from backend import (
     RoleTypeBill,
     Proponents,
     LegPeriod,
-    Legislature,
     VoteResult,
     MajorityType,
     TypeCommittee,
@@ -74,20 +73,24 @@ def test_create_congresista(session):
 
 
 def test_create_bill(session):
+    org = Organization(
+        org_name="Bancada Test",
+        org_type=TypeOrganization.BANCADA.value,
+    )
+    session.add(org)
+    session.flush()
+
     bill = Bill(
         id="B001",
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        legislature=Legislature.LEGISLATURA_2021_1,
-        presentation_date=datetime.now(),
         title="Ley de Transparencia",
-        summary="Resumen de ley",
+        summary_congreso="Resumen de ley",
         observations="Observaciones aquí",
-        complete_text="Texto completo",
         status="En trámite",
-        proponent=Proponents.CONGRESO,
+        proponent=Proponents.CONGRESO.value,
         author_id=1,
-        bancada_id=10,
-        approved=False,
+        bancada_id=org.org_id,
+        bill_approved=False,
+        summary_oc="Resumen OC",
     )
     session.add(bill)
     session.commit()
@@ -119,11 +122,11 @@ def test_attendance(session):
 
 def test_bill_step(session):
     step = BillStep(
-        id=1,
         bill_id="B001",
+        step_id=1,
         vote_step=True,
         vote_event_id=None,
-        step_type=BillStepType.VOTACION,
+        step_type=BillStepType.VOTACION.value,
         step_date=datetime.now(),
         step_detail="Votación en pleno",
     )
@@ -164,14 +167,17 @@ def test_unique_vote_constraint(session):
 
 def test_bill_congresistas(session):
     relation = BillCongresistas(
-        bill_id="B001", person_id=1, role_type=RoleTypeBill.COAUTHOR
+        bill_id="B001",
+        person_id=1,
+        bancada_id=10,
+        role_type=RoleTypeBill.COAUTHOR.value,
     )
     session.add(relation)
     session.commit()
     assert relation.role_type == RoleTypeBill.COAUTHOR
 
 
-def test_bill_committees(session):
+def test_bill_organization(session):
     committee = Organization(
         org_name="Congreso del Perú",
         org_type=TypeOrganization.COMMITTEE.value,
@@ -181,10 +187,15 @@ def test_bill_committees(session):
     session.add(committee)
     session.commit()
 
-    relation = BillCommittees(bill_id="B001", committee_id=committee.org_id)
+    relation = BillOrganization(
+        bill_id="B001",
+        org_id=committee.org_id,
+        org_type=TypeOrganization.COMMITTEE.value,
+        presentation_date=datetime.now().date(),
+    )
     session.add(relation)
     session.commit()
-    assert relation.committee_id == 1
+    assert relation.org_id == 1
 
 
 def test_vote_counts(session):

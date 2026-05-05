@@ -164,7 +164,7 @@ def create_vote_ids(
                 vote_id = f"{step.bill_id}_{vote_step_counter}"
             elif isinstance(step, MotionStep):
                 vote_id = f"{step.motion_id}_{vote_step_counter}"
-            step.vote_id = vote_id
+            step.vote_event_id = vote_id
 
         final_list.append(step)
 
