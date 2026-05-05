@@ -26,7 +26,7 @@ class Vote(Base):
     __tablename__ = "votes"
 
     vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.vote_event_id"), primary_key=True
+        ForeignKey("vote_events.vote_event_id"), nullable=False
     )
     voter_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=False)
     option: Mapped[str] = mapped_column(nullable=False)
@@ -55,7 +55,7 @@ class Attendance(Base):
     __tablename__ = "attendance"
 
     event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.vote_event_id"), primary_key=True
+        ForeignKey("vote_events.vote_event_id"), nullable=False
     )
     attendee_id: Mapped[int] = mapped_column(
         ForeignKey("congresistas.id"), nullable=False
