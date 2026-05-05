@@ -155,13 +155,13 @@ def test_process_motion_steps_vote_detection_and_vote_id_increment():
             "detalle": "Otra votacion en comisión (segunda)",
         },
     ]
-    rm = _raw_motion(id="MO_777", steps=steps)
+    rm = _raw_motion(id="2021_777", steps=steps)
 
     out = mod.process_motion_steps(rm)
 
     assert len(out) == 3
     assert out[0].step_id == 123
-    assert out[0].motion_id == "MO_777"
+    assert out[0].motion_id == "2021_777"
     assert out[0].step_type == MotionStepType.ETAPA_EN_COMISION
     assert out[0].vote_step is False
     assert out[0].vote_event_id is None
@@ -169,12 +169,12 @@ def test_process_motion_steps_vote_detection_and_vote_id_increment():
     assert out[1].step_id == 234
     assert out[1].step_type == MotionStepType.VOTACION_O_DECISION
     assert out[1].vote_step is True
-    assert out[1].vote_event_id == "MO_777_1"
+    assert out[1].vote_event_id == "M_2021_777_1"
 
     assert out[2].step_id == 345
     assert out[2].step_type == MotionStepType.VOTACION_O_DECISION
     assert out[2].vote_step is True
-    assert out[2].vote_event_id == "MO_777_2"
+    assert out[2].vote_event_id == "M_2021_777_2"
 
 
 def test_process_motion_organizations_chamber_only_and_dates():

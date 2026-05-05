@@ -1,22 +1,11 @@
 from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    Enum,
-    DateTime,
     ForeignKey,
     UniqueConstraint,
     PrimaryKeyConstraint,
+    CheckConstraint,
     Index,
 )
-from backend import (
-    VoteOption,
-    VoteResult,
-    MajorityType,
-    AttendanceStatus,
-    LegPeriod,
-    TypeOrganization,
-)
+from backend import TypeOrganization
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 from datetime import datetime, date
 
@@ -36,15 +25,20 @@ class Vote(Base):
 
     __tablename__ = "votes"
 
-    vote_event_id = Column(String, ForeignKey("vote_events.id"), primary_key=True)
-    voter_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-    option = Column(Enum(VoteOption, name="option"), nullable=False)
-    bancada_id = Column(Integer, ForeignKey("organizations.org_id"), nullable=False)
+    vote_event_id: Mapped[str] = mapped_column(
+        ForeignKey("vote_events.vote_event_id"), primary_key=True
+    )
+    voter_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=False)
+    option: Mapped[str] = mapped_column(nullable=False)
+    bancada_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=False
+    )
 
     __table_args__ = (
-        UniqueConstraint("vote_event_id", "voter_id", name="uq_vote_event_voter"),
+        PrimaryKeyConstraint("vote_event_id", "voter_id", name="pk_vote_event_voter"),
         Index("ix_vote_vote_event_id", "vote_event_id"),
         Index("ix_vote_voter_id", "voter_id"),
+        Index("ix_vote_bancada_id", "bancada_id"),
     )
 
 
@@ -60,12 +54,16 @@ class Attendance(Base):
 
     __tablename__ = "attendance"
 
-    event_id = Column(Integer, ForeignKey("vote_events.id"), primary_key=True)
-    attendee_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-    status = Column(Enum(AttendanceStatus, name="attendance_status"), nullable=False)
+    event_id: Mapped[str] = mapped_column(
+        ForeignKey("vote_events.vote_event_id"), primary_key=True
+    )
+    attendee_id: Mapped[int] = mapped_column(
+        ForeignKey("congresistas.id"), nullable=False
+    )
+    status: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
-        UniqueConstraint("event_id", "attendee_id", name="uq_attendance"),
+        PrimaryKeyConstraint("event_id", "attendee_id", name="pk_attendance"),
         Index("ix_attendance_by_event", "event_id"),
         Index("ix_attendance_attendee_id", "attendee_id"),
     )
@@ -76,30 +74,55 @@ class VoteEvent(Base):
     Represents a vote event in a parliament session.
 
     Attributes:
-        leg_period (str): The legislative period during which the vote occurred.
+        vote_event_id (str): Unique identifier for the vote event
+        org_id (int): Unique identifier for the organization where the vote event occur
         bill_id (str): Unique identifier for the bill associated with the vote.
+        motion_id (str): Unique identifier for the motion associated with the vote.
         date (str): The date of the vote event.
+        result (str): Final result of the vote event
+        votes_in_favor (int): Number of votes in favor
+        votes_against (int): Number of votes against
+        votes_abstention (int): Number of votes in abstention
     """
 
     __tablename__ = "vote_events"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    leg_period = Column(Enum(LegPeriod, name="leg_period"), nullable=False)
-    bill_or_motion = Column(String, nullable=False)
-    bill_motion_id = Column(String, nullable=False)
-    date = Column(DateTime, nullable=False)
-    result = Column(Enum(VoteResult, name="vote_result"), nullable=False)
-    majority_type = Column(Enum(MajorityType, name="majority_type"), nullable=True)
+    vote_event_id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
+    org_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=False
+    )
+    bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
+    motion_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
+    date: Mapped[datetime] = mapped_column(nullable=False)
+    result: Mapped[str] = mapped_column(nullable=False)
+    votes_in_favor: Mapped[int] = mapped_column(nullable=False)
+    votes_against: Mapped[int] = mapped_column(nullable=False)
+    votes_abstention: Mapped[int] = mapped_column(nullable=False)
 
     __table_args__ = (
-        UniqueConstraint(
-            "leg_period",
-            "bill_or_motion",
-            "bill_motion_id",
-            "date",
-            name="uq_vote_event",
+        CheckConstraint(
+            """
+            (bill_id IS NOT NULL AND motion_id IS NULL)
+            OR
+            (bill_id IS NULL AND motion_id IS NOT NULL)
+            """,
+            name="ck_vote_event_exactly_one_target",
         ),
-        Index("ix_vote_event_bill_motion_id", "bill_motion_id"),
+        UniqueConstraint(
+            "org_id",
+            "bill_id",
+            "date",
+            name="uq_vote_event_bill",
+        ),
+        UniqueConstraint(
+            "org_id",
+            "motion_id",
+            "date",
+            name="uq_vote_event_motion",
+        ),
+        Index("ix_vote_event_bill_id", "bill_id"),
+        Index("ix_vote_event_motion_id", "motion_id"),
+        Index("ix_vote_event_org_id", "org_id"),
     )
 
 
@@ -116,10 +139,14 @@ class VoteCounts(Base):
 
     __tablename__ = "vote_counts"
 
-    vote_event_id = Column(String, ForeignKey("vote_events.id"), nullable=False)
-    option = Column(Enum(VoteOption, name="option"), nullable=False)
-    bancada_id = Column(Integer, ForeignKey("organizations.org_id"), nullable=False)
-    count = Column(Integer, nullable=False)
+    vote_event_id: Mapped[str] = mapped_column(
+        ForeignKey("vote_events.vote_event_id"), nullable=False
+    )
+    option: Mapped[str] = mapped_column(nullable=False)
+    bancada_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=False
+    )
+    count: Mapped[int] = mapped_column(nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint(
@@ -248,7 +275,7 @@ class BillStep(Base):
     step_type: Mapped[str] = mapped_column(nullable=False)
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.id"), nullable=True
+        ForeignKey("vote_events.vote_event_id"), nullable=True
     )
     step_date: Mapped[datetime] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
@@ -600,7 +627,7 @@ class MotionStep(Base):
     step_type: Mapped[str] = mapped_column(nullable=False)
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.id"), nullable=True
+        ForeignKey("vote_events.vote_event_id"), nullable=True
     )
     step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)

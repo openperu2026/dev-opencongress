@@ -26,7 +26,6 @@ from backend import (
     Proponents,
     LegPeriod,
     VoteResult,
-    MajorityType,
     TypeCommittee,
     TypeOrganization,
 )
@@ -99,12 +98,14 @@ def test_create_bill(session):
 
 def test_create_vote_event_and_vote(session):
     vote_event = VoteEvent(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        bill_or_motion="Bill",
-        bill_motion_id="B001",
+        vote_event_id="VOT123",
+        org_id=1,
+        bill_id="B001",
         date=datetime.now(),
-        result=VoteResult.APROBADO,
-        majority_type=MajorityType.SIMPLE,
+        result=VoteResult.APROBADO.value,
+        votes_in_favor=100,
+        votes_against=10,
+        votes_abstention=20,
     )
     session.add(vote_event)
     vote = Vote(vote_event_id="VOT123", voter_id=1, option=VoteOption.SI, bancada_id=10)

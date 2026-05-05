@@ -3,7 +3,6 @@ from pydantic import BaseModel, field_validator, ConfigDict, model_validator
 from backend import (
     VoteOption,
     VoteResult,
-    MajorityType,
     AttendanceStatus,
     RoleTypeBill,
     BillStepType,
@@ -20,7 +19,6 @@ from backend import (
     parse_proponent,
     parse_motion_type,
 )
-from typing import Optional
 from datetime import datetime, date
 
 
@@ -70,9 +68,15 @@ class VoteEvent(PrintableModel):
     """
     Represents a vote event in a parliament session.
     Attributes:
-        leg_period (str): The legislative period during which the vote occurred.
+        vote_event_id (str): Unique identifier for the vote event
+        org_name (int): Name of the organization where the vote occur
+        org_type (int): Type of organization
         bill_id (str): Unique identifier for the bill associated with the vote.
+        motion_id (str): Unique identifier for the motion associated with the vote.
         date (str): The date of the vote event.
+        result (str): Final result of the vote event
+        votes (list[Vote]): List of Vote objects in this event
+        attendance (list[Attendance]): List of Attendance objects in this event
     """
 
     # Attributes that fit in in Popolo structure
@@ -81,9 +85,8 @@ class VoteEvent(PrintableModel):
     bill_motion_id: str
     date: datetime
     result: VoteResult
-    majority_type: MajorityType | None
-    votes: Optional[list[Vote]] = None
-    attendance: Optional[list[Attendance]] = None
+    votes: list[Vote]
+    attendance: list[Attendance]
 
     @field_validator("leg_period", mode="before")
     @classmethod
