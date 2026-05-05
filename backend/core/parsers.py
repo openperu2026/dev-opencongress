@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 import unicodedata
 from backend.core.constants import (
     BILL_ROLE_MAPS,
@@ -595,24 +596,38 @@ _MOTION_STEP_PRIORITY: dict[MotionStepType, int] = {
 }
 
 
-def find_leg_period(leg_year: int):
-    if leg_year in range(2026, 2031):
+def find_leg_period(value: date | datetime):
+    if value is None:
+        raise ValueError("date cannot be null")
+
+    if isinstance(value, datetime):
+        value = value.date()
+
+    if date(2026, 7, 26) <= value <= date(2031, 7, 25):
         return parse_leg_period("Parlamentario 2026 - 2031")
-    if leg_year in range(2021, 2026):
+
+    if date(2021, 7, 26) <= value <= date(2026, 7, 25):
         return parse_leg_period("Parlamentario 2021 - 2026")
-    if leg_year in range(2016, 2021):
+
+    if date(2016, 7, 26) <= value <= date(2021, 7, 25):
         return parse_leg_period("Parlamentario 2016 - 2021")
-    if leg_year in range(2011, 2016):
+
+    if date(2011, 7, 26) <= value <= date(2016, 7, 25):
         return parse_leg_period("Parlamentario 2011 - 2016")
-    if leg_year in range(2006, 2011):
+
+    if date(2006, 7, 26) <= value <= date(2011, 7, 25):
         return parse_leg_period("Parlamentario 2006 - 2011")
-    if leg_year in range(2001, 2006):
+
+    if date(2001, 7, 26) <= value <= date(2006, 7, 25):
         return parse_leg_period("Parlamentario 2001 - 2006")
-    if leg_year in range(2000, 2001):
+
+    if date(2000, 7, 26) <= value <= date(2001, 7, 25):
         return parse_leg_period("Parlamentario 2000 - 2001")
-    if leg_year in range(1995, 2000):
+
+    if date(1995, 7, 26) <= value <= date(2000, 7, 25):
         return parse_leg_period("Parlamentario 1995 - 2000")
-    return parse_leg_period("CCD 1992 -1995")
+
+    return parse_leg_period("CCD 1992 - 1995")
 
 
 def normalize_membership_role(raw: str) -> RoleOrganization:

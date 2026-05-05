@@ -92,7 +92,7 @@ class VoteEvent(Base):
         ForeignKey("organizations.org_id"), nullable=False
     )
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
-    motion_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
+    motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=True)
     date: Mapped[datetime] = mapped_column(nullable=False)
     result: Mapped[str] = mapped_column(nullable=False)
     votes_in_favor: Mapped[int] = mapped_column(nullable=False)
@@ -685,3 +685,30 @@ class Ley(Base):
     id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
     title: Mapped[str] = mapped_column(nullable=False)
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=False)
+
+
+class CongresistaMetric(Base):
+    """
+    Stores precomputed metrics for each congresista by legislative period.
+    """
+
+    __tablename__ = "congresista_metrics"
+
+    cong_id: Mapped[int] = mapped_column(
+        ForeignKey("congresistas.id"),
+        nullable=False,
+    )
+    leg_period: Mapped[str] = mapped_column(nullable=False)
+
+    avg_attendance: Mapped[float | None] = mapped_column(nullable=True)
+
+    bills_auth: Mapped[int] = mapped_column(nullable=False, default=0)
+    bills_success_rate: Mapped[float | None] = mapped_column(nullable=True)
+
+    motions_auth: Mapped[int] = mapped_column(nullable=False, default=0)
+    motions_success_rate: Mapped[float | None] = mapped_column(nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("cong_id", "leg_period"),
+        Index("ix_congresista_metrics_period", "leg_period"),
+    )

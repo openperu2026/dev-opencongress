@@ -79,8 +79,6 @@ def test_process_bancada_current_period_no_override(
         legislative_period="2025-2026",
     )
 
-    monkeypatch.setattr(mod, "get_current_leg_year", lambda ts: 2025)
-
     # Act
     bancadas, memberships = mod.process_bancada(rb)
 
@@ -111,9 +109,6 @@ def test_process_bancada_past_period_overrides_leg_year(
         legislative_period="2023-2024",
     )
 
-    # Mock: would normally say current year is 2025, but should be overridden for past periods
-    monkeypatch.setattr(mod, "get_current_leg_year", lambda ts: 2025)
-
     # Act
     bancadas, memberships = mod.process_bancada(rb)
 
@@ -133,8 +128,6 @@ def test_process_bancada_multiple_bancadas_updates_state(
         timestamp="2026-01-01T00:00:00",
         legislative_period="2025-2026",
     )
-
-    monkeypatch.setattr(mod, "get_current_leg_year", lambda ts: 2025)
 
     # Act
     bancadas, memberships = mod.process_bancada(rb)

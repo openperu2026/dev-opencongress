@@ -2,7 +2,8 @@ from lxml.html import fromstring
 from backend import RoleOrganization, find_leg_period
 from backend.database.raw_models import RawBancada
 from backend.process.schema import Organization, Membership
-from backend.process.utils import get_current_leg_year, split_and_sort_name
+from backend.process.utils import split_and_sort_name
+from datetime import datetime
 
 CONGRESO_BASE_URL = "https://www.congreso.gob.pe"
 LEGACY_CONGRESO_BASE_URL = "https://www3.congreso.gob.pe"
@@ -25,8 +26,7 @@ def process_bancada(
     html = fromstring(raw_bancada.raw_html)
 
     rows = html.xpath('//*[@class="table-cng"]/tbody/tr')
-    current_leg_year = get_current_leg_year(raw_bancada.timestamp)
-    current_leg_period = find_leg_period(current_leg_year)
+    current_leg_period = find_leg_period(datetime.fromisoformat(raw_bancada.timestamp))
 
     bancadas: list[Organization] = []
     memberships: list[Membership] = []
