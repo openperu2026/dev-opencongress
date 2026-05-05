@@ -9,14 +9,15 @@ from backend.process.schema import (
     Bill,
     BillStep,
     BillCongresistas,
+    BillOrganization,
     Congresista,
     Organization,
     Membership,
 )
 from backend import (
     RoleTypeBill,
-    Proponents,
     BillStepType,
+    Proponents,
     LegPeriod,
     TypeOrganization,
     RoleOrganization,
@@ -149,10 +150,19 @@ def test_bill_congresistas_creation():
     relation = BillCongresistas(
         bill_id="b001",
         nombre="Juan Perez",
-        leg_period=LegPeriod.PERIODO_2021_2026,
         role_type=RoleTypeBill.ADHERENTE,
     )
     assert relation.role_type == RoleTypeBill.ADHERENTE
+
+
+def test_bill_organization_creation():
+    relation = BillOrganization(
+        bill_id="b001",
+        org_name="Comisión de Justicia",
+        org_type=TypeOrganization.COMMITTEE,
+        presentation_date=datetime.now().date(),
+    )
+    assert relation.org_name == "Comisión de Justicia"
 
 
 def test_bill_step_creation():

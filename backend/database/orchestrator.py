@@ -44,9 +44,10 @@ from backend.process.congresistas import (
     get_cong_data,
 )
 from backend.process.motions import (
+    find_motion_organization_schema,
     process_motion,
-    process_motion_document,
-    process_motion_steps,
+    process_motion_organizations,
+    process_motion_text,
 )
 from backend.process.organizations import (
     process_chambers,
@@ -1017,7 +1018,49 @@ class OpenPeruOrchestrator:
 
             for raw_motion in rows:
                 try:
-                    motion_schema, motion_congs = process_motion(raw_motion)
+                    motion_schema, motion_congs, motion_steps = process_motion(
+                        raw_motion
+                    )
+
+                    author = None
+                    if motion_schema.author_name:
+                        author = crud_core.find_congresista(
+                            db,
+                            name=motion_schema.author_name,
+                            website=motion_schema.author_web,
+                        )
+                    if author is None:
+                        logger.warning(
+                            f"Skipping RawMotion id={raw_motion.id}: author not found"
+                        )
+                        stats.skipped += 1
+                        continue
+
+                    motion_orgs = process_motion_organizations(raw_motion, motion_steps)
+                    chamber_schema = find_motion_organization_schema(
+                        motion_orgs,
+                        org_name="Cámara de Diputados",
+                        org_type="Cámara",
+                    )
+                    if chamber_schema is None:
+                        logger.warning(
+                            f"Skipping RawMotion id={raw_motion.id}: chamber relation not generated"
+                        )
+                        stats.skipped += 1
+                        continue
+
+                    chamber = crud_core.find_organization(
+                        db,
+                        org_name="Cámara de Diputados",
+                        org_type="Cámara",
+                    )
+                    if chamber is None:
+                        logger.warning(
+                            f"Skipping RawMotion id={raw_motion.id}: Cámara de Diputados organization not found"
+                        )
+                        stats.skipped += 1
+                        continue
+
                     pre = db.get(db_models.Motion, motion_schema.id)
                     motion = crud_motions.upsert_motion(db, motion_schema)
                     if pre is None:
@@ -1025,6 +1068,26 @@ class OpenPeruOrchestrator:
                     else:
                         clean_updated += 1
 
+                    for step_schema in motion_steps:
+                        crud_motions.upsert_motion_step(db, step_schema)
+
+                    for org_schema in motion_orgs:
+                        org = crud_core.find_organization(
+                            db=db,
+                            org_name=org_schema.org_name,
+                            org_type=org_schema.org_type,
+                        )
+                        if org is None:
+                            logger.warning(
+                                f"Skipping MotionOrganization motion_id={motion.id}, org={org_schema.org_name}: organization not found"
+                            )
+                            stats.skipped += 1
+                            continue
+                        crud_motions.upsert_motion_organization(
+                            db, motion.id, org.org_id, org_schema
+                        )
+
+                    presentation_date = chamber_schema.presentation_date
                     for cong_rel in motion_congs:
                         cong = crud_core.find_congresista(
                             db,
@@ -1034,35 +1097,47 @@ class OpenPeruOrchestrator:
                         if cong is None:
                             stats.skipped += 1
                             continue
-                        crud_motions.upsert_motion_congresista(
-                            db, motion.id, cong.id, cong_rel.role_type
+                        signer_bancada = crud_core.find_active_bancada_for_person(
+                            db, cong.id, presentation_date
                         )
-
-                    for step_schema in process_motion_steps(raw_motion) or []:
-                        crud_motions.upsert_motion_step(
+                        if signer_bancada is None:
+                            logger.warning(
+                                f"Skipping MotionCongresistas motion_id={motion.id}, person_id={cong.id}: active bancada not found"
+                            )
+                            stats.skipped += 1
+                            continue
+                        crud_motions.upsert_motion_congresista(
                             db,
-                            step_id=step_schema.id,
-                            motion_id=motion.id,
-                            step_date=step_schema.step_date,
-                            step_detail=step_schema.step_detail,
-                            step_status=step_schema.step_status,
-                            vote_step=step_schema.vote_step,
-                            vote_id=step_schema.vote_id,
+                            motion.id,
+                            cong.id,
+                            signer_bancada.org_id,
+                            cong_rel.role_type.value
+                            if hasattr(cong_rel.role_type, "value")
+                            else cong_rel.role_type,
                         )
 
                     if include_documents:
                         for raw_doc in crud_motions.find_raw_motion_documents(
                             raw_db, motion.id
                         ):
-                            doc = process_motion_document(raw_doc)
-                            crud_motions.upsert_motion_document(
+                            pages = crud_motions.find_raw_motion_pages(
+                                raw_db, motion.id, raw_doc.step_id, raw_doc.file_id
+                            )
+                            if not pages:
+                                stats.skipped += 1
+                                continue
+                            try:
+                                text_schema = process_motion_text(pages)
+                            except ValueError:
+                                stats.skipped += 1
+                                continue
+                            crud_motions.upsert_motion_text(
                                 db,
-                                motion_id=doc.motion_id,
-                                step_id=doc.step_id,
-                                archivo_id=doc.archivo_id,
-                                url=doc.url,
-                                text=doc.text,
-                                vote_doc=doc.vote_doc,
+                                motion_id=text_schema.motion_id,
+                                step_id=text_schema.step_id,
+                                file_id=text_schema.file_id,
+                                version_id=text_schema.version_id,
+                                text=text_schema.text,
                             )
                             raw_doc.processed = True
 
