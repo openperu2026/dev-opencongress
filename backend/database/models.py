@@ -92,7 +92,7 @@ class VoteEvent(Base):
         ForeignKey("organizations.org_id"), nullable=False
     )
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
-    motion_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
+    motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=True)
     date: Mapped[datetime] = mapped_column(nullable=False)
     result: Mapped[str] = mapped_column(nullable=False)
     votes_in_favor: Mapped[int] = mapped_column(nullable=False)
