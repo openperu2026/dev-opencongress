@@ -289,11 +289,11 @@ class Congresista(Base):
     Represents a member of the peruvian parliament
 
     Attributes:
-        id (str): Unique identifier for the person.
+        id (int): Unique identifier for the person.
         full_name (str): Full name of the person.
         first_name (str): First name of the person.
         last_name (str): Last name of the person.
-        dni (str): DNI of the person.
+        dni (str): DNI (Documento Nacional de Identidad) of the person.
         gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
         website (str): Official website of the congressperson.
@@ -309,6 +309,8 @@ class Congresista(Base):
     gender: Mapped[str] = mapped_column(nullable=True)
     photo_url: Mapped[str] = mapped_column(nullable=False)
     website: Mapped[str] = mapped_column(nullable=False)
+
+    __table_args__ = (UniqueConstraint("full_name", "dni", name="uq_congresista_id"),)
 
 
 class Organization(Base):
