@@ -1,19 +1,15 @@
 import argparse
 from loguru import logger
 
+from backend.database.orchestrator import OpenPeruOrchestrator, ProcessStats
 from backend.config import (
     directories,
     stop_logging_to_console,
     resume_logging_to_console,
 )
-from backend.database.orchestrator import (
-    OpenPeruOrchestrator,
-    StageStats,
-    DownloadStats,
-)
 
 
-def _print_summary(summary: dict[str, StageStats]) -> None:
+def _print_summary(summary: dict[str, ProcessStats]) -> None:
     total_processed = 0
     total_skipped = 0
     total_errors = 0
@@ -26,28 +22,6 @@ def _print_summary(summary: dict[str, StageStats]) -> None:
         total_errors += stats.errors
     logger.info(
         f"total: processed={total_processed}, skipped={total_skipped}, errors={total_errors}"
-    )
-
-
-def _print_document_summary(summary: dict[str, DownloadStats]) -> None:
-    total_scanned = 0
-    total_downloaded = 0
-    total_skipped = 0
-    total_errors = 0
-    total_uploaded = 0
-    for stage, stats in summary.items():
-        logger.info(
-            f"{stage}: scanned={stats.scanned}, downloaded={stats.downloaded}, skipped={stats.skipped}, errors={stats.errors}, uploaded={stats.uploaded}"
-        )
-        total_scanned += stats.scanned
-        total_downloaded += stats.downloaded
-        total_skipped += stats.skipped
-        total_errors += stats.errors
-        total_uploaded += stats.uploaded
-    logger.info(
-        "documents_total: "
-        f"scanned={total_scanned}, downloaded={total_downloaded}, "
-        f"skipped={total_skipped}, errors={total_errors}, uploaded={total_uploaded}"
     )
 
 
@@ -115,26 +89,6 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scrape pending bill/motion documents",
     )
     parser.add_argument(
-        "--download-documents",
-        action="store_true",
-        help="Download PDF documents from RawDB links",
-    )
-    parser.add_argument(
-        "--download-documents-limit",
-        type=int,
-        help="Limit the number of documents downloaded per type (bills/motions)",
-    )
-    parser.add_argument(
-        "--update-documents",
-        action="store_true",
-        help="Re-download documents even if they already exist locally",
-    )
-    parser.add_argument(
-        "--upload-documents-s3",
-        action="store_true",
-        help="Upload downloaded documents to the configured AWS S3 bucket",
-    )
-    parser.add_argument(
         "--no-documents",
         action="store_true",
         help="Skip loading documents in processing stage",
@@ -185,7 +139,6 @@ def main(argv: list[str] | None = None) -> None:
         run_leyes = False
 
     if args.scrape:
-        stop_logging_to_console(filename=directories.LOGS / "run_scrapers.log")
         orchestrator.run_scrapers(
             scrape_bills=run_bills,
             scrape_motions=run_motions,
@@ -204,21 +157,6 @@ def main(argv: list[str] | None = None) -> None:
             ley_end=args.ley_end,
             scrape_documents=args.scrape_documents,
         )
-        resume_logging_to_console()
-
-    if args.download_documents:
-        stop_logging_to_console(
-            filename=directories.LOGS / "run_document_downloads.log"
-        )
-        doc_summary = orchestrator.run_document_downloads(
-            download_bills=run_bills,
-            download_motions=run_motions,
-            update=args.update_documents,
-            upload_s3=args.upload_documents_s3,
-            limit=args.download_documents_limit,
-        )
-        resume_logging_to_console()
-        _print_document_summary(doc_summary)
 
     if not args.skip_processing:
         stop_logging_to_console(filename=directories.LOGS / "run_processing.log")
