@@ -37,7 +37,7 @@ BASE_URLS = {
     "Comisión Permanente": "https://www3.congreso.gob.pe/pagina/comision-permanente",
 }
 
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawOrganizationScraper:
@@ -47,7 +47,7 @@ class RawOrganizationScraper:
 
     def __init__(self):
         # Engine and session maker for DB
-        self.engine = create_engine(RAW_DB_PATH)
+        self.engine = create_engine(DB_PATH)
         self.urls = BASE_URLS
         self.Session = sessionmaker(bind=self.engine)
 

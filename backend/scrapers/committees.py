@@ -25,7 +25,7 @@ from backend.database.raw_models import RawCommittee
 from backend.scrapers.utils import parse_url
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/comisiones-ordinarias"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawCommitteeScraper:
@@ -35,7 +35,7 @@ class RawCommitteeScraper:
 
     def __init__(self):
         # Engine and session maker for DB
-        self.engine = create_engine(RAW_DB_PATH)
+        self.engine = create_engine(DB_PATH)
         self.url = BASE_URL
         self.Session = sessionmaker(bind=self.engine)
 
@@ -232,7 +232,7 @@ class RawCommitteeScraper:
 
                     new_committee = RawCommittee(
                         timestamp=datetime.now(),
-                        legislative_year=int(year_label),
+                        legislative_year=year_label,
                         committee_type=committee_label,
                         raw_html=html,
                         processed=False,

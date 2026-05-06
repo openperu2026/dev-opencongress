@@ -119,7 +119,7 @@ def process_profile_content(
     """
     html = fromstring(raw_cong.profile_content)
     photo_url = (
-        f"https://www.congreso.gob.pe{html.xpath('//*[@class="foto"]/img/@src')[0]}"
+        f"https://www3.congreso.gob.pe{html.xpath('//*[@class="foto"]/img/@src')[0]}"
     )
     website = raw_cong.website
     data_cong = dict_cong_data.get(website)

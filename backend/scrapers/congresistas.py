@@ -20,7 +20,7 @@ from backend.scrapers.utils import (
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/congresistas"
 API_MEMBERSHIP = "https://wb2server.congreso.gob.pe/vll/cargos/api/"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawCongresistasScraper:
@@ -30,7 +30,7 @@ class RawCongresistasScraper:
 
     def __init__(self):
         # Engine and session maker for DB
-        self.engine = create_engine(RAW_DB_PATH)
+        self.engine = create_engine(DB_PATH)
         self.url = BASE_URL
         self.Session = sessionmaker(bind=self.engine)
 
