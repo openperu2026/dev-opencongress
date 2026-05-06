@@ -1,0 +1,17 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: db/Dockerfile
+    container_name: opencongress-db
+    environment:
+      POSTGRES_USER: opencongress
+      POSTGRES_PASSWORD: opencongress
+      POSTGRES_DB: opencongress
+    ports:
+      - "5432:5432"
+    volumes:
+      - opencongress_pgdata:/var/lib/postgresql/data
+
+volumes:
+  opencongress_pgdata:
