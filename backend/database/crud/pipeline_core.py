@@ -42,6 +42,23 @@ def _enum_value(value) -> str:
 def find_congresista(
     db: Session, name: str, website: str | None = None, leg_period=None
 ) -> db_models.Congresista | None:
+    """
+    Find a congressperson by website or full name.
+
+    The function first searches by website when a website is provided, since it is
+    expected to be a more stable identifier than the person's name. If no match is
+    found by website, or if no website is provided, it falls back to searching by
+    full name.
+
+    Args:
+        db (Session): Active SQLAlchemy database session.
+        name (str): Full name of the congressperson to search for.
+        website (str | None, optional): Congressperson website URL. Defaults to None.
+
+    Returns:
+        db_models.Congresista | None: The matching congressperson if found;
+        otherwise, None.
+    """
     if website:
         by_web = db.scalar(
             select(db_models.Congresista).where(
@@ -50,6 +67,8 @@ def find_congresista(
         )
         if by_web is not None:
             return by_web
+
+    # TODO: implement a Fuzzy Match. .filter(func.jarowinkler(User.name, 'Jerry') > 0.85) --> with PostgreSQL and pg_similarity extension
     return db.scalar(
         select(db_models.Congresista).where(
             db_models.Congresista.full_name == name,
