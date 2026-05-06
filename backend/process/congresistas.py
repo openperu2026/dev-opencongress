@@ -90,8 +90,6 @@ def process_profile_content(
         leg_period=raw_cong.leg_period,
         role=normalize_membership_role("Miembro"),
         time_stamp=getattr(raw_cong, "timestamp", datetime.now()),
-        votes_in_election=int(votes_text.replace(",", "")),
-        dist_electoral=xpath2('//*[@class="representa"]/span[2]', html),
     )
 
     # TODO: Update when the webpage divides diputados and senadores
@@ -103,6 +101,8 @@ def process_profile_content(
         role=normalize_membership_role("Diputado"),
         time_stamp=getattr(raw_cong, "timestamp", datetime.now()),
         condicion=xpath2('//*[@class="condicion"]/span[2]', html),
+        votes_in_election=int(votes_text.replace(",", "")),
+        dist_electoral=xpath2('//*[@class="representa"]/span[2]', html),
     )
 
     chamber = Organization(
