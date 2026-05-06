@@ -1,7 +1,7 @@
 from backend import normalize_membership_role
 from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership, Organization
-from backend.process.utils import gen_congresistas_df, split_and_sort_name, to_datetime
+from backend.process.utils import gen_congresistas_df, to_datetime
 from backend.database.session import get_db
 
 import json
@@ -11,10 +11,25 @@ from lxml.html import fromstring, HtmlElement
 
 
 def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
+    """
+    Load and process congressmembers data from a JSON file.
+
+    If the JSON file does not exist, the function generates it using the
+    current database session. It then reads the JSON data, processes each
+    congressperson record, and returns a dictionary indexed by website URL.
+
+    Args:
+        json_path (Path): Path to the JSON file containing raw congressperson
+            data.
+
+    Returns:
+        dict[str, dict[str, str]]: Dictionary where each key is a congressperson
+        website URL and each value is the processed congressperson data.
+    """
     if not json_path.exists():
         gen_congresistas_df(next(get_db), True)
 
-    with open(json_path, "r") as file:
+    with open(json_path, "r", encoding="utf-8") as file:
         data = json.load(file)
 
     final_dict = dict()
@@ -26,7 +41,23 @@ def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
 
 
 def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
-    full_name, first_name, last_name = split_and_sort_name(cong_dict["nombre"])
+    """
+    Normalize a raw congressperson dictionary into a standard schema.
+
+    The function parses the full name from the raw "nombre" field, builds a
+    normalized full name, maps the gender code, its full Spanish label, and
+    fixes a known website URL error for Hernando Guerra García.
+
+    Args:
+        cong_dict (dict[str, str | int]): Raw congressperson data containing
+            fields such as "nombre", "dni", "sexo", and "pagWeb".
+
+    Returns:
+        dict[str, str]: Processed congressperson data with first name, last
+        name, full name, DNI (Documento Nacional de Identidad), gender, and website.
+    """
+    last_name, first_name = [sub.strip() for sub in cong_dict["nombre"].split(",")]
+    full_name = f"{first_name} {last_name}"
 
     if cong_dict["dni"] == "07202572":
         # This is due to an error in the website, where it points to HernandoGarcia
@@ -39,13 +70,27 @@ def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
         "first_name": first_name,
         "last_name": last_name,
         "full_name": full_name,
-        "dni": cong_dict["dni"],
+        "dni": str(cong_dict["dni"]),
         "gender": "Masculino" if cong_dict["sexo"] == "M" else "Femenino",
-        "website": website,
+        "website": str(website),
     }
 
 
-def xpath2(xpath_query: str, parse: HtmlElement):
+def xpath2(xpath_query: str, parse: HtmlElement) -> str | None:
+    """
+    Extract the text from the first element matching an XPath query.
+
+    The function evaluates the XPath query against the parsed HTML element and
+    returns the text content of the first match. If no elements match the query,
+    it returns None.
+
+    Args:
+        xpath_query (str): XPath expression used to search the HTML tree.
+        parse (HtmlElement): Parsed HTML element where the XPath query is applied.
+
+    Returns:
+        str | None: Text from the first matching element, or None if no match is found.
+    """
     result = parse.xpath(xpath_query)
     return result[0].text if result else None
 
@@ -53,6 +98,25 @@ def xpath2(xpath_query: str, parse: HtmlElement):
 def process_profile_content(
     raw_cong: RawCongresista, dict_cong_data: dict[str, dict]
 ) -> tuple[Congresista, list[Organization], list[Membership]]:
+    """
+    Process raw congressperson profile HTML into a Congresista schema.
+
+    The function parses the congressperson profile page, extracts the photo URL,
+    and tries to enrich the profile using preprocessed congressperson data indexed
+    by website. For the 2021 to 2026 legislative period, it uses the external
+    processed data when available. If no matching data is found, it falls back to
+    extracting the congressperson name directly from the HTML profile content.
+
+    Args:
+        raw_cong (RawCongresista): Raw congressperson record containing profile
+            HTML, website, and legislative period.
+        dict_cong_data (dict[str, dict]): Dictionary of processed congressperson
+            data indexed by website URL.
+
+    Returns:
+        Congresista: Processed congressperson schema with available profile
+        information.
+    """
     html = fromstring(raw_cong.profile_content)
     photo_url = (
         f"https://www.congreso.gob.pe{html.xpath('//*[@class="foto"]/img/@src')[0]}"
