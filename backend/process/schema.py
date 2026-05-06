@@ -424,7 +424,7 @@ class Congresista(PrintableModel):
         full_name (str): Full name of the person.
         first_name (str): First name of the person.
         last_name (str): Last name of the person.
-        dni (str): DNI of the person.
+        dni (str): DNI (Documento Nacional de Identidad) of the person.
         gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
         website (str): Official website of the congressperson.
