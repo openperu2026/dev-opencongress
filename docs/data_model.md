@@ -25,6 +25,21 @@ All data originates from publicly available information published by the Peruvia
 
 This section includes the details on each core entity for the data model. All the core entities refers to cleaned, validated, and normalized entities ready for analysis and frontend consumption.
 
+### AdminMembership
+
+Tracks which congresista belongs to which administrative organization per legislative period.
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| id | Integer | PK | Auto-increments |
+| person_id | Integer | FK → congresistas.id | Identifier for the person |
+| org_id | Integer | FK → organizations.org_id | Identifier for the organization |
+| leg_period | String | | Legislative period |
+| membership_type | String | | Type of membership/organization |
+| role | String | | Role of the person in the organization |
+| start_date | DateTime | | Start of membership |
+| end_date | DateTime | | End of membership |
+
 ### Attendance
 
 Records attendance at vote events. Unique on `(event_id, attendee_id)`.
@@ -47,13 +62,18 @@ Represents a parliamentary group (grupo parlamentario or bancada).
 
 ### BancadaMembership
 
-Tracks which congresista belongs to which bancada per legislative year.
+Tracks which congresista belongs to which bancada per legislative period.
 
 | Column | Type | Key | Description |
 |---|---|---|---|
-| leg_year | Enum(LegislativeYear) | | Legislative year |
-| person_id | Integer | FK → congresistas.id | |
-| bancada_id | Integer | FK → bancadas.bancada_id | |
+| id | Integer | PK | Auto-increments |
+| person_id | Integer | FK → congresistas.id | Identifier for the person |
+| org_id | Integer | FK → organizations.org_id | Identifier for the organization |
+| leg_period | String | | Legislative period |
+| membership_type | String | | Type of membership/organization |
+| role | String | | Role of the person in the organization |
+| start_date | DateTime | | Start of membership |
+| end_date | DateTime | | End of membership |
 
 ### Bill
 
@@ -133,7 +153,38 @@ Normative body sliced from each bill PDF: from the first matched heading (e.g. �
 | seguimiento_id | String | | Event identifier |
 | text | String (nullable) | | Body slice, or null if no heading matched |
 
+### ChamberMembership
 
+Tracks which congresista belongs to which chamber per legislative period.
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| id | Integer | PK | Auto-increments |
+| person_id | Integer | FK → congresistas.id | Identifier for the person |
+| org_id | Integer | FK → organizations.org_id | Identifier for the organization |
+| leg_period | String | | Legislative period |
+| membership_type | String | | Type of membership/organization |
+| role | String | | Role of the person in the organization |
+| start_date | DateTime | | Start of membership |
+| end_date | DateTime | | End of membership |
+| condicion | String | | Current status of their membership into the chamber |
+| votes_in_election | Integer | | Votes obtained in the election |
+| dist_electoral | String | | Electoral district |
+
+### CommitteeMembership
+
+Tracks which congresista belongs to which committee per legislative period.
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| id | Integer | PK | Auto-increments |
+| person_id | Integer | FK → congresistas.id | Identifier for the person |
+| org_id | Integer | FK → organizations.org_id | Identifier for the organization |
+| leg_period | String | | Legislative period |
+| membership_type | String | | Type of membership/organization |
+| role | String | | Role of the person in the organization |
+| start_date | DateTime | | Start of membership |
+| end_date | DateTime | | End of membership |
 
 ### Congresista
 
@@ -168,9 +219,12 @@ Tracks a person's role in an organization during a time period.
 
 | Column | Type | Key | Description |
 |---|---|---|---|
-| person_id | Integer | FK → congresistas.id | |
-| org_id | Integer | FK → organizations.org_id | |
-| role | Enum(RoleOrganization) | | Role (e.g., vocero, miembro, presidente) |
+| id | Integer | PK | Auto-increments |
+| person_id | Integer | FK → congresistas.id | Identifier for the person |
+| org_id | Integer | FK → organizations.org_id | Identifier for the organization |
+| leg_period | String | | Legislative period |
+| membership_type | String | | Type of membership/organization |
+| role | String | | Role of the person in the organization |
 | start_date | DateTime | | Start of membership |
 | end_date | DateTime | | End of membership |
 
@@ -231,17 +285,34 @@ Tracks the procedural history of a motion.
 
 ### Organization
 
-Represents legislative organizations: committees, Junta de Portavoces, Consejo Directivo, Mesa Directiva, Comisión Permanente. Uniqueness on `(leg_period, leg_year, org_name, org_type)`.
+Represents legislative organizations: committees, bancadas, parties, chambers and administratives (Junta de Portavoces, Consejo Directivo, Mesa Directiva, Comisión Permanente). Uniqueness on `(org_name, org_type)`.
 
 | Column | Type | Key | Description |
 |---|---|---|---|
 | org_id | Integer | PK | Auto-increment |
-| leg_period | Enum(LegPeriod) | UQ | Legislative period |
-| leg_year | Enum(LegislativeYear) | UQ | Legislative year |
 | org_name | String | UQ | Organization name |
-| org_type | Enum(TypeOrganization) | UQ | Organization type |
-| comm_type | Enum(TypeCommittee) | | Committee subtype, if applicable |
+| org_type | String | UQ | Organization type |
+| org_subtype | String | | Organization subtype, if applicable |
 | org_link | String | | Website URL |
+| parent_org_id | String | | Unique identification of the organization's parent |
+| date_founding | String | | Date of establishment of the organization if applicable |
+| date_dissolution | String | | Date of dissolution of the organization if applicable |
+
+### PartyMembership
+
+Tracks which congresista belongs to which party per legislative period.
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| id | Integer | PK | Auto-increments |
+| person_id | Integer | FK → congresistas.id | Identifier for the person |
+| org_id | Integer | FK → organizations.org_id | Identifier for the organization |
+| leg_period | String | | Legislative period |
+| membership_type | String | | Type of membership/organization |
+| role | String | | Role of the person in the organization |
+| start_date | DateTime | | Start of membership |
+| end_date | DateTime | | End of membership |
+
 
 
 ### VoteEvent
