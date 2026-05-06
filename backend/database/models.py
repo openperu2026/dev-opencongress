@@ -736,7 +736,7 @@ class SemanticBill(Base):
         embedding_model (str): Name of the model used to generate the embedding.
     """
 
-    __tablename__ = "bill_search_chunks"
+    __tablename__ = "semantic_bills"
 
     id: Mapped[int] = mapped_column(primary_key=True)
 
