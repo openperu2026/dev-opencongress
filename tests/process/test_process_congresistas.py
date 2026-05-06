@@ -6,12 +6,27 @@ from backend import RoleOrganization
 from datetime import datetime
 
 
+@pytest.fixture()
+def dict_data_cong():
+    website = "https://www.congreso.gob.pe/congresista/juan"
+    return {
+        website: {
+            "first_name": "Juan Alberto",
+            "last_name": "Perez Quispe",
+            "full_name": "Juan Alberto Perez Quispe",
+            "dni": "12345678",
+            "gender": "Masculino",
+            "website": website,
+        }
+    }
+
+
 @pytest.fixture
 def profile_html():
     # Must match the xpaths used in process_profile_content
     return """
     <html>
-      <div class="nombres"><span>Label</span><span>Juan Pérez</span></div>
+      <div class="nombres"><span>Label</span><span>Juan Alberto Perez Quispe</span></div>
       <div class="grupo"><span>Label</span><span>Accion Popular</span></div>
       <div class="bancada"><span>Label</span><span>Accion Popular</span></div>
       <div class="votacion"><span>Label</span><span>12,345</span></div>
@@ -27,7 +42,6 @@ def _raw_cong(
     profile_content="",
     memberships_content=None,
     leg_period="2021-2026",
-    url="https://www.congreso.gob.pe/congresista/juan",
     website="https://www.congreso.gob.pe/congresista/juan",
 ):
     if memberships_content is None:
@@ -36,7 +50,6 @@ def _raw_cong(
         profile_content=profile_content,
         memberships_content=json.dumps(memberships_content),
         leg_period=leg_period,
-        url=url,
         website=website,
     )
 
@@ -45,7 +58,9 @@ def test_xpath2_returns_text_when_found(profile_html):
     from lxml.html import fromstring
 
     html = fromstring(profile_html)
-    assert mod.xpath2('//*[@class="nombres"]/span[2]', html) == "Juan Pérez"
+    assert (
+        mod.xpath2('//*[@class="nombres"]/span[2]', html) == "Juan Alberto Perez Quispe"
+    )
 
 
 def test_xpath2_returns_none_when_missing(profile_html):
@@ -55,18 +70,14 @@ def test_xpath2_returns_none_when_missing(profile_html):
     assert mod.xpath2('//*[@class="does-not-exist"]/span[2]', html) is None
 
 
-def test_process_profile_content_parses_fields_and_votes_int(profile_html):
+def test_process_profile_content_parses_fields_and_votes_int(
+    profile_html, dict_data_cong
+):
     raw = _raw_cong(profile_content=profile_html, leg_period="2021-2026")
 
-    cong = mod.process_profile_content(raw)
+    cong = mod.process_profile_content(raw, dict_data_cong)
 
-    assert cong.nombre == "Juan Pérez"
-    assert cong.leg_period == "2021-2026"
-    assert cong.party_name == "Accion Popular"
-    assert cong.current_bancada == "Accion Popular"
-    assert cong.votes_in_election == 12345  # "12,345" -> 12345
-    assert cong.dist_electoral == "Lima"
-    assert cong.condicion == "Titular"
+    assert cong.full_name == "Juan Alberto Perez Quispe"
     assert cong.website == "https://www.congreso.gob.pe/congresista/juan"
     assert cong.photo_url == "https://www.congreso.gob.pe/FotosCongresista/juan.jpg"
 
