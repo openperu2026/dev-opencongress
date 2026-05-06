@@ -305,7 +305,7 @@ class Congresista(Base):
     photo_url: Mapped[str] = mapped_column(nullable=False)
     website: Mapped[str] = mapped_column(nullable=False)
 
-    __table_args__ = UniqueConstraint("full_name", "dni", name="uq_congresista_id")
+    __table_args__ = (UniqueConstraint("full_name", "dni", name="uq_congresista_id"),)
 
 
 class Bancada(Base):
