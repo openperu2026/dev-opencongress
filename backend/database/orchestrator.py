@@ -8,7 +8,12 @@ from loguru import logger
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
 
-from backend.config import settings, directories
+from backend.config import (
+    settings,
+    directories,
+    stop_logging_to_console,
+    resume_logging_to_console,
+)
 from backend.database import models as db_models
 from backend.database.models import Bill, Motion, Ley
 from backend.database.crud import (
@@ -19,7 +24,7 @@ from backend.database.crud import (
 from backend.database.crud.pipeline_core import (
     ProcessStats,
     ScraperStats,
-    upsert_scraper_runs,
+    upsert_scraper_run,
 )
 from backend.database.raw_models import (
     RawBase,
@@ -76,20 +81,13 @@ class OpenPeruOrchestrator:
       3) load SQLAlchemy models into the clean DB
     """
 
-    def __init__(
-        self, raw_db_url: str = settings.RAW_DB_URL, db_url: str = settings.DB_URL
-    ):
-        self.raw_engine = create_engine(raw_db_url, pool_pre_ping=True)
+    def __init__(self, db_url: str = settings.DB_URL):
         self.db_engine = create_engine(db_url, pool_pre_ping=True)
-        self.RawSession = sessionmaker(
-            bind=self.raw_engine, autocommit=False, autoflush=False
-        )
         self.DBSession = sessionmaker(
             bind=self.db_engine, autocommit=False, autoflush=False
         )
 
         # Ensure schemas exist before the pipeline runs.
-        RawBase.metadata.create_all(self.raw_engine)
         db_models.Base.metadata.create_all(self.db_engine)
 
     # -----------------------------
@@ -100,7 +98,7 @@ class OpenPeruOrchestrator:
         Query to check recent changes in a period of time in any RawDB table (default 7 days / 1 week)
         """
         cutoff = datetime.now() - timedelta(days=days)
-        with self.RawSession() as raw_db:
+        with self.DBSession() as raw_db:
             last_ts = raw_db.query(func.max(raw_model.timestamp)).scalar()
             return bool(last_ts and last_ts >= cutoff)
 
@@ -128,7 +126,7 @@ class OpenPeruOrchestrator:
         """
         cutoff = datetime.now() - timedelta(days=days)
 
-        with self.RawSession() as raw_db:
+        with self.DBSession() as raw_db:
             latest_rows = raw_db.query(raw_model).filter(raw_model.last_update).all()
             pending_ids: list[str] = []
 
@@ -140,6 +138,14 @@ class OpenPeruOrchestrator:
                 pending_ids.append(row.id)
 
             return pending_ids
+
+    def _load_scraper_results(self, scraper_name: str) -> None:
+        stats = self.scraper_results[scraper_name]
+        with self.DBSession() as db:
+            upsert_scraper_run(db, scraper_name, stats)
+        logger.info(
+            f"Results for scraper/{scraper_name}: Time: {(stats.end_time - stats.start_time).seconds}s | Rows scraped: {stats.scrapped}"
+        )
 
     def run_scrapers(
         self,
@@ -165,13 +171,16 @@ class OpenPeruOrchestrator:
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
         """
         logger.info("Starting processing pipeline")
-        scraper_results: dict[str, ScraperStats] = dict()
+        self.scraper_results: dict[str, ScraperStats] = dict()
 
         if scrape_others:
             logger.info(
                 "Running reference scrapers (congresistas, bancadas, committees, organizations)"
             )
 
+            stop_logging_to_console(
+                filename=directories.LOGS_SCRAPERS / "congresistas.log"
+            )
             if self._recent_raw_exists(RawCongresista, days=others_days):
                 logger.info(
                     f"Skipping congresistas scrape: latest raw scrape is within {others_days} days"
@@ -182,12 +191,14 @@ class OpenPeruOrchestrator:
                 cong.get_dict_periodos()
                 scraped_congs = cong.extract_and_load_all(only_current=only_current)
                 end_time = datetime.now()
-                scraper_results[
-                    "congresistas.py" : ScraperStats(
-                        start_time, end_time, len(scraped_congs)
-                    )
-                ]
+                self.scraper_results["congresistas.py"] = ScraperStats(
+                    start_time, end_time, len(scraped_congs)
+                )
 
+                resume_logging_to_console()
+                self._load_scraper_results("congresistas.py")
+
+            stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "bancadas.log")
             if self._recent_raw_exists(RawBancada, days=others_days):
                 logger.info(
                     f"Skipping bancadas scrape: latest raw scrape is within {others_days} days"
@@ -198,12 +209,16 @@ class OpenPeruOrchestrator:
                 banc.get_raw_bancadas(only_current=only_current)
                 scraped_banc = banc.add_bancadas_to_db()
                 end_time = datetime.now()
-                scraper_results[
-                    "bancadas.py" : ScraperStats(
-                        start_time, end_time, len(scraped_banc)
-                    )
-                ]
+                self.scraper_results["bancadas.py"] = ScraperStats(
+                    start_time, end_time, int(scraped_banc)
+                )
 
+                resume_logging_to_console()
+                self._load_scraper_results("bancadas.py")
+
+            stop_logging_to_console(
+                filename=directories.LOGS_SCRAPERS / "committees.log"
+            )
             if self._recent_raw_exists(RawCommittee, days=others_days):
                 logger.info(
                     f"Skipping committees scrape: latest raw scrape is within {others_days} days"
@@ -211,15 +226,20 @@ class OpenPeruOrchestrator:
             else:
                 comm = RawCommitteeScraper()
                 start_time = datetime.now()
-                scraped_comm = comm.get_raw_committees(only_current=only_current)
+                comm.get_raw_committees(only_current=only_current)
+                scraped_comm = len(comm.committee_list)
                 end_time = datetime.now()
                 comm.add_committees_to_db()
-                scraper_results[
-                    "committees.py" : ScraperStats(
-                        start_time, end_time, len(scraped_comm)
-                    )
-                ]
+                self.scraper_results["committees.py"] = ScraperStats(
+                    start_time, end_time, scraped_comm
+                )
 
+                resume_logging_to_console()
+                self._load_scraper_results("committees.py")
+
+            stop_logging_to_console(
+                filename=directories.LOGS_SCRAPERS / "organizations.log"
+            )
             if self._recent_raw_exists(RawOrganization, days=others_days):
                 logger.info(
                     f"Skipping organizations scrape: latest raw scrape is within {others_days} days"
@@ -227,19 +247,22 @@ class OpenPeruOrchestrator:
             else:
                 org = RawOrganizationScraper()
                 start_time = datetime.now()
-                scraped_orgs = org.get_raw_organizations(only_current=only_current)
+                org.get_raw_organizations(only_current=only_current)
+                scraped_orgs = len(org.organizations_list)
                 end_time = datetime.now()
                 org.add_organizations_to_db()
-                scraper_results[
-                    "organizations.py" : ScraperStats(
-                        start_time, end_time, len(scraped_orgs)
-                    )
-                ]
+                self.scraper_results["organizations.py"] = ScraperStats(
+                    start_time, end_time, scraped_orgs
+                )
 
+                resume_logging_to_console()
+                self._load_scraper_results("organizations.py")
+
+        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "bills.log")
         if scrape_bills:
             scraper = RawBillScraper()
             if all(v is not None for v in [bill_year, bill_start, bill_end]):
-                scraper_results["bills.py"] = self._scrape_range(
+                self.scraper_results["bills.py"] = self._scrape_range(
                     scraper=scraper,
                     scrape_fn=scraper.scrape_bill,
                     buffer_attr="raw_bills",
@@ -251,7 +274,7 @@ class OpenPeruOrchestrator:
                     entity_name="Bills",
                 )
             else:
-                scraper_results["bills.py"] = self._scrape_pending_weekly(
+                self.scraper_results["bills.py"] = self._scrape_pending_weekly(
                     raw_model=RawBill,
                     model=Bill,
                     scraper=scraper,
@@ -262,10 +285,14 @@ class OpenPeruOrchestrator:
                     flush_every=100,
                 )
 
+            resume_logging_to_console()
+            self._load_scraper_results("bills.py")
+
+        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "motions.log")
         if scrape_motions:
             scraper = RawMotionScraper()
             if all(v is not None for v in [motion_year, motion_start, motion_end]):
-                scraper_results["motions.py"] = self._scrape_range(
+                self.scraper_results["motions.py"] = self._scrape_range(
                     scraper=scraper,
                     scrape_fn=scraper.scrape_motion,
                     buffer_attr="raw_motions",
@@ -277,7 +304,7 @@ class OpenPeruOrchestrator:
                     entity_name="Motions",
                 )
             else:
-                scraper_results["motions.py"] = self._scrape_pending_weekly(
+                self.scraper_results["motions.py"] = self._scrape_pending_weekly(
                     raw_model=RawMotion,
                     model=Motion,
                     scraper=scraper,
@@ -288,15 +315,24 @@ class OpenPeruOrchestrator:
                     flush_every=100,
                 )
 
+            resume_logging_to_console()
+            self._load_scraper_results("motions.py")
+
+        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "documents.log")
         if scrape_documents and (scrape_bills or scrape_motions):
             doc_bill_run, doc_motion_run = self._scrape_pending_documents()
-            scraper_results["bills_documents.py"] = doc_bill_run
-            scraper_results["motions_documents.py"] = doc_motion_run
+            self.scraper_results["bills_documents.py"] = doc_bill_run
+            self.scraper_results["motions_documents.py"] = doc_motion_run
 
+            resume_logging_to_console()
+            self._load_scraper_results("bills_documents.py")
+            self._load_scraper_results("motions_documents.py")
+
+        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "leyes.log")
         if scrape_leyes:
             scraper = RawLeyesScraper()
             if all(v is not None for v in [ley_start, ley_end]):
-                scraper_results["leyes.py"] = self._scrape_range(
+                self.scraper_results["leyes.py"] = self._scrape_range(
                     scraper=scraper,
                     scrape_fn=scraper.scrape_ley,
                     buffer_attr="raw_leyes",
@@ -308,7 +344,7 @@ class OpenPeruOrchestrator:
                     entity_name="Ley",
                 )
             else:
-                scraper_results["leyes.py"] = self._scrape_pending_weekly(
+                self.scraper_results["leyes.py"] = self._scrape_pending_weekly(
                     raw_model=RawLey,
                     model=Ley,
                     scraper=scraper,
@@ -320,7 +356,8 @@ class OpenPeruOrchestrator:
                     entity_name="Ley",
                 )
 
-        upsert_scraper_runs(self.RawSession, scraper_results)
+            resume_logging_to_console()
+            self._load_scraper_results("leyes.py")
 
     def run_processing(
         self,
@@ -341,22 +378,40 @@ class OpenPeruOrchestrator:
         summary: dict[str, ProcessStats] = {}
 
         if process_others:
+            stop_logging_to_console(
+                filename=directories.LOGS_PROCESS / "organizations.log"
+            )
             summary["organizations"] = self._process_organization_definitions()
-            summary["congresistas"] = self._process_congresistas()
             summary["admin_memberships"] = self._process_admin_memberships()
             summary["bancadas"] = self._process_bancadas()
+            resume_logging_to_console()
+
+            stop_logging_to_console(
+                filename=directories.LOGS_PROCESS / "congresistas.log"
+            )
+            summary["congresistas"] = self._process_congresistas()
+            resume_logging_to_console()
+
         if process_bills:
+            stop_logging_to_console(filename=directories.LOGS_PROCESS / "bills.log")
             summary["bills"] = self._process_bills(
                 include_documents=include_documents,
                 limit=bills_limit,
             )
+            resume_logging_to_console()
+
         if process_motions:
+            stop_logging_to_console(filename=directories.LOGS_PROCESS / "motions.log")
             summary["motions"] = self._process_motions(
                 include_documents=include_documents,
                 limit=motions_limit,
             )
+            resume_logging_to_console()
+
         if process_leyes:
+            stop_logging_to_console(filename=directories.LOGS_PROCESS / "leyes.log")
             summary["leyes"] = self._process_leyes(limit=leyes_limit)
+            resume_logging_to_console()
 
         return summary
 
@@ -560,7 +615,7 @@ class OpenPeruOrchestrator:
         CONG_JSON = directories.PROCESSED_DATA / "cong_info_2021_2026.json"
 
         dict_cong_data = get_cong_data(CONG_JSON)
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             rows = (
                 raw_db.query(RawCongresista)
                 .filter(
@@ -602,6 +657,7 @@ class OpenPeruOrchestrator:
                             process_cong_memberships(raw_cong, cong_schema)
                         )
                     for ms in memberships:
+                        # TODO: We need to implement a fuzzy match for finding organization
                         org = crud_core.find_organization(
                             db=db,
                             org_name=ms.org_name,
@@ -636,7 +692,7 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             for org_schema in process_chambers():
                 _, inserted = self._upsert_organization_with_count(db, org_schema)
                 if inserted:
@@ -657,7 +713,7 @@ class OpenPeruOrchestrator:
             for raw_comm in committees:
                 try:
                     # TODO: Remove this range to process all years
-                    if raw_comm.legislative_year not in range(2016, 2027):
+                    if int(raw_comm.legislative_year) not in range(2016, 2027):
                         raw_comm.processed = False
                         stats.skipped += 1
                         continue
@@ -691,7 +747,7 @@ class OpenPeruOrchestrator:
             for raw_org in organizations:
                 try:
                     # TODO: Remove this range to process all years
-                    if raw_org.legislative_year not in range(2016, 2027):
+                    if int(raw_org.legislative_year) not in range(2016, 2027):
                         raw_org.processed = False
                         stats.skipped += 1
                         continue
@@ -718,7 +774,7 @@ class OpenPeruOrchestrator:
 
     def _process_admin_memberships(self) -> ProcessStats:
         stats = ProcessStats()
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             organizations = (
                 raw_db.query(RawOrganization)
                 .filter(
@@ -729,7 +785,7 @@ class OpenPeruOrchestrator:
             )
             for raw_org in organizations:
                 try:
-                    if raw_org.legislative_year not in range(2016, 2027):
+                    if int(raw_org.legislative_year) not in range(2016, 2027):
                         raw_org.processed = False
                         stats.skipped += 1
                         continue
@@ -772,7 +828,7 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             rows = (
                 raw_db.query(RawBancada)
                 .filter(
@@ -841,7 +897,7 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             query = raw_db.query(RawBill).filter(
                 RawBill.last_update.is_(True), RawBill.processed.is_(False)
             )
@@ -1008,7 +1064,7 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             query = raw_db.query(RawMotion).filter(
                 RawMotion.last_update.is_(True), RawMotion.processed.is_(False)
             )
@@ -1161,7 +1217,7 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.RawSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as raw_db, self.DBSession() as db:
             query = raw_db.query(RawLey).filter(
                 RawLey.last_update.is_(True), RawLey.processed.is_(False)
             )

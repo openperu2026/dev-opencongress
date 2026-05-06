@@ -28,6 +28,8 @@ class Directories:
     BILL_DOCUMENTS = DOCUMENTS / "bills"
     MOTION_DOCUMENTS = DOCUMENTS / "motions"
     LOGS = ROOT_DIR / "logs"
+    LOGS_SCRAPERS = LOGS / "scrapers"
+    LOGS_PROCESS = LOGS / "process"
 
     def __init__(self):
         for dir in [
@@ -38,6 +40,8 @@ class Directories:
             self.BILL_DOCUMENTS,
             self.MOTION_DOCUMENTS,
             self.LOGS,
+            self.LOGS_SCRAPERS,
+            self.LOGS_PROCESS,
         ]:
             dir.mkdir(exist_ok=True)
 
@@ -61,10 +65,8 @@ class Settings(BaseSettings):
 
     # This should change depending on where the DB will be stored
     DB_URL: str = os.getenv(
-        "DB_URL", f"sqlite:///{directories.PROCESSED_DATA.as_posix()}/OpenPeru.db"
-    )
-    RAW_DB_URL: str = os.getenv(
-        "RAW_DB_URL", f"sqlite:///{directories.RAW_DATA.as_posix()}/OpenPeruRaw.db"
+        "DB_URL",
+        "postgresql+psycopg://opencongress:opencongress@localhost:5432/opencongress",
     )
     AWS_ACCESS_KEY_ID: str | None = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
@@ -73,14 +75,16 @@ class Settings(BaseSettings):
     AWS_S3_PREFIX: str | None = os.getenv("AWS_S3_PREFIX")
 
     # This is only in case we need some API_KEYS. Allow us to handle safely.
-    model_config = ConfigDict(env_file=directories.ROOT_DIR / ".env")
+    model_config = ConfigDict(
+        env_file=directories.ROOT_DIR / ".env",
+    )
 
 
 settings = Settings()
 
 
 def stop_logging_to_console(
-    filename: str = directories.LOGS / "main.log", mode: str = "a"
+    filename: str = directories.LOGS / "main.log", mode: str = "w"
 ):
     """
     Stops logging messages to the console and redirects them to a file.

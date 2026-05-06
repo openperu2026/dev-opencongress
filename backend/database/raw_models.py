@@ -1,32 +1,28 @@
 from sqlalchemy import (
-    Column,
-    Integer,
-    String,
-    DateTime,
-    Boolean,
     Index,
     PrimaryKeyConstraint,
+    ForeignKeyConstraint,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import expression
 from sqlalchemy.inspection import inspect
-
-Base = declarative_base()
+from datetime import datetime
+from backend.database.models import Base
 
 
 class RawBase(Base):
     __abstract__ = True
 
     # Common columns for all the tables
-    timestamp = Column(DateTime, nullable=False)
-    last_update = Column(
-        Boolean, nullable=False, server_default=expression.false(), default=False
+    timestamp: Mapped[datetime] = mapped_column(nullable=False)
+    last_update: Mapped[bool] = mapped_column(
+        nullable=False, server_default=expression.false(), default=False
     )
-    changed = Column(
-        Boolean, nullable=False, server_default=expression.false(), default=False
+    changed: Mapped[bool] = mapped_column(
+        nullable=False, server_default=expression.false(), default=False
     )
-    processed = Column(
-        Boolean, nullable=False, server_default=expression.false(), default=False
+    processed: Mapped[bool] = mapped_column(
+        nullable=False, server_default=expression.false(), default=False
     )
 
     # Columns to ignore in ALL raw models
@@ -85,9 +81,9 @@ class RawBancada(RawBase):
 
     __tablename__ = "raw_bancadas"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    legislative_period = Column(String, nullable=False)
-    raw_html = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    legislative_period: Mapped[str] = mapped_column(nullable=False)
+    raw_html: Mapped[str] = mapped_column(nullable=False)
 
 
 class RawBill(RawBase):
@@ -108,11 +104,11 @@ class RawBill(RawBase):
 
     __tablename__ = "raw_bills"
 
-    id = Column(String, nullable=False)
-    general = Column(String, nullable=True)
-    committees = Column(String, nullable=True)
-    congresistas = Column(String, nullable=True)
-    steps = Column(String, nullable=True)
+    id: Mapped[str] = mapped_column(nullable=False)
+    general: Mapped[str] = mapped_column(nullable=True)
+    committees: Mapped[str] = mapped_column(nullable=True)
+    congresistas: Mapped[str] = mapped_column(nullable=True)
+    steps: Mapped[str] = mapped_column(nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("id", "timestamp", name="pk_raw_bills"),
@@ -146,9 +142,17 @@ class RawBillDocument(RawBase):
 
     __tablename__ = "raw_bill_documents"
 
+    bill_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[str] = mapped_column(nullable=False)
+    file_id: Mapped[str] = mapped_column(nullable=False)
+    step_date: Mapped[datetime] = mapped_column(nullable=False)
+    url: Mapped[str] = mapped_column(nullable=False)
+    s3_key: Mapped[str] = mapped_column(nullable=True)
+    local_path: Mapped[str] = mapped_column(nullable=True)
+
     __table_args__ = (
         Index(
-            "ix_raw_bills_documents_pipeline",
+            "ix_raw_bill_documents_pipeline",
             "bill_id",
             "step_id",
             "file_id",
@@ -156,30 +160,42 @@ class RawBillDocument(RawBase):
             "changed",
             "processed",
         ),
+        PrimaryKeyConstraint(
+            "bill_id", "step_id", "file_id", name="pk_raw_bills_documents"
+        ),
     )
-
-    bill_id = Column(String, primary_key=True)
-    step_id = Column(String, primary_key=True)
-    file_id = Column(String, primary_key=True)
-    step_date = Column(DateTime, nullable=False)
-    url = Column(String, nullable=False)
-    s3_key = Column(String, nullable=True)
-    local_path = Column(String, nullable=True)
 
 
 class RawBillPage(RawBase):
     __tablename__ = "raw_bill_pages"
 
-    bill_id = Column(String, primary_key=True)
-    step_id = Column(String, primary_key=True)
-    file_id = Column(String, primary_key=True)
-    page_num = Column(Integer, primary_key=True)
-    text = Column(String, nullable=False)
-    model = Column(String, nullable=False)
+    bill_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[str] = mapped_column(nullable=False)
+    file_id: Mapped[str] = mapped_column(nullable=False)
+    page_num: Mapped[int] = mapped_column(nullable=False)
+    text: Mapped[str] = mapped_column(nullable=False)
+    ocr_model: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
+        PrimaryKeyConstraint(
+            "bill_id",
+            "step_id",
+            "file_id",
+            "page_num",
+            "ocr_model",
+            name="pk_raw_bill_pages",
+        ),
+        ForeignKeyConstraint(
+            ["bill_id", "step_id", "file_id"],
+            [
+                "raw_bill_documents.bill_id",
+                "raw_bill_documents.step_id",
+                "raw_bill_documents.file_id",
+            ],
+            name="fk_raw_bill_pages_document",
+        ),
         Index(
-            "ix_raw_bills_pages_pipeline",
+            "ix_raw_bill_pages_pipeline",
             "bill_id",
             "step_id",
             "file_id",
@@ -197,7 +213,7 @@ class RawCommittee(RawBase):
 
     Attributes:
         id (str): Unique identifier for raw committee.
-        legislative_year (int): Legislative year
+        legislative_year (str): Legislative year
         committee_type (str): Type of committee in the parliament
         raw_html (str): Html text
         timestamp (datetime): timestamp of the scraping task
@@ -208,10 +224,10 @@ class RawCommittee(RawBase):
 
     __tablename__ = "raw_committees"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    legislative_year = Column(Integer, nullable=False)
-    committee_type = Column(String, nullable=False)
-    raw_html = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    legislative_year: Mapped[str] = mapped_column(nullable=False)
+    committee_type: Mapped[str] = mapped_column(nullable=False)
+    raw_html: Mapped[str] = mapped_column(nullable=False)
 
 
 class RawCongresista(RawBase):
@@ -232,11 +248,11 @@ class RawCongresista(RawBase):
 
     __tablename__ = "raw_congresistas"
 
-    id = Column(Integer, primary_key=True, nullable=False, autoincrement=True)
-    leg_period = Column(String, nullable=False)
-    website = Column(String, nullable=False)
-    profile_content = Column(String, nullable=False)
-    memberships_content = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    leg_period: Mapped[str] = mapped_column(nullable=False)
+    website: Mapped[str] = mapped_column(nullable=False)
+    profile_content: Mapped[str] = mapped_column(nullable=False)
+    memberships_content: Mapped[str] = mapped_column(nullable=True)
 
     __table_args__ = (
         Index(
@@ -264,8 +280,8 @@ class RawLey(RawBase):
 
     __tablename__ = "raw_leyes"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    data = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    data: Mapped[str] = mapped_column(nullable=False)
 
 
 class RawMotion(RawBase):
@@ -285,10 +301,10 @@ class RawMotion(RawBase):
 
     __tablename__ = "raw_motions"
 
-    id = Column(String, nullable=False)
-    general = Column(String, nullable=True)
-    congresistas = Column(String, nullable=True)
-    steps = Column(String, nullable=True)
+    id: Mapped[str] = mapped_column(nullable=False)
+    general: Mapped[str] = mapped_column(nullable=True)
+    congresistas: Mapped[str] = mapped_column(nullable=True)
+    steps: Mapped[str] = mapped_column(nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("id", "timestamp", name="pk_raw_motions"),
@@ -322,15 +338,21 @@ class RawMotionDocument(RawBase):
 
     __tablename__ = "raw_motion_documents"
 
-    motion_id = Column(String, primary_key=True)
-    step_id = Column(String, primary_key=True)
-    file_id = Column(String, primary_key=True)
-    step_date = Column(DateTime, nullable=False)
-    url = Column(String, nullable=False)
-    s3_key = Column(String, nullable=True)
-    local_path = Column(String, nullable=True)
+    motion_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[str] = mapped_column(nullable=False)
+    file_id: Mapped[str] = mapped_column(nullable=False)
+    step_date: Mapped[datetime] = mapped_column(nullable=False)
+    url: Mapped[str] = mapped_column(nullable=False)
+    s3_key: Mapped[str] = mapped_column(nullable=True)
+    local_path: Mapped[str] = mapped_column(nullable=True)
 
     __table_args__ = (
+        PrimaryKeyConstraint(
+            "motion_id",
+            "step_id",
+            "file_id",
+            name="pk_raw_motion_documents",
+        ),
         Index(
             "ix_raw_motion_documents_pipeline",
             "motion_id",
@@ -346,16 +368,33 @@ class RawMotionDocument(RawBase):
 class RawMotionPage(RawBase):
     __tablename__ = "raw_motion_pages"
 
-    motion_id = Column(String, primary_key=True)
-    step_id = Column(String, primary_key=True)
-    file_id = Column(String, primary_key=True)
-    page_num = Column(Integer, primary_key=True)
-    text = Column(String, nullable=False)
-    model = Column(String, nullable=False)
+    motion_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[str] = mapped_column(nullable=False)
+    file_id: Mapped[str] = mapped_column(nullable=False)
+    page_num: Mapped[int] = mapped_column(nullable=False)
+    text: Mapped[str] = mapped_column(nullable=False)
+    ocr_model: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
+        PrimaryKeyConstraint(
+            "motion_id",
+            "step_id",
+            "file_id",
+            "page_num",
+            "ocr_model",
+            name="pk_raw_motion_pages",
+        ),
+        ForeignKeyConstraint(
+            ["motion_id", "step_id", "file_id"],
+            [
+                "raw_motion_documents.motion_id",
+                "raw_motion_documents.step_id",
+                "raw_motion_documents.file_id",
+            ],
+            name="fk_raw_motion_pages_document",
+        ),
         Index(
-            "ix_raw_motions_pages_pipeline",
+            "ix_raw_motion_pages_pipeline",
             "motion_id",
             "step_id",
             "file_id",
@@ -385,11 +424,11 @@ class RawOrganization(RawBase):
 
     __tablename__ = "raw_organizations"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    legislative_year = Column(Integer, nullable=False)
-    type_org = Column(String, nullable=False)
-    org_link = Column(String, nullable=False)
-    raw_html = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    legislative_year: Mapped[str] = mapped_column(nullable=False)
+    type_org: Mapped[str] = mapped_column(nullable=False)
+    org_link: Mapped[str] = mapped_column(nullable=True)
+    raw_html: Mapped[str] = mapped_column(nullable=False)
 
 
 class ScraperRun(Base):
@@ -406,8 +445,8 @@ class ScraperRun(Base):
 
     __tablename__ = "scraper_runs"
 
-    run_id = Column(Integer, primary_key=True, autoincrement=True)
-    scraper_name = Column(String, nullable=False)
-    start_time = Column(DateTime, nullable=False)
-    end_time = Column(DateTime, nullable=False)
-    scraped_rows = Column(Integer, nullable=False)
+    run_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    scraper_name: Mapped[str] = mapped_column(nullable=False)
+    start_time: Mapped[datetime] = mapped_column(nullable=False)
+    end_time: Mapped[datetime] = mapped_column(nullable=False)
+    scraped_rows: Mapped[int] = mapped_column(nullable=False)

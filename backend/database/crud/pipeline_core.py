@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from dataclasses import dataclass
 from typing import Type
+from enum import Enum
 
 from backend import TypeOrganization
 from backend.database import models as db_models
@@ -26,6 +27,8 @@ class ScraperStats:
     scrapped: int = 0
 
 
+SIMILARITY = 0.85
+
 MEMBERSHIP_MODELS = {
     TypeOrganization.BANCADA.value: db_models.BancadaMembership,
     TypeOrganization.PARTY.value: db_models.PartyMembership,
@@ -35,7 +38,7 @@ MEMBERSHIP_MODELS = {
 }
 
 
-def _enum_value(value) -> str:
+def _enum_value(value: Enum) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
@@ -70,10 +73,9 @@ def find_congresista(
         if by_web is not None:
             return by_web
 
-    # TODO: implement a Fuzzy Match. .filter(func.jarowinkler(User.name, 'Jerry') > 0.85) --> with PostgreSQL and pg_similarity extension
     return db.scalar(
         select(db_models.Congresista).where(
-            db_models.Congresista.full_name == name,
+            func.jarowinkler(db_models.Congresista.full_name, name) > SIMILARITY
         )
     )
 
@@ -85,7 +87,8 @@ def find_organization(
     return db.scalar(
         select(db_models.Organization).where(
             db_models.Organization.org_name == org_name,
-            db_models.Organization.org_type == org_type_value,
+            func.jarowinkler(db_models.Organization.org_type, org_type_value)
+            > SIMILARITY,
         )
     )
 
@@ -257,11 +260,13 @@ def upsert_ley(db: Session, schema: schema.Ley) -> db_models.Ley:
     return _upsert_model(db, existing=existing, model=db_models.Ley, payload=payload)
 
 
-def upsert_scraper_runs(raw_db: Session, runs: dict[str, ScraperStats]):
-    runs_list = [
-        ScraperRun(scraper, stats.start_time, stats.end_time, stats.scrapped)
-        for scraper, stats in runs.items()
-    ]
-    raw_db.add_all(runs_list)
-    raw_db.flush()
-    return len(runs_list)
+def upsert_scraper_run(db: Session, scraper_name: str, stats: ScraperStats):
+    obj = ScraperRun(
+        scraper_name=scraper_name,
+        start_time=stats.start_time,
+        end_time=stats.end_time,
+        scraped_rows=stats.scrapped,
+    )
+
+    db.add(obj)
+    db.commit()

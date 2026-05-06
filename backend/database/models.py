@@ -305,7 +305,7 @@ class BillText(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
-        PrimaryKeyConstraint("file_id", "version_id", name="bill_texts"),
+        PrimaryKeyConstraint("file_id", "version_id", name="pk_bill_texts"),
         Index("ix_bill_texts_bill_id", "bill_id"),
         Index("ix_bill_texts_step_id", "step_id"),
         Index("ix_bill_texts_file_id", "file_id"),
@@ -666,7 +666,7 @@ class MotionText(Base):
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
-        PrimaryKeyConstraint("file_id", "version_id", name="motion_texts"),
+        PrimaryKeyConstraint("file_id", "version_id", name="pk_motion_texts"),
         Index("ix_motion_texts_motion_id", "motion_id"),
         Index("ix_motion_texts_step_id", "step_id"),
         Index("ix_motion_texts_file_id", "file_id"),
