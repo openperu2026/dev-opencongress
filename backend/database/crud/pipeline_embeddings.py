@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, insert
 from sqlalchemy.orm import Session
 
 from backend.database import models as db_models
@@ -10,27 +10,20 @@ from sentence_transformers import SentenceTransformer
 
 def create_bill_full_text(db: Session, bill_id: str) -> str:
     """
-    Creates the text that will be embedded
+    Build the full searchable text representation of a bill.
+
+    The returned text combines the most relevant bill fields into a single
+    structured string that can later be split into chunks and embedded for
+    semantic search.
 
     Args:
-        db (Session): database session
-        bill_id (str): unique identifier of the bill
+        db (Session): Active SQLAlchemy database session.
+        bill_id (str): Unique identifier of the bill.
 
     Returns:
-        str: Text related to the bill with a format as follows:
-        '''
-            Título: {bill.title}
-
-            Sumilla: {bill.summary}
-
-            Autores: {bill.authors}
-
-            Resumen OC: {bill.steps}
-
-            Comisiones: {bill.committees}
-
-            Texto: {bill.bill_text}
-        '''
+        str: Structured text representation of the bill, including title,
+            congressional summary, authors, committees, and the latest available
+            bill text.
     """
 
     # Title of the bill
@@ -93,15 +86,19 @@ Texto:
 
 def _get_text_chunks(text: str, chunk_size: int = 500, overlap: int = 100) -> list[str]:
     """
-    Generate text chunks for embedding generation.
+    Split text into overlapping chunks for embedding generation.
+
+    The function splits text by words, not characters, to avoid cutting words in
+    the middle. Consecutive chunks can share a configurable number of words so
+    that important context is not lost at chunk boundaries.
 
     Args:
-        text (str): Text related to the bill.
-        chunk_size (int): Size of each chunk in number of words.
+        text (str): Full text to split into chunks.
+        chunk_size (int): Maximum number of words per chunk.
         overlap (int): Number of words shared between consecutive chunks.
 
     Returns:
-        list[str]: List of text chunks.
+        list[str]: List of text chunks ready for embedding generation.
     """
 
     if not text or not text.strip():
@@ -140,12 +137,109 @@ def _get_text_chunks(text: str, chunk_size: int = 500, overlap: int = 100) -> li
     return chunks
 
 
-if __name__ == "__main__":
-    model = SentenceTransformer("intfloat/multilingual-e5-base")
-    input_texts = [
-        "query: how much protein should a female eat",
-        "passage: As a general guideline, the CDC's average requirement of protein for women ages 19 to 70 is 46 grams per day. But, as you can see from this chart, you'll need to increase that if you're expecting or training for a marathon. Check out the chart below to see how much protein you should be eating each day.",
-    ]
-    embeddings = model.encode(input_texts, normalize_embeddings=True)
+def build_semantic_bill_rows(
+    db: Session,
+    bill_ids: list[str],
+    model_name: str,
+    embedding_model: SentenceTransformer,
+) -> list[dict]:
+    """
+    Build semantic-search rows for multiple bills.
 
-    print(embeddings)
+    The function creates bill text chunks for all provided bills, embeds all
+    chunks in batches, and returns dictionaries ready for bulk upsert.
+
+    Args:
+        db (Session): Active SQLAlchemy database session.
+        bill_ids (list[str]): Bill IDs to process.
+        model_name (str): Name of the SentenceTransformer model used to generate
+            embeddings.
+        embedding_model (SentenceTransformer): Loaded embedding model.
+
+    Returns:
+        list[dict]: Rows ready to be inserted or updated in the
+            semantic_bills table.
+    """
+
+    texts: list[str] = []
+    metadata: list[dict] = []
+
+    for bill_id in bill_ids:
+        full_text = create_bill_full_text(db, bill_id)
+        chunks = _get_text_chunks(full_text)
+
+        for chunk_index, chunk in enumerate(chunks):
+            texts.append(chunk)
+            metadata.append(
+                {
+                    "bill_id": bill_id,
+                    "chunk_index": chunk_index,
+                    "text": chunk,
+                    "embedding_model": model_name,
+                }
+            )
+
+    if not texts:
+        return []
+
+    embeddings = embedding_model.encode(
+        texts,
+        normalize_embeddings=True,
+        batch_size=32,
+    )
+
+    return [
+        {
+            **meta,
+            "embedding": embedding.tolist(),
+        }
+        for meta, embedding in zip(metadata, embeddings)
+    ]
+
+
+def bulk_upsert_semantic_bills(
+    db: Session,
+    bill_ids: list[str],
+    model_name: str = "intfloat/multilingual-e5-base",
+) -> int:
+    """
+    Generate and upsert semantic-search chunks for multiple bills.
+
+    Args:
+        db (Session): Active SQLAlchemy database session.
+        bill_ids (list[str]): Bill IDs to process.
+        model_name (str): SentenceTransformer model used to generate embeddings.
+
+    Returns:
+        int: Number of semantic chunk rows inserted or updated.
+    """
+
+    if not bill_ids:
+        return 0
+
+    embedding_model = SentenceTransformer(model_name)
+
+    rows = build_semantic_bill_rows(
+        db=db,
+        bill_ids=bill_ids,
+        model_name=model_name,
+        embedding_model=embedding_model,
+    )
+
+    if not rows:
+        return 0
+
+    stmt = insert(db_models.SemanticBill).values(rows)
+
+    stmt = stmt.on_conflict_do_update(
+        constraint="uq_semantic_bills_bill_chunk_model",
+        set_={
+            "text": stmt.excluded.text,
+            "embedding": stmt.excluded.embedding,
+        },
+    )
+
+    db.execute(stmt)
+    db.commit()
+
+    return len(rows)

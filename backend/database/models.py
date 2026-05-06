@@ -4,10 +4,12 @@ from sqlalchemy import (
     PrimaryKeyConstraint,
     CheckConstraint,
     Index,
+    Text,
 )
 from backend import TypeOrganization
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 from datetime import datetime, date
+from pgvector.sqlalchemy import Vector
 
 Base = declarative_base()
 
@@ -178,7 +180,7 @@ class Bill(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(nullable=False)
-    summary_congreso: Mapped[str] = mapped_column(nullable=False)
+    summary_congreso: Mapped[str] = mapped_column(Text, nullable=False)
     observations: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)
     proponent: Mapped[str] = mapped_column(nullable=False)
@@ -187,7 +189,7 @@ class Bill(Base):
         ForeignKey("organizations.org_id"), nullable=False
     )
     bill_approved: Mapped[bool] = mapped_column(nullable=False)
-    summary_oc: Mapped[str] = mapped_column(nullable=False)
+    summary_oc: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
         Index("ix_bill_author_id", "author_id"),
@@ -300,7 +302,7 @@ class BillText(Base):
     )
     file_id: Mapped[int] = mapped_column(nullable=False)
     version_id: Mapped[int] = mapped_column(nullable=False)
-    text: Mapped[str] = mapped_column(nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("file_id", "version_id", name="bill_texts"),
@@ -538,12 +540,12 @@ class Motion(Base):
 
     id: Mapped[str] = mapped_column(primary_key=True)
     motion_type: Mapped[str] = mapped_column(nullable=False)
-    summary_congreso: Mapped[str] = mapped_column(nullable=False)
+    summary_congreso: Mapped[str] = mapped_column(Text, nullable=False)
     observations: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=True)
     motion_approved: Mapped[bool] = mapped_column(nullable=False, default=False)
-    summary_oc: Mapped[str] = mapped_column(nullable=False)
+    summary_oc: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class MotionCongresistas(Base):
@@ -659,7 +661,7 @@ class MotionText(Base):
     )
     file_id: Mapped[int] = mapped_column(nullable=False)
     version_id: Mapped[int] = mapped_column(nullable=False)
-    text: Mapped[str] = mapped_column(nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("file_id", "version_id", name="motion_texts"),
@@ -685,3 +687,82 @@ class Ley(Base):
     id: Mapped[str] = mapped_column(primary_key=True, nullable=False)
     title: Mapped[str] = mapped_column(nullable=False)
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=False)
+
+
+class CongresistaMetric(Base):
+    """
+    Stores precomputed metrics for each congresista by legislative period.
+    """
+
+    __tablename__ = "congresista_metrics"
+
+    cong_id: Mapped[int] = mapped_column(
+        ForeignKey("congresistas.id"),
+        nullable=False,
+    )
+    leg_period: Mapped[str] = mapped_column(nullable=False)
+
+    avg_attendance: Mapped[float | None] = mapped_column(nullable=True)
+
+    bills_auth: Mapped[int] = mapped_column(nullable=False, default=0)
+    bills_success_rate: Mapped[float | None] = mapped_column(nullable=True)
+
+    motions_auth: Mapped[int] = mapped_column(nullable=False, default=0)
+    motions_success_rate: Mapped[float | None] = mapped_column(nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("cong_id", "leg_period"),
+        Index("ix_congresista_metrics_period", "leg_period"),
+    )
+
+
+class SemanticBill(Base):
+    """
+    Stores semantic-search chunks and embeddings for bills.
+
+    Each row represents one chunk of text extracted from a bill. The chunk is
+    converted into an embedding vector and used by PostgreSQL/pgvector to perform
+    semantic similarity search.
+
+    This table is a derived search index, not the source of truth for bill data.
+    The source bill metadata remains in the `bills` table.
+
+    Attributes:
+        id (int): Primary key for the semantic bill chunk.
+        bill_id (str): ID of the bill associated with this chunk.
+        chunk_index (int): Position of the chunk within the full bill text.
+        text (str): Text content used to generate the embedding.
+        embedding (list[float]): Vector representation of the chunk text.
+        embedding_model (str): Name of the model used to generate the embedding.
+    """
+
+    __tablename__ = "bill_search_chunks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    bill_id: Mapped[str] = mapped_column(
+        ForeignKey("bills.id"), nullable=False, index=True
+    )
+    chunk_index: Mapped[int] = mapped_column(nullable=False)
+
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+
+    embedding: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
+    embedding_model: Mapped[str] = mapped_column(nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "bill_id",
+            "chunk_index",
+            "embedding_model",
+            name="uq_semantic_bills_bill_chunk_model",
+        ),
+        Index(
+            "ix_semantic_bills_embedding_hnsw",
+            "embedding",
+            postgresql_using="hnsw",
+            postgresql_ops={
+                "embedding": "vector_cosine_ops",
+            },
+        ),
+    )
