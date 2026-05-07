@@ -13,13 +13,13 @@ from sqlalchemy import (
 from backend import (
     VoteOption,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     AttendanceStatus,
-    RoleTypeBill,
+    TypeRoleBill,
     LegPeriod,
     Legislature,
     Proponents,
-    MotionType,
+    TypeMotion,
     TypeOrganization,
 )
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
@@ -94,7 +94,7 @@ class VoteEvent(Base):
     bill_motion_id = Column(String, nullable=False)
     date = Column(DateTime, nullable=False)
     result = Column(Enum(VoteResult, name="vote_result"), nullable=False)
-    majority_type = Column(Enum(MajorityType, name="majority_type"), nullable=True)
+    majority_type = Column(Enum(TypeMajority, name="majority_type"), nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -193,7 +193,7 @@ class BillCongresistas(Base):
 
     bill_id = Column(String, ForeignKey("bills.id"), nullable=False)
     person_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-    role_type = Column(Enum(RoleTypeBill, name="role_type"), nullable=False)
+    role_type = Column(Enum(TypeRoleBill, name="role_type"), nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("bill_id", "person_id"),
@@ -308,7 +308,8 @@ class Congresista(Base):
 
 class Organization(Base):
     """
-    Represents a legislative organization, such as a parliament or congress.
+    Represents a legislative organization, such as a chamber, political group (bancada),
+    party, committee or administrative organization.
 
     Attributes:
         org_id (int): Unique identification of the organization.
@@ -334,7 +335,9 @@ class Organization(Base):
     date_founding: Mapped[datetime | None] = mapped_column(nullable=True)
     date_dissolution: Mapped[datetime | None] = mapped_column(nullable=True)
 
-    __table_args__ = (UniqueConstraint("org_name", "org_type", name="org_uniq"),)
+    __table_args__ = (
+        UniqueConstraint("org_name", "org_type", "parent_org_id", name="org_uniq"),
+    )
 
 
 class Membership(Base):
@@ -553,7 +556,7 @@ class Motion(Base):
     leg_period = Column(Enum(LegPeriod, name="leg_period"), nullable=False)
     legislature = Column(Enum(Legislature, name="legislature"), nullable=False)
     presentation_date = Column(DateTime, nullable=False)
-    motion_type = Column(Enum(MotionType, name="motion_type"), nullable=False)
+    motion_type = Column(Enum(TypeMotion, name="motion_type"), nullable=False)
     summary = Column(String, nullable=False)
     observations = Column(String, nullable=False)
     complete_text = Column(String, nullable=False)
@@ -578,7 +581,7 @@ class MotionCongresistas(Base):
 
     motion_id = Column(String, ForeignKey("motions.id"), nullable=False)
     person_id = Column(Integer, ForeignKey("congresistas.id"), nullable=False)
-    role_type = Column(Enum(RoleTypeBill, name="role_type_motion"), nullable=False)
+    role_type = Column(Enum(TypeRoleBill, name="role_type_motion"), nullable=False)
 
     __table_args__ = (
         PrimaryKeyConstraint("motion_id", "person_id"),

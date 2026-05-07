@@ -1,7 +1,7 @@
 import json
 from types import SimpleNamespace
 import backend.process.bills as mod
-from backend import RoleTypeBill
+from backend import TypeRoleBill
 
 
 def _raw_bill(
@@ -96,10 +96,10 @@ def test_process_bill_with_firmantes_sets_author_and_cong_list():
     assert congs[0].bill_id == "PL_999"
     assert congs[0].nombre == "Juan Perez"
     assert congs[0].leg_period == "2021-2026"
-    assert congs[0].role_type == RoleTypeBill.AUTHOR
+    assert congs[0].role_type == TypeRoleBill.AUTHOR
 
     assert congs[1].nombre == "Maria Lopez"
-    assert congs[1].role_type == RoleTypeBill.COAUTHOR
+    assert congs[1].role_type == TypeRoleBill.COAUTHOR
 
 
 def test_process_bill_without_firmantes_sets_author_none_and_empty_cong_list():

@@ -18,16 +18,16 @@ from backend.database.models import (
     CommitteeMembership,
 )
 from backend import (
-    BillStepType,
+    TypeBillStep,
     RoleOrganization,
     VoteOption,
     AttendanceStatus,
-    RoleTypeBill,
+    TypeRoleBill,
     Proponents,
     LegPeriod,
     Legislature,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     TypeCommittee,
     TypeOrganization,
 )
@@ -101,7 +101,7 @@ def test_create_vote_event_and_vote(session):
         bill_motion_id="B001",
         date=datetime.now(),
         result=VoteResult.APROBADO,
-        majority_type=MajorityType.SIMPLE,
+        majority_type=TypeMajority.SIMPLE,
     )
     session.add(vote_event)
     vote = Vote(vote_event_id="VOT123", voter_id=1, option=VoteOption.SI, bancada_id=10)
@@ -123,13 +123,13 @@ def test_bill_step(session):
         bill_id="B001",
         vote_step=True,
         vote_event_id=None,
-        step_type=BillStepType.VOTACION,
+        step_type=TypeBillStep.VOTACION,
         step_date=datetime.now(),
         step_detail="Votación en pleno",
     )
     session.add(step)
     session.commit()
-    assert step.step_type == BillStepType.VOTACION
+    assert step.step_type == TypeBillStep.VOTACION
 
 
 def test_membership_validation(session):
@@ -164,11 +164,11 @@ def test_unique_vote_constraint(session):
 
 def test_bill_congresistas(session):
     relation = BillCongresistas(
-        bill_id="B001", person_id=1, role_type=RoleTypeBill.COAUTHOR
+        bill_id="B001", person_id=1, role_type=TypeRoleBill.COAUTHOR
     )
     session.add(relation)
     session.commit()
-    assert relation.role_type == RoleTypeBill.COAUTHOR
+    assert relation.role_type == TypeRoleBill.COAUTHOR
 
 
 def test_bill_committees(session):

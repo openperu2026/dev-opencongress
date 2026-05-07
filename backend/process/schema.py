@@ -3,9 +3,9 @@ from pydantic import BaseModel, field_validator, ConfigDict, model_validator
 from backend import (
     VoteOption,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     AttendanceStatus,
-    RoleTypeBill,
+    TypeRoleBill,
     LegPeriod,
     Legislature,
     Proponents,
@@ -13,7 +13,7 @@ from backend import (
     RoleOrganization,
     TypeCommittee,
     TypeAdmin,
-    MotionType,
+    TypeMotion,
     parse_leg_period,
     parse_legislature,
     parse_role_bill,
@@ -81,7 +81,7 @@ class VoteEvent(PrintableModel):
     bill_motion_id: str
     date: datetime
     result: VoteResult
-    majority_type: MajorityType | None
+    majority_type: TypeMajority | None
     votes: Optional[list[Vote]] = None
     attendance: Optional[list[Attendance]] = None
 
@@ -225,7 +225,7 @@ class BillCongresistas(PrintableModel):
     bill_id: str
     nombre: str
     leg_period: LegPeriod
-    role_type: RoleTypeBill
+    role_type: TypeRoleBill
     web_page: str | None = None
 
     @field_validator("leg_period", mode="before")
@@ -238,7 +238,7 @@ class BillCongresistas(PrintableModel):
     @field_validator("role_type", mode="before")
     @classmethod
     def validate_role_type(cls, v):
-        if isinstance(v, RoleTypeBill):
+        if isinstance(v, TypeRoleBill):
             return v
         return parse_role_bill(v)
 
@@ -332,7 +332,7 @@ class Motion(PrintableModel):
     leg_period: LegPeriod
     legislature: Legislature
     presentation_date: datetime
-    motion_type: MotionType
+    motion_type: TypeMotion
     summary: str
     observations: str | None
     complete_text: str | None
@@ -360,7 +360,7 @@ class Motion(PrintableModel):
     @field_validator("motion_type", mode="before")
     @classmethod
     def validate_motion_type(cls, v):
-        if isinstance(v, MotionType):
+        if isinstance(v, TypeMotion):
             return v
         return parse_motion_type(v)
 
@@ -381,7 +381,7 @@ class MotionCongresistas(PrintableModel):
     motion_id: str
     nombre: str
     leg_period: LegPeriod
-    role_type: RoleTypeBill
+    role_type: TypeRoleBill
     web_page: str | None = None
 
     @field_validator("leg_period", mode="before")
@@ -394,7 +394,7 @@ class MotionCongresistas(PrintableModel):
     @field_validator("role_type", mode="before")
     @classmethod
     def validate_role_type(cls, v):
-        if isinstance(v, RoleTypeBill):
+        if isinstance(v, TypeRoleBill):
             return v
         return parse_role_bill(v)
 
