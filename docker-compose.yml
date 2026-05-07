@@ -2,7 +2,7 @@ services:
   db:
     build:
       context: .
-      dockerfile: db/Dockerfile
+      dockerfile: backend/database/Dockerfile
     container_name: opencongress-db
     environment:
       POSTGRES_USER: opencongress
@@ -22,7 +22,7 @@ services:
     image: ${OPENPERU_RAW_MIGRATION_IMAGE:-opencongress/raw-migration:latest}
     build:
       context: .
-      dockerfile: db/RawMigration.Dockerfile
+      dockerfile: backend/database/migration/migration.Dockerfile
     depends_on:
       db:
         condition: service_healthy

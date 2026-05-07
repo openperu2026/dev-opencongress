@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, func
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from dataclasses import dataclass
@@ -26,8 +26,6 @@ class ScraperStats:
     end_time: datetime
     scrapped: int = 0
 
-
-SIMILARITY = 0.85
 
 MEMBERSHIP_MODELS = {
     TypeOrganization.BANCADA.value: db_models.BancadaMembership,
@@ -73,9 +71,10 @@ def find_congresista(
         if by_web is not None:
             return by_web
 
+    # TODO: implement a Fuzzy Match. .filter(func.jarowinkler(User.name, 'Jerry') > 0.85) --> with PostgreSQL and pg_similarity extension
     return db.scalar(
         select(db_models.Congresista).where(
-            func.jarowinkler(db_models.Congresista.full_name, name) > SIMILARITY
+            db_models.Congresista.full_name == name,
         )
     )
 
@@ -87,8 +86,7 @@ def find_organization(
     return db.scalar(
         select(db_models.Organization).where(
             db_models.Organization.org_name == org_name,
-            func.jarowinkler(db_models.Organization.org_type, org_type_value)
-            > SIMILARITY,
+            db_models.Organization.org_type == org_type_value,
         )
     )
 

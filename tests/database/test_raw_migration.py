@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, func, select
 
 from backend.database.models import Base
-from db.raw_migration import (
+from backend.database.migration.migration import (
     BILL_DOCUMENTS,
     MOTION_DOCUMENTS,
     assert_raw_tables_empty,

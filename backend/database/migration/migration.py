@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import argparse
 import hashlib
 import json
 import os
@@ -10,12 +9,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import Table, create_engine, func, select, text
+from sqlalchemy import Table, func, select, text
 from sqlalchemy.engine import Engine
 
 from backend.database.models import Base
-from backend.database import raw_models  # noqa: F401
-
 
 DEFAULT_DB_URL = "postgresql+psycopg://opencongress:opencongress@db:5432/opencongress"
 DEFAULT_SQLITE_PATH = "/app/data/raw/OpenPeruRaw.db"
@@ -102,62 +99,6 @@ STRING_COLUMNS = {
     ("raw_motion_documents", "step_id"),
     ("raw_motion_documents", "file_id"),
 }
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Import the baked OpenPeru raw SQLite database into PostgreSQL."
-    )
-    parser.add_argument(
-        "--db-url",
-        default=os.getenv("DB_URL", DEFAULT_DB_URL),
-        help="SQLAlchemy PostgreSQL URL. Defaults to DB_URL.",
-    )
-    parser.add_argument(
-        "--sqlite-path",
-        default=os.getenv("SQLITE_PATH", DEFAULT_SQLITE_PATH),
-        help="Path to OpenPeruRaw.db inside the migration container.",
-    )
-    parser.add_argument(
-        "--skip-checksums",
-        action="store_true",
-        help="Only validate row counts after import.",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = parse_args()
-    sqlite_path = Path(args.sqlite_path)
-    if not sqlite_path.exists():
-        raise FileNotFoundError(f"SQLite source not found: {sqlite_path}")
-
-    sqlite_conn = sqlite3.connect(sqlite_path)
-    sqlite_conn.row_factory = sqlite3.Row
-    engine = create_engine(args.db_url, pool_pre_ping=True)
-
-    try:
-        migrate(sqlite_conn, engine, validate_checksums=not args.skip_checksums)
-    finally:
-        sqlite_conn.close()
-        engine.dispose()
-
-
-def migrate(
-    sqlite_conn: sqlite3.Connection,
-    engine: Engine,
-    *,
-    validate_checksums: bool = True,
-) -> None:
-    enable_extensions(engine)
-    Base.metadata.create_all(engine)
-
-    with engine.begin() as pg_conn:
-        assert_raw_tables_empty(pg_conn)
-        import_direct_tables(sqlite_conn, pg_conn)
-        import_document_tables(sqlite_conn, pg_conn)
-        reset_sequences(pg_conn)
-        validate_import(sqlite_conn, pg_conn, validate_checksums=validate_checksums)
 
 
 def enable_extensions(engine: Engine) -> None:
@@ -568,7 +509,3 @@ def normalize_checksum_value(value: Any) -> Any:
 
 def empty_checksum() -> str:
     return hashlib.sha256().hexdigest()
-
-
-if __name__ == "__main__":
-    main()

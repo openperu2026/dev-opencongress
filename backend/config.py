@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     # This should change depending on where the DB will be stored
     DB_URL: str = os.getenv(
         "DB_URL",
-        "postgresql+psycopg://opencongress:opencongress@localhost:5432/opencongress",
+        "postgresql+psycopg://opencongress:opencongress@db:5432/opencongress",
     )
     AWS_ACCESS_KEY_ID: str | None = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
