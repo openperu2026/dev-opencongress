@@ -9,14 +9,14 @@ from backend.core.constants import (
     LEGISLATURE_ALIASES,
 )
 from backend.core.enums import (
-    BillStepType,
+    TypeBillStep,
     LegPeriod,
     Legislature,
-    MotionStepType,
-    MotionType,
+    TypeMotionStep,
+    TypeMotion,
     Proponents,
     RoleOrganization,
-    RoleTypeBill,
+    TypeRoleBill,
 )
 
 
@@ -81,7 +81,7 @@ def parse_legislature(value: str) -> Legislature:
     return Legislature(canon)
 
 
-def parse_role_bill(value: int | str) -> RoleTypeBill:
+def parse_role_bill(value: int | str) -> TypeRoleBill:
     if value is None:
         raise ValueError("role_bill cannot be null")
 
@@ -90,14 +90,14 @@ def parse_role_bill(value: int | str) -> RoleTypeBill:
 
     canon = BILL_ROLE_MAPS.get(value, value)
     role_map = {
-        "author": RoleTypeBill.AUTHOR,
-        "autor": RoleTypeBill.AUTHOR,
-        "coauthor": RoleTypeBill.COAUTHOR,
-        "coautor": RoleTypeBill.COAUTHOR,
-        "adherente": RoleTypeBill.ADHERENTE,
-        RoleTypeBill.AUTHOR.value: RoleTypeBill.AUTHOR,
-        RoleTypeBill.COAUTHOR.value: RoleTypeBill.COAUTHOR,
-        RoleTypeBill.ADHERENTE.value: RoleTypeBill.ADHERENTE,
+        "author": TypeRoleBill.AUTHOR,
+        "autor": TypeRoleBill.AUTHOR,
+        "coauthor": TypeRoleBill.COAUTHOR,
+        "coautor": TypeRoleBill.COAUTHOR,
+        "adherente": TypeRoleBill.ADHERENTE,
+        TypeRoleBill.AUTHOR.value: TypeRoleBill.AUTHOR,
+        TypeRoleBill.COAUTHOR.value: TypeRoleBill.COAUTHOR,
+        TypeRoleBill.ADHERENTE.value: TypeRoleBill.ADHERENTE,
     }
 
     role = role_map.get(str(canon).strip().lower())
@@ -106,20 +106,20 @@ def parse_role_bill(value: int | str) -> RoleTypeBill:
     return role
 
 
-def parse_motion_type(value: str) -> MotionType:
+def parse_motion_type(value: str) -> TypeMotion:
     if value is None:
         raise ValueError("motion_type cannot be null")
 
     v = " ".join(value.strip().split())
 
     # Direct match for scalar enum values.
-    for item in MotionType:
+    for item in TypeMotion:
         if isinstance(item.value, str) and item.value == v:
             return item
 
     # Handle the multi-value case for COMISION_INVESTIGADORA.
-    if v in MotionType.COMISION_INVESTIGADORA.value:
-        return MotionType.COMISION_INVESTIGADORA
+    if v in TypeMotion.COMISION_INVESTIGADORA.value:
+        return TypeMotion.COMISION_INVESTIGADORA
 
     raise ValueError(f"Unknown motion_type: {value!r}")
 
@@ -146,145 +146,145 @@ def parse_proponent(value: str) -> Proponents:
     raise ValueError(f"Unknown proponent: {value!r}")
 
 
-DES_ESTADO_TO_MOTION_STEP_LABEL: dict[str, MotionStepType] = {
-    "": MotionStepType.SIN_CATEGORIA,
+DES_ESTADO_TO_MOTION_STEP_LABEL: dict[str, TypeMotionStep] = {
+    "": TypeMotionStep.SIN_CATEGORIA,
     # Presented / admission
-    "Presentado": MotionStepType.PRESENTADO,
-    "Admitida la Moción": MotionStepType.ADMISION,
-    "ADMITIDA A DEBATE": MotionStepType.ADMISION,
-    "NO ADMITIDA A DEBATE": MotionStepType.ADMISION,
-    "RECHAZADA LA ADMISIÓN A DEBATE": MotionStepType.ADMISION,
+    "Presentado": TypeMotionStep.PRESENTADO,
+    "Admitida la Moción": TypeMotionStep.ADMISION,
+    "ADMITIDA A DEBATE": TypeMotionStep.ADMISION,
+    "NO ADMITIDA A DEBATE": TypeMotionStep.ADMISION,
+    "RECHAZADA LA ADMISIÓN A DEBATE": TypeMotionStep.ADMISION,
     # Committee handling
-    "En Comisión": MotionStepType.ETAPA_EN_COMISION,
-    "Integrantes de Comisión": MotionStepType.ETAPA_EN_COMISION,
-    "Aprobado integrantes de Comisión": MotionStepType.ETAPA_EN_COMISION,
+    "En Comisión": TypeMotionStep.ETAPA_EN_COMISION,
+    "Integrantes de Comisión": TypeMotionStep.ETAPA_EN_COMISION,
+    "Aprobado integrantes de Comisión": TypeMotionStep.ETAPA_EN_COMISION,
     # Agenda / internal routing (CD = Consejo Directivo)
-    "En Agenda C.D": MotionStepType.AGENDA_CD,
-    "PARA SER VISTA POR EL CONSEJO DIRECTIVO": MotionStepType.AGENDA_CD,
-    "Tramitada con conocimiento del CD": MotionStepType.ACUERDO_CD,
-    "TRAMITADA CON ACUERDO DE CD": MotionStepType.ACUERDO_CD,
-    "Por Acuerdo de CD.": MotionStepType.ACUERDO_CD,
-    "Acuerdo Junta de Portavoces": MotionStepType.ACUERDO_JP,
+    "En Agenda C.D": TypeMotionStep.AGENDA_CD,
+    "PARA SER VISTA POR EL CONSEJO DIRECTIVO": TypeMotionStep.AGENDA_CD,
+    "Tramitada con conocimiento del CD": TypeMotionStep.ACUERDO_CD,
+    "TRAMITADA CON ACUERDO DE CD": TypeMotionStep.ACUERDO_CD,
+    "Por Acuerdo de CD.": TypeMotionStep.ACUERDO_CD,
+    "Acuerdo Junta de Portavoces": TypeMotionStep.ACUERDO_JP,
     # Pleno routing / agenda
-    "Para ser vista por el Pleno": MotionStepType.AGENDA_DEL_PLENO,
-    "En Agenda del Pleno": MotionStepType.AGENDA_DEL_PLENO,
-    "En Agenda de Pleno": MotionStepType.AGENDA_DEL_PLENO,
-    "Orden del Día": MotionStepType.AGENDA_DEL_PLENO,
-    "Dado cuenta en el Pleno": MotionStepType.ANUNCIO_O_DACION_DE_CUENTA,
-    "Se ha dado cuenta": MotionStepType.ANUNCIO_O_DACION_DE_CUENTA,
-    "Por Acuerdo de Pleno": MotionStepType.ANUNCIO_O_DACION_DE_CUENTA,
+    "Para ser vista por el Pleno": TypeMotionStep.AGENDA_DEL_PLENO,
+    "En Agenda del Pleno": TypeMotionStep.AGENDA_DEL_PLENO,
+    "En Agenda de Pleno": TypeMotionStep.AGENDA_DEL_PLENO,
+    "Orden del Día": TypeMotionStep.AGENDA_DEL_PLENO,
+    "Dado cuenta en el Pleno": TypeMotionStep.ANUNCIO_O_DACION_DE_CUENTA,
+    "Se ha dado cuenta": TypeMotionStep.ANUNCIO_O_DACION_DE_CUENTA,
+    "Por Acuerdo de Pleno": TypeMotionStep.ANUNCIO_O_DACION_DE_CUENTA,
     # Debate / floor handling
-    "En Debate": MotionStepType.DEBATE,
-    "En debate": MotionStepType.DEBATE,
-    "Leída en sesión": MotionStepType.DEBATE,
-    "Fundamentada la Moción": MotionStepType.FUNDAMENTACION,
+    "En Debate": TypeMotionStep.DEBATE,
+    "En debate": TypeMotionStep.DEBATE,
+    "Leída en sesión": TypeMotionStep.DEBATE,
+    "Fundamentada la Moción": TypeMotionStep.FUNDAMENTACION,
     # Vote-ish / outcomes
-    "Aprobada": MotionStepType.VOTACION_O_DECISION,
-    "Aprobada la Moción": MotionStepType.VOTACION_O_DECISION,
-    "Rechazada": MotionStepType.VOTACION_O_DECISION,
+    "Aprobada": TypeMotionStep.VOTACION_O_DECISION,
+    "Aprobada la Moción": TypeMotionStep.VOTACION_O_DECISION,
+    "Rechazada": TypeMotionStep.VOTACION_O_DECISION,
     # Reconsideration
-    "Reconsideración": MotionStepType.RECONSIDERACION,
-    "Rechazada Reconsideración": MotionStepType.RECONSIDERACION,
+    "Reconsideración": TypeMotionStep.RECONSIDERACION,
+    "Rechazada Reconsideración": TypeMotionStep.RECONSIDERACION,
     # Text updates
-    "Texto consensuado": MotionStepType.REVISION_DE_TEXTO,
-    "Texto Sustitutorio": MotionStepType.REVISION_DE_TEXTO,
-    "Adhesión": MotionStepType.REVISION_DE_TEXTO,
-    "Se adhiere": MotionStepType.REVISION_DE_TEXTO,
-    "Retiro de Firma": MotionStepType.RETIRADO,
+    "Texto consensuado": TypeMotionStep.REVISION_DE_TEXTO,
+    "Texto Sustitutorio": TypeMotionStep.REVISION_DE_TEXTO,
+    "Adhesión": TypeMotionStep.REVISION_DE_TEXTO,
+    "Se adhiere": TypeMotionStep.REVISION_DE_TEXTO,
+    "Retiro de Firma": TypeMotionStep.RETIRADO,
     # Official comms / documents
-    "Oficio": MotionStepType.COMUNICACION_OFICIAL,
-    "Fe de Erratas": MotionStepType.FE_DE_ERRATAS_O_CORRECCION,
+    "Oficio": TypeMotionStep.COMUNICACION_OFICIAL,
+    "Fe de Erratas": TypeMotionStep.FE_DE_ERRATAS_O_CORRECCION,
     # Publication
-    "Publicado Diario Oficial  El Peruano": MotionStepType.PUBLICADO,
-    "Publicado Diario Oficial El Peruano": MotionStepType.PUBLICADO,
+    "Publicado Diario Oficial  El Peruano": TypeMotionStep.PUBLICADO,
+    "Publicado Diario Oficial El Peruano": TypeMotionStep.PUBLICADO,
     # Appearances (minister, etc.)
-    "Concurre Ministro": MotionStepType.ASISTENCIA_O_COMPARECENCIA,
-    "Asiste": MotionStepType.ASISTENCIA_O_COMPARECENCIA,
-    "Asistió el Ministro  para contestar el pliego.": MotionStepType.ASISTENCIA_O_COMPARECENCIA,
-    "Asistió el Ministro para contestar el pliego.": MotionStepType.ASISTENCIA_O_COMPARECENCIA,
+    "Concurre Ministro": TypeMotionStep.ASISTENCIA_O_COMPARECENCIA,
+    "Asiste": TypeMotionStep.ASISTENCIA_O_COMPARECENCIA,
+    "Asistió el Ministro  para contestar el pliego.": TypeMotionStep.ASISTENCIA_O_COMPARECENCIA,
+    "Asistió el Ministro para contestar el pliego.": TypeMotionStep.ASISTENCIA_O_COMPARECENCIA,
     # Order / procedural
-    "Cuestión de Orden": MotionStepType.CUESTION_DE_ORDEN,
-    "EN CUARTO INTERMEDIO": MotionStepType.CUARTO_INTERMEDIO,
+    "Cuestión de Orden": TypeMotionStep.CUESTION_DE_ORDEN,
+    "EN CUARTO INTERMEDIO": TypeMotionStep.CUARTO_INTERMEDIO,
     # Requirements / blocking status
-    "INCUMPLE REQUISITOS PARA CONTINUAR SU TRÁMITE": MotionStepType.BLOQUEO_POR_REQUISITOS,
+    "INCUMPLE REQUISITOS PARA CONTINUAR SU TRÁMITE": TypeMotionStep.BLOQUEO_POR_REQUISITOS,
     # Withdrawal
-    "Solicita retiro de moción": MotionStepType.RETIRADO,
-    "RETIRADA POR SU AUTOR": MotionStepType.RETIRADO,
-    "Se deje sin efecto": MotionStepType.RETIRADO,
+    "Solicita retiro de moción": TypeMotionStep.RETIRADO,
+    "RETIRADA POR SU AUTOR": TypeMotionStep.RETIRADO,
+    "Se deje sin efecto": TypeMotionStep.RETIRADO,
     # Archive
-    "Al archivo": MotionStepType.ARCHIVADO,
-    "En Archivo General": MotionStepType.ARCHIVADO,
+    "Al archivo": TypeMotionStep.ARCHIVADO,
+    "En Archivo General": TypeMotionStep.ARCHIVADO,
     # Resignation / referrals
-    "Renuncia": MotionStepType.RENUNCIA,
-    "En Fiscalía de la Nación": MotionStepType.COMUNICACION_OFICIAL,
+    "Renuncia": TypeMotionStep.RENUNCIA,
+    "En Fiscalía de la Nación": TypeMotionStep.COMUNICACION_OFICIAL,
 }
 
 
-DES_ESTADO_TO_STEP_LABEL: dict[str, BillStepType] = {
-    "------": BillStepType.SIN_CATEGORIA,
+DES_ESTADO_TO_STEP_LABEL: dict[str, TypeBillStep] = {
+    "------": TypeBillStep.SIN_CATEGORIA,
     # Presented
-    "PRESENTADO": BillStepType.PRESENTADO,
+    "PRESENTADO": TypeBillStep.PRESENTADO,
     # Assigned / committee routing
-    "EN COMISIÓN": BillStepType.EN_COMISION,
-    "PASA A COMISIÓN": BillStepType.EN_COMISION,
-    "RETORNA A COMISIÓN": BillStepType.EN_COMISION,
-    "Acumulado en Sala": BillStepType.ACUMULADO,
+    "EN COMISIÓN": TypeBillStep.EN_COMISION,
+    "PASA A COMISIÓN": TypeBillStep.EN_COMISION,
+    "RETORNA A COMISIÓN": TypeBillStep.EN_COMISION,
+    "Acumulado en Sala": TypeBillStep.ACUMULADO,
     # Committee stage artifacts / decisions
-    "DICTAMEN": BillStepType.DICTAMEN_O_ACUERDO_DE_COMISION,
-    "ACUERDO DE COMISIÓN": BillStepType.DICTAMEN_O_ACUERDO_DE_COMISION,
+    "DICTAMEN": TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
+    "ACUERDO DE COMISIÓN": TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
     # Exemptions / procedural shortcuts
-    "Dispensado de Dictamen": BillStepType.EXONERACION_DE_DICTAMEN,
-    "EXONERADO DE DICTAMEN": BillStepType.EXONERACION_DE_DICTAMEN,
-    "EXONERADO DE PLAZO DE PUBLICACIÓN": BillStepType.EXONERACION_DE_DICTAMEN,
-    "Dispensado de Publicación en el Portal": BillStepType.EXONERACION_DE_DICTAMEN,
+    "Dispensado de Dictamen": TypeBillStep.EXONERACION_DE_DICTAMEN,
+    "EXONERADO DE DICTAMEN": TypeBillStep.EXONERACION_DE_DICTAMEN,
+    "EXONERADO DE PLAZO DE PUBLICACIÓN": TypeBillStep.EXONERACION_DE_DICTAMEN,
+    "Dispensado de Publicación en el Portal": TypeBillStep.EXONERACION_DE_DICTAMEN,
     # Agenda
-    "Orden del Día": BillStepType.AGENDA_DEL_PLENO,
-    "EN AGENDA DEL PLENO": BillStepType.AGENDA_DEL_PLENO,
-    "EN AGENDA DE LA COMISIÓN PERMANENTE": BillStepType.AGENDA_DE_LA_COMISION_PERMANENTE,
+    "Orden del Día": TypeBillStep.AGENDA_DEL_PLENO,
+    "EN AGENDA DEL PLENO": TypeBillStep.AGENDA_DEL_PLENO,
+    "EN AGENDA DE LA COMISIÓN PERMANENTE": TypeBillStep.AGENDA_DE_LA_COMISION_PERMANENTE,
     # Debate
-    "EN DEBATE - PLENO": BillStepType.DEBATE_EN_EL_PLENO,
-    "EN DEBATE - COMISIÓN PERMANENTE": BillStepType.DEBATE_EN_LA_COMISION_PERMANENTE,
-    "EN DEBATE DE LA COMISIÓN PERMANENTE": BillStepType.DEBATE_EN_LA_COMISION_PERMANENTE,
+    "EN DEBATE - PLENO": TypeBillStep.DEBATE_EN_EL_PLENO,
+    "EN DEBATE - COMISIÓN PERMANENTE": TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE,
+    "EN DEBATE DE LA COMISIÓN PERMANENTE": TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE,
     # Vote events
-    "APROBADO 1ERA. VOTACIÓN": BillStepType.VOTACION,
-    "Pendiente 2da. votación": BillStepType.VOTACION,
-    "Pendiente 2da. Votación": BillStepType.VOTACION,
-    "No alcanzó Nº de votos": BillStepType.VOTACION,
-    "No alcanzó N° de votos": BillStepType.VOTACION,
-    "No alcanzó No de votos": BillStepType.VOTACION,
-    "NO APROBADO": BillStepType.VOTACION,
-    "APROBADO": BillStepType.VOTACION,
-    "Aprobado Com.Permanente": BillStepType.VOTACION,
-    "ACUERDO DEL PLENO": BillStepType.VOTACION,
+    "APROBADO 1ERA. VOTACIÓN": TypeBillStep.VOTACION,
+    "Pendiente 2da. votación": TypeBillStep.VOTACION,
+    "Pendiente 2da. Votación": TypeBillStep.VOTACION,
+    "No alcanzó Nº de votos": TypeBillStep.VOTACION,
+    "No alcanzó N° de votos": TypeBillStep.VOTACION,
+    "No alcanzó No de votos": TypeBillStep.VOTACION,
+    "NO APROBADO": TypeBillStep.VOTACION,
+    "APROBADO": TypeBillStep.VOTACION,
+    "Aprobado Com.Permanente": TypeBillStep.VOTACION,
+    "ACUERDO DEL PLENO": TypeBillStep.VOTACION,
     # Text / autographs (post-approval drafting)
-    "TEXTO SUSTITUTORIO": BillStepType.TEXTO_SUSTITUTORIO_O_REVISION,
-    "AUTÓGRAFA": BillStepType.AUTOGRAFA,
-    "AUTÓGRAFA OBSERVADA": BillStepType.AUTOGRAFA,
+    "TEXTO SUSTITUTORIO": TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION,
+    "AUTÓGRAFA": TypeBillStep.AUTOGRAFA,
+    "AUTÓGRAFA OBSERVADA": TypeBillStep.AUTOGRAFA,
     # Reconsideration
-    "EN RECONSIDERACIÓN": BillStepType.RECONSIDERACION,
+    "EN RECONSIDERACIÓN": TypeBillStep.RECONSIDERACION,
     # Rejection
-    "RECHAZADO": BillStepType.RECHAZADO,
+    "RECHAZADO": TypeBillStep.RECHAZADO,
     # Withdrawal
-    "Retirado por su Autor": BillStepType.RETIRADO,
-    "Solicita Retiro": BillStepType.RETIRADO,
-    "Retiro de Firma": BillStepType.RETIRADO,
+    "Retirado por su Autor": TypeBillStep.RETIRADO,
+    "Solicita Retiro": TypeBillStep.RETIRADO,
+    "Retiro de Firma": TypeBillStep.RETIRADO,
     # Archive
-    "Al Archivo": BillStepType.ARCHIVADO,
-    "DECRETO DE ARCHIVO": BillStepType.ARCHIVADO,
+    "Al Archivo": TypeBillStep.ARCHIVADO,
+    "DECRETO DE ARCHIVO": TypeBillStep.ARCHIVADO,
     # Promulgation / publication
-    "Promulgado/Presidente de la República": BillStepType.PROMULGADO,
-    "Promulgado/Presidente del Congreso": BillStepType.PROMULGADO,
-    "Publicada en el Diario Oficial El Peruano": BillStepType.PUBLICADO,
+    "Promulgado/Presidente de la República": TypeBillStep.PROMULGADO,
+    "Promulgado/Presidente del Congreso": TypeBillStep.PROMULGADO,
+    "Publicada en el Diario Oficial El Peruano": TypeBillStep.PUBLICADO,
     # Clarification / internal routing
-    "ACLARACIÓN": BillStepType.ACLARACION,
-    "EN CUARTO INTERMEDIO": BillStepType.CUARTO_INTERMEDIO,
-    "PARA CONSEJO DIRECTIVO": BillStepType.AGENDA_DEL_CONSEJO_DIRECTIVO,
+    "ACLARACIÓN": TypeBillStep.ACLARACION,
+    "EN CUARTO INTERMEDIO": TypeBillStep.CUARTO_INTERMEDIO,
+    "PARA CONSEJO DIRECTIVO": TypeBillStep.AGENDA_DEL_CONSEJO_DIRECTIVO,
 }
 
 
 def classify_motion_des_estado(
     des_estado: str | None, detail: str | None = None
-) -> MotionStepType:
+) -> TypeMotionStep:
     key = _normalize_step_text(des_estado)
     status_label = _lookup_step_label(DES_ESTADO_TO_MOTION_STEP_LABEL, key)
     detail_labels = _collect_detail_labels(detail, _MOTION_DETAIL_LABEL_RULES)
@@ -292,13 +292,13 @@ def classify_motion_des_estado(
         status_label,
         detail_labels,
         _MOTION_STEP_PRIORITY,
-        MotionStepType.SIN_CATEGORIA,
+        TypeMotionStep.SIN_CATEGORIA,
     )
 
 
 def classify_des_estado(
     des_estado: str | None, detail: str | None = None
-) -> BillStepType:
+) -> TypeBillStep:
     key = _normalize_step_text(des_estado)
     status_label = _lookup_step_label(DES_ESTADO_TO_STEP_LABEL, key)
     detail_labels = _collect_detail_labels(detail, _BILL_DETAIL_LABEL_RULES)
@@ -306,7 +306,7 @@ def classify_des_estado(
         status_label,
         detail_labels,
         _BILL_STEP_PRIORITY,
-        BillStepType.SIN_CATEGORIA,
+        TypeBillStep.SIN_CATEGORIA,
     )
 
 
@@ -352,247 +352,247 @@ def _resolve_step_label(
     return best_label
 
 
-_BILL_DETAIL_LABEL_RULES: list[tuple[re.Pattern[str], BillStepType]] = [
+_BILL_DETAIL_LABEL_RULES: list[tuple[re.Pattern[str], TypeBillStep]] = [
     (
         re.compile(
             r"\bpublicad[ao]s?\b.*\b(diario oficial|el peruano)\b", re.IGNORECASE
         ),
-        BillStepType.PUBLICADO,
+        TypeBillStep.PUBLICADO,
     ),
     (
         re.compile(r"\bpromulgad[ao]s?\b", re.IGNORECASE),
-        BillStepType.PROMULGADO,
+        TypeBillStep.PROMULGADO,
     ),
     (
         re.compile(
             r"\bsolicita retiro\b|\bretirad[oa] por su autor\b|\bretiro de firma\b|\bconsid[eé]rese retirad[oa]\b",
             re.IGNORECASE,
         ),
-        BillStepType.RETIRADO,
+        TypeBillStep.RETIRADO,
     ),
     (
         re.compile(
             r"\bal archivo\b|\benv[ií]o al archivo\b|\bdecreto de archivo\b|\bpas[oó] al archivo\b",
             re.IGNORECASE,
         ),
-        BillStepType.ARCHIVADO,
+        TypeBillStep.ARCHIVADO,
     ),
     (
         re.compile(
             r"\basistencia y votaci[oó]n\b|\bprimera votaci[oó]n\b|\bsegunda votaci[oó]n\b|\b1era\.?\s*votaci[oó]n\b|\b2da\.?\s*votaci[oó]n\b|\bno alcanz[oó]\b.*\bvotos?\b",
             re.IGNORECASE,
         ),
-        BillStepType.VOTACION,
+        TypeBillStep.VOTACION,
     ),
     (
         re.compile(r"\bcuarto intermedio\b", re.IGNORECASE),
-        BillStepType.CUARTO_INTERMEDIO,
+        TypeBillStep.CUARTO_INTERMEDIO,
     ),
     (
         re.compile(r"\bdebat\w+\b.*\bcomisi[oó]n permanente\b", re.IGNORECASE),
-        BillStepType.DEBATE_EN_LA_COMISION_PERMANENTE,
+        TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE,
     ),
     (
         re.compile(r"\b(debate|debat\w+)\b", re.IGNORECASE),
-        BillStepType.DEBATE_EN_EL_PLENO,
+        TypeBillStep.DEBATE_EN_EL_PLENO,
     ),
     (
         re.compile(
             r"^reconsideraci[oó]n\b|\basistencia y votaci[oó]n\s*-\s*reconsideraci[oó]n\b|\breconsideraci[oó]n a la votaci[oó]n\b|\bpresentaron reconsideraci[oó]n\b|\bpresentada .* reconsideraci[oó]n\b",
             re.IGNORECASE,
         ),
-        BillStepType.RECONSIDERACION,
+        TypeBillStep.RECONSIDERACION,
     ),
     (
         re.compile(
             r"\b(texto|nuevo texto|f[oó]rmula)\s+sustitutor\w*\b|\btexto consensuado\b",
             re.IGNORECASE,
         ),
-        BillStepType.TEXTO_SUSTITUTORIO_O_REVISION,
+        TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION,
     ),
     (
         re.compile(r"\baut[oó]grafa\b", re.IGNORECASE),
-        BillStepType.AUTOGRAFA,
+        TypeBillStep.AUTOGRAFA,
     ),
     (
         re.compile(r"\baclaraci[oó]n\b", re.IGNORECASE),
-        BillStepType.ACLARACION,
+        TypeBillStep.ACLARACION,
     ),
     (
         re.compile(
             r"\bexoneraci[oó]n de dictamen\b|\bexoneraci[oó]n del? plazo de publicaci[oó]n\b|\bdispensad[oa] de dictamen\b|\bdispensad[oa] de publicaci[oó]n\b|\bexoneraci[oó]n del tr[aá]mite de env[ií]o a comisi[oó]n\b",
             re.IGNORECASE,
         ),
-        BillStepType.EXONERACION_DE_DICTAMEN,
+        TypeBillStep.EXONERACION_DE_DICTAMEN,
     ),
     (
         re.compile(r"\bacumulad[oa]\b", re.IGNORECASE),
-        BillStepType.ACUMULADO,
+        TypeBillStep.ACUMULADO,
     ),
     (
         re.compile(
             r"\b(pasa|pas[oó]|retorna|retorn[ao]) a comisi[oó]n\b|\bdevuelv\w+ a la comisi[oó]n\b",
             re.IGNORECASE,
         ),
-        BillStepType.EN_COMISION,
+        TypeBillStep.EN_COMISION,
     ),
     (
         re.compile(r"\bconsejo directivo\b", re.IGNORECASE),
-        BillStepType.AGENDA_DEL_CONSEJO_DIRECTIVO,
+        TypeBillStep.AGENDA_DEL_CONSEJO_DIRECTIVO,
     ),
     (
         re.compile(r"\bagenda\b.*\bcomisi[oó]n permanente\b", re.IGNORECASE),
-        BillStepType.AGENDA_DE_LA_COMISION_PERMANENTE,
+        TypeBillStep.AGENDA_DE_LA_COMISION_PERMANENTE,
     ),
     (
         re.compile(
             r"\b(orden del d[ií]a|ampliaci[oó]n de agenda|agenda del pleno)\b",
             re.IGNORECASE,
         ),
-        BillStepType.AGENDA_DEL_PLENO,
+        TypeBillStep.AGENDA_DEL_PLENO,
     ),
 ]
 
 
-_BILL_STEP_PRIORITY: dict[BillStepType, int] = {
-    BillStepType.SIN_CATEGORIA: 0,
-    BillStepType.AGENDA_DEL_CONSEJO_DIRECTIVO: 100,
-    BillStepType.AGENDA_DEL_PLENO: 110,
-    BillStepType.AGENDA_DE_LA_COMISION_PERMANENTE: 120,
-    BillStepType.EN_COMISION: 130,
-    BillStepType.PRESENTADO: 140,
-    BillStepType.DICTAMEN_O_ACUERDO_DE_COMISION: 160,
-    BillStepType.EXONERACION_DE_DICTAMEN: 320,
-    BillStepType.ACUMULADO: 330,
-    BillStepType.ACLARACION: 340,
-    BillStepType.TEXTO_SUSTITUTORIO_O_REVISION: 350,
-    BillStepType.AUTOGRAFA: 360,
-    BillStepType.RECONSIDERACION: 370,
-    BillStepType.DEBATE_EN_EL_PLENO: 500,
-    BillStepType.DEBATE_EN_LA_COMISION_PERMANENTE: 510,
-    BillStepType.CUARTO_INTERMEDIO: 520,
-    BillStepType.VOTACION: 530,
-    BillStepType.RECHAZADO: 540,
-    BillStepType.ARCHIVADO: 550,
-    BillStepType.RETIRADO: 560,
-    BillStepType.PROMULGADO: 570,
-    BillStepType.PUBLICADO: 580,
+_BILL_STEP_PRIORITY: dict[TypeBillStep, int] = {
+    TypeBillStep.SIN_CATEGORIA: 0,
+    TypeBillStep.AGENDA_DEL_CONSEJO_DIRECTIVO: 100,
+    TypeBillStep.AGENDA_DEL_PLENO: 110,
+    TypeBillStep.AGENDA_DE_LA_COMISION_PERMANENTE: 120,
+    TypeBillStep.EN_COMISION: 130,
+    TypeBillStep.PRESENTADO: 140,
+    TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION: 160,
+    TypeBillStep.EXONERACION_DE_DICTAMEN: 320,
+    TypeBillStep.ACUMULADO: 330,
+    TypeBillStep.ACLARACION: 340,
+    TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION: 350,
+    TypeBillStep.AUTOGRAFA: 360,
+    TypeBillStep.RECONSIDERACION: 370,
+    TypeBillStep.DEBATE_EN_EL_PLENO: 500,
+    TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE: 510,
+    TypeBillStep.CUARTO_INTERMEDIO: 520,
+    TypeBillStep.VOTACION: 530,
+    TypeBillStep.RECHAZADO: 540,
+    TypeBillStep.ARCHIVADO: 550,
+    TypeBillStep.RETIRADO: 560,
+    TypeBillStep.PROMULGADO: 570,
+    TypeBillStep.PUBLICADO: 580,
 }
 
 
-_MOTION_DETAIL_LABEL_RULES: list[tuple[re.Pattern[str], MotionStepType]] = [
+_MOTION_DETAIL_LABEL_RULES: list[tuple[re.Pattern[str], TypeMotionStep]] = [
     (
         re.compile(r"\bfundamenta\b.*\bmoci[oó]n\b", re.IGNORECASE),
-        MotionStepType.FUNDAMENTACION,
+        TypeMotionStep.FUNDAMENTACION,
     ),
     (
         re.compile(
             r"\basistencia y votaci[oó]n\b|\b(fue|fueron)\s+aprobad[ao]s?\b|\b(fue|fueron)\s+rechazad[ao]s?\b|\baprobad[ao]\s+(la|el|un|una)\b|\brechazad[ao]\s+la\b|\bno alcanz[oó]\b.*\bvotos?\b|\bpor \d+ votos?\b",
             re.IGNORECASE,
         ),
-        MotionStepType.VOTACION_O_DECISION,
+        TypeMotionStep.VOTACION_O_DECISION,
     ),
     (
         re.compile(
             r"\badmitid[ao]\b.*\bmoci[oó]n\b|\badmisi[oó]n a debate\b", re.IGNORECASE
         ),
-        MotionStepType.ADMISION,
+        TypeMotionStep.ADMISION,
     ),
     (
         re.compile(
             r"\bse ha dado cuenta\b|\bse consultar[aá] su admisi[oó]n\b|\banunci[oó] que se hab[ií]a presentado la moci[oó]n\b",
             re.IGNORECASE,
         ),
-        MotionStepType.ANUNCIO_O_DACION_DE_CUENTA,
+        TypeMotionStep.ANUNCIO_O_DACION_DE_CUENTA,
     ),
     (
         re.compile(
             r"\ble[ií]d[ao] en sesi[oó]n\b|\bfue le[ií]d[ao]\b.*\bsesi[oó]n\b|\bse reabri[oó] el debate\b|\breabri[oó] el debate\b|\ben debate\b",
             re.IGNORECASE,
         ),
-        MotionStepType.DEBATE,
+        TypeMotionStep.DEBATE,
     ),
     (
         re.compile(
             r"\bpas[oó] a la comisi[oó]n\b|\bpase a la comisi[oó]n\b|\bdevolvi[oó] a la comisi[oó]n\b",
             re.IGNORECASE,
         ),
-        MotionStepType.ETAPA_EN_COMISION,
+        TypeMotionStep.ETAPA_EN_COMISION,
     ),
     (
         re.compile(
             r"^(acta de acuerdo|acuerdo n[°ºo.]?\s*\d+|oficio|carta|informe)\b|^\bn[°ºo.]?\s*\d+",
             re.IGNORECASE,
         ),
-        MotionStepType.COMUNICACION_OFICIAL,
+        TypeMotionStep.COMUNICACION_OFICIAL,
     ),
     (
         re.compile(
             r"\bsolicita el retiro\b|\bsolicita retiro\b|\bconsid[eé]rese retirad[oa]\b|\bretira su moci[oó]n\b|\bdeje sin efecto\b|\bsolicita el retiro de la moci[oó]n\b",
             re.IGNORECASE,
         ),
-        MotionStepType.RETIRADO,
+        TypeMotionStep.RETIRADO,
     ),
     (
         re.compile(r"\bal archivo\b|\bpas[oó] al archivo\b", re.IGNORECASE),
-        MotionStepType.ARCHIVADO,
+        TypeMotionStep.ARCHIVADO,
     ),
     (
         re.compile(
             r"\bcuarto intermedio\b|\btexto sustitutorio presentado\b", re.IGNORECASE
         ),
-        MotionStepType.CUARTO_INTERMEDIO,
+        TypeMotionStep.CUARTO_INTERMEDIO,
     ),
     (
         re.compile(r"\breconsideraci[oó]n\b", re.IGNORECASE),
-        MotionStepType.RECONSIDERACION,
+        TypeMotionStep.RECONSIDERACION,
     ),
     (
         re.compile(
             r"\btexto sustitutorio\b|\btexto consensuado\b|\badhier[ea]\b|\bcon texto sustitutorio\b",
             re.IGNORECASE,
         ),
-        MotionStepType.REVISION_DE_TEXTO,
+        TypeMotionStep.REVISION_DE_TEXTO,
     ),
     (
         re.compile(r"\bfe de erratas\b", re.IGNORECASE),
-        MotionStepType.FE_DE_ERRATAS_O_CORRECCION,
+        TypeMotionStep.FE_DE_ERRATAS_O_CORRECCION,
     ),
     (
         re.compile(
             r"^(censurar|saludar|felicitar|expresar|considerar|conformar|aprobar|declarar|otorgar|constituir|crear)\b",
             re.IGNORECASE,
         ),
-        MotionStepType.PRESENTADO,
+        TypeMotionStep.PRESENTADO,
     ),
 ]
 
 
-_MOTION_STEP_PRIORITY: dict[MotionStepType, int] = {
-    MotionStepType.SIN_CATEGORIA: 0,
-    MotionStepType.AGENDA_CD: 100,
-    MotionStepType.ACUERDO_CD: 105,
-    MotionStepType.ACUERDO_JP: 108,
-    MotionStepType.AGENDA_DEL_PLENO: 110,
-    MotionStepType.PRESENTADO: 120,
-    MotionStepType.REVISION_DE_TEXTO: 300,
-    MotionStepType.RECONSIDERACION: 310,
-    MotionStepType.COMUNICACION_OFICIAL: 320,
-    MotionStepType.ETAPA_EN_COMISION: 330,
-    MotionStepType.ASISTENCIA_O_COMPARECENCIA: 340,
-    MotionStepType.ANUNCIO_O_DACION_DE_CUENTA: 350,
-    MotionStepType.ADMISION: 360,
-    MotionStepType.FUNDAMENTACION: 370,
-    MotionStepType.DEBATE: 380,
-    MotionStepType.CUESTION_DE_ORDEN: 390,
-    MotionStepType.CUARTO_INTERMEDIO: 400,
-    MotionStepType.VOTACION_O_DECISION: 410,
-    MotionStepType.RETIRADO: 420,
-    MotionStepType.ARCHIVADO: 430,
-    MotionStepType.BLOQUEO_POR_REQUISITOS: 440,
-    MotionStepType.RENUNCIA: 450,
-    MotionStepType.PUBLICADO: 460,
-    MotionStepType.FE_DE_ERRATAS_O_CORRECCION: 470,
+_MOTION_STEP_PRIORITY: dict[TypeMotionStep, int] = {
+    TypeMotionStep.SIN_CATEGORIA: 0,
+    TypeMotionStep.AGENDA_CD: 100,
+    TypeMotionStep.ACUERDO_CD: 105,
+    TypeMotionStep.ACUERDO_JP: 108,
+    TypeMotionStep.AGENDA_DEL_PLENO: 110,
+    TypeMotionStep.PRESENTADO: 120,
+    TypeMotionStep.REVISION_DE_TEXTO: 300,
+    TypeMotionStep.RECONSIDERACION: 310,
+    TypeMotionStep.COMUNICACION_OFICIAL: 320,
+    TypeMotionStep.ETAPA_EN_COMISION: 330,
+    TypeMotionStep.ASISTENCIA_O_COMPARECENCIA: 340,
+    TypeMotionStep.ANUNCIO_O_DACION_DE_CUENTA: 350,
+    TypeMotionStep.ADMISION: 360,
+    TypeMotionStep.FUNDAMENTACION: 370,
+    TypeMotionStep.DEBATE: 380,
+    TypeMotionStep.CUESTION_DE_ORDEN: 390,
+    TypeMotionStep.CUARTO_INTERMEDIO: 400,
+    TypeMotionStep.VOTACION_O_DECISION: 410,
+    TypeMotionStep.RETIRADO: 420,
+    TypeMotionStep.ARCHIVADO: 430,
+    TypeMotionStep.BLOQUEO_POR_REQUISITOS: 440,
+    TypeMotionStep.RENUNCIA: 450,
+    TypeMotionStep.PUBLICADO: 460,
+    TypeMotionStep.FE_DE_ERRATAS_O_CORRECCION: 470,
 }
 
 

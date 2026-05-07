@@ -13,7 +13,7 @@
             {% for congresista in congresistas %}
                 <li>
                     <a href="{{ url_for('congress.congress_detail', congresista_id=congresista.id) }}">
-                        {{ congresista.id }} - {{ congresista.nombre }}
+                        {{ congresista.id }} - {{ congresista.full_name }}
                     </a>
                 </li>
             {% endfor %}
