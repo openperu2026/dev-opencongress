@@ -12,7 +12,7 @@ from sqlalchemy import (
 from backend import (
     VoteOption,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     AttendanceStatus,
     LegPeriod,
     TypeOrganization,
@@ -89,7 +89,7 @@ class VoteEvent(Base):
     bill_motion_id = Column(String, nullable=False)
     date = Column(DateTime, nullable=False)
     result = Column(Enum(VoteResult, name="vote_result"), nullable=False)
-    majority_type = Column(Enum(MajorityType, name="majority_type"), nullable=True)
+    majority_type = Column(Enum(TypeMajority, name="majority_type"), nullable=True)
 
     __table_args__ = (
         UniqueConstraint(
@@ -315,7 +315,8 @@ class Congresista(Base):
 
 class Organization(Base):
     """
-    Represents a legislative organization, such as a parliament or congress.
+    Represents a legislative organization, such as a chamber, political group (bancada),
+    party, committee or administrative organization.
 
     Attributes:
         org_id (int): Unique identification of the organization.
@@ -341,7 +342,9 @@ class Organization(Base):
     date_founding: Mapped[datetime | None] = mapped_column(nullable=True)
     date_dissolution: Mapped[datetime | None] = mapped_column(nullable=True)
 
-    __table_args__ = (UniqueConstraint("org_name", "org_type", name="org_uniq"),)
+    __table_args__ = (
+        UniqueConstraint("org_name", "org_type", "parent_org_id", name="org_uniq"),
+    )
 
 
 class Membership(Base):
@@ -408,7 +411,9 @@ class ChamberMembership(Membership):
         role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         start_date (datetime): Date of the beginning of the membership
         end_date (datetime): Date of the end of the membership
-        condicion (str): Current status of their membership into the
+        condicion (str): Current status of their membership into the chamber
+        votes_in_election (int): Votes obtained in the election
+        dist_electoral (str): Electoral district
     """
 
     __tablename__ = "chamber_memberships"
@@ -418,6 +423,8 @@ class ChamberMembership(Membership):
         primary_key=True,
     )
     condicion: Mapped[str | None] = mapped_column(nullable=True)
+    votes_in_election: Mapped[int | None] = mapped_column(nullable=True)
+    dist_electoral: Mapped[str | None] = mapped_column(nullable=True)
 
     __mapper_args__ = {
         "polymorphic_identity": TypeOrganization.CHAMBER.value,
@@ -437,8 +444,6 @@ class PartyMembership(Membership):
         role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         start_date (datetime): Date of the beginning of the membership
         end_date (datetime): Date of the end of the membership
-        votes_in_election (int): Votes obtained in the election
-        dist_electoral (str): Electoral district
     """
 
     __tablename__ = "party_memberships"
@@ -447,8 +452,6 @@ class PartyMembership(Membership):
         ForeignKey("memberships.id"),
         primary_key=True,
     )
-    votes_in_election: Mapped[int | None] = mapped_column(nullable=True)
-    dist_electoral: Mapped[str | None] = mapped_column(nullable=True)
 
     __mapper_args__ = {
         "polymorphic_identity": TypeOrganization.PARTY.value,
@@ -456,6 +459,20 @@ class PartyMembership(Membership):
 
 
 class BancadaMembership(Membership):
+    """
+    Represents a person's membership in a party during a specific time period.
+
+    Attributes:
+        id (int): Unique identifier for the Membership
+        person_id (int): Identifier for the person
+        org_id (int): Identifier for the organization
+        leg_period (str): Legislative period.
+        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        start_date (datetime): Date of the beginning of the membership
+        end_date (datetime): Date of the end of the membership
+    """
+
     __tablename__ = "bancada_memberships"
 
     id: Mapped[int] = mapped_column(
@@ -469,6 +486,20 @@ class BancadaMembership(Membership):
 
 
 class CommitteeMembership(Membership):
+    """
+    Represents a person's membership in a party during a specific time period.
+
+    Attributes:
+        id (int): Unique identifier for the Membership
+        person_id (int): Identifier for the person
+        org_id (int): Identifier for the organization
+        leg_period (str): Legislative period.
+        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        start_date (datetime): Date of the beginning of the membership
+        end_date (datetime): Date of the end of the membership
+    """
+
     __tablename__ = "committee_memberships"
 
     id: Mapped[int] = mapped_column(
@@ -482,6 +513,20 @@ class CommitteeMembership(Membership):
 
 
 class AdminMembership(Membership):
+    """
+    Represents a person's membership in a party during a specific time period.
+
+    Attributes:
+        id (int): Unique identifier for the Membership
+        person_id (int): Identifier for the person
+        org_id (int): Identifier for the organization
+        leg_period (str): Legislative period.
+        org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        start_date (datetime): Date of the beginning of the membership
+        end_date (datetime): Date of the end of the membership
+    """
+
     __tablename__ = "admin_memberships"
 
     id: Mapped[int] = mapped_column(

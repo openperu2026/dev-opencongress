@@ -3,18 +3,18 @@ from pydantic import BaseModel, field_validator, ConfigDict, model_validator
 from backend import (
     VoteOption,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     AttendanceStatus,
-    RoleTypeBill,
-    BillStepType,
+    TypeRoleBill,
+    TypeBillStep,
     LegPeriod,
-    MotionStepType,
+    TypeMotionStep,
     Proponents,
     TypeOrganization,
     RoleOrganization,
     TypeCommittee,
     TypeAdmin,
-    MotionType,
+    TypeMotion,
     parse_leg_period,
     parse_role_bill,
     parse_proponent,
@@ -81,7 +81,7 @@ class VoteEvent(PrintableModel):
     bill_motion_id: str
     date: datetime
     result: VoteResult
-    majority_type: MajorityType | None
+    majority_type: TypeMajority | None
     votes: Optional[list[Vote]] = None
     attendance: Optional[list[Attendance]] = None
 
@@ -205,13 +205,13 @@ class BillCongresistas(PrintableModel):
 
     bill_id: str
     nombre: str
-    role_type: RoleTypeBill
+    role_type: TypeRoleBill
     web_page: str | None = None
 
     @field_validator("role_type", mode="before")
     @classmethod
     def validate_role_type(cls, v):
-        if isinstance(v, RoleTypeBill):
+        if isinstance(v, TypeRoleBill):
             return v
         return parse_role_bill(v)
 
@@ -244,7 +244,7 @@ class BillStep(PrintableModel):
     Attributes:
         bill_id (str): The identifier of the bill associated with this step.
         step_id (int): A unique identifier for each step record.
-        step_type (BillStepType): Type of the step related to the bill
+        step_type (TypeBillStep): Type of the step related to the bill
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (str): Id of the vote.
         step_date (datetime): The date and time when the step occured.
@@ -253,7 +253,7 @@ class BillStep(PrintableModel):
 
     bill_id: str
     step_id: int
-    step_type: BillStepType
+    step_type: TypeBillStep
     vote_step: bool
     vote_event_id: str | None = None
     step_date: datetime
@@ -302,7 +302,7 @@ class Motion(PrintableModel):
 
     # Attributes that fit in in Popolo structure
     id: str
-    motion_type: MotionType
+    motion_type: TypeMotion
     summary_congreso: str
     observations: str | None
     status: str
@@ -316,7 +316,7 @@ class Motion(PrintableModel):
     @field_validator("motion_type", mode="before")
     @classmethod
     def validate_motion_type(cls, v):
-        if isinstance(v, MotionType):
+        if isinstance(v, TypeMotion):
             return v
         return parse_motion_type(v)
 
@@ -335,13 +335,13 @@ class MotionCongresistas(PrintableModel):
 
     motion_id: str
     nombre: str
-    role_type: RoleTypeBill
+    role_type: TypeRoleBill
     web_page: str | None = None
 
     @field_validator("role_type", mode="before")
     @classmethod
     def validate_role_type(cls, v):
-        if isinstance(v, RoleTypeBill):
+        if isinstance(v, TypeRoleBill):
             return v
         return parse_role_bill(v)
 
@@ -374,7 +374,7 @@ class MotionStep(PrintableModel):
     Attributes:
         motion_id (str): The identifier of the motion associated with this step.
         step_id (int): A unique identifier for each step record.
-        step_type (MotionStepType): Type of the step related to the motion
+        step_type (TypeMotionStep): Type of the step related to the motion
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (int): Id of the vote.
         step_date (datetime): The date and time when the step occured.
@@ -383,7 +383,7 @@ class MotionStep(PrintableModel):
 
     motion_id: str
     step_id: int
-    step_type: MotionStepType
+    step_type: TypeMotionStep
     vote_step: bool
     vote_event_id: str | None = None
     step_date: datetime
