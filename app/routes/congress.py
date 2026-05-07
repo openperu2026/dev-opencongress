@@ -2,7 +2,7 @@ from types import SimpleNamespace
 
 from flask import Blueprint, render_template, request
 from sqlalchemy import select, text
-from backend.database.models import Bill, Congresista
+from backend.database.models import Bill
 from .processed_session import SessionProcessed
 
 congress_bp = Blueprint("congress", __name__, template_folder="../templates")
@@ -37,10 +37,14 @@ def index():
 @congress_bp.route("/congress/<congresista_id>")
 def congress_detail(congresista_id):
     with SessionProcessed() as db:
-        row = db.execute(
-            text("SELECT * FROM congresistas WHERE id = :id"),
-            {"id": congresista_id},
-        ).mappings().first()
+        row = (
+            db.execute(
+                text("SELECT * FROM congresistas WHERE id = :id"),
+                {"id": congresista_id},
+            )
+            .mappings()
+            .first()
+        )
 
         congresista = (
             SimpleNamespace(**row, full_name=row["nombre"]) if row is not None else None
