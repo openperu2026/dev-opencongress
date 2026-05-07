@@ -25,7 +25,7 @@ from backend import (
     TypeCommittee,
     MotionType,
 )
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 
 Base = declarative_base()
 
@@ -284,34 +284,28 @@ class Congresista(Base):
     Represents a member of the peruvian parliament
 
     Attributes:
-        id (str): Unique identifier for the person.
-        nombre (str): Name of the person.
-        leg_period (str): Legislative period.
-        party_name (str): Name of the party.
-        current_bancada (str): Name of the bancada.
-        votes_in_election (int): Number of votes obtain in elections
-        dist_electoral (str): Electoral district.
-        condicion (str): Condition of the congressperson, e.g., 'active', 'inactive'.
-        website (str): Official website of the congressperson.
+        id (int): Unique identifier for the person.
+        full_name (str): Full name of the person.
+        first_name (str): First name of the person.
+        last_name (str): Last name of the person.
+        dni (str): DNI (Documento Nacional de Identidad) of the person.
+        gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
+        website (str): Official website of the congressperson.
     """
 
     __tablename__ = "congresistas"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    nombre = Column(String, nullable=False)
-    leg_period = Column(Enum(LegPeriod, name="leg_period"), nullable=False)
-    party_name = Column(String, nullable=False)
-    current_bancada = Column(String, nullable=False)
-    votes_in_election = Column(Integer, nullable=False)
-    dist_electoral = Column(String, nullable=True)
-    condicion = Column(String, nullable=False)
-    website = Column(String, nullable=False)
-    photo_url = Column(String, nullable=False)
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    full_name: Mapped[str] = mapped_column(nullable=False)
+    first_name: Mapped[str] = mapped_column(nullable=True)
+    last_name: Mapped[str] = mapped_column(nullable=True)
+    dni: Mapped[str] = mapped_column(nullable=True)
+    gender: Mapped[str] = mapped_column(nullable=True)
+    photo_url: Mapped[str] = mapped_column(nullable=False)
+    website: Mapped[str] = mapped_column(nullable=False)
 
-    __table_args__ = (
-        UniqueConstraint("nombre", "leg_period", name="congresista_uniq"),
-    )
+    __table_args__ = (UniqueConstraint("full_name", "dni", name="uq_congresista_id"),)
 
 
 class Bancada(Base):
@@ -536,3 +530,24 @@ class Ley(Base):
     id = Column(String, primary_key=True, nullable=False)
     title = Column(String, nullable=False)
     bill_id = Column(String, nullable=False)
+
+
+# Add near other bill models; adjust imports (Text, ForeignKey, Index, etc.)
+
+
+class BillText(Base):
+    """
+    Extracted normative body text from a bill PDF (anchor-based slice of OCR text).
+    One row per bill document (archivo_id aligns with bill_documents).
+    """
+
+    __tablename__ = "billtext"
+
+    archivo_id = Column(
+        Integer, ForeignKey("bill_documents.archivo_id"), primary_key=True
+    )
+    bill_id = Column(String, ForeignKey("bills.id"), nullable=False)
+    step_date = Column(DateTime, nullable=False)
+    seguimiento_id = Column(String, nullable=False)
+    text = Column(String, nullable=True)  # NULL if no anchor matched
+    __table_args__ = (Index("ix_billtext_bill_id", "bill_id"),)

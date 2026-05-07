@@ -1,14 +1,17 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="landing-container">
-    <div class="content-container">
-        <h1 class="landing-title">OPEN CONGRESS</h1>
-        <p class="landing-subtitle">
-            Information portal about the Congress of the Republic of Peru
-        </p>
 
-        <div class="menu">
+
+<div class="page-container">
+    <div class="content-container">
+        <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="Open Congress logo">
+        <p class="page-subtitle">
+            Select what information about the peruvian congress you want to explore
+
+        </p>
+        
+        <div class="menu-landing">
             {% for item in menu_items %}
                 <div class="menu-card">
                     <a href="{{ item.url }}">
@@ -19,4 +22,5 @@
         </div>
     </div>
 </div>
+
 {% endblock %}

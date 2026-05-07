@@ -122,7 +122,7 @@ Tracks the procedural history of a bill.
 
 ### BillText
 
-Stores the content body of the bill in different steps of the legislative process.
+Normative body sliced from each bill PDF: from the first matched heading (e.g. “PROYECTO DE LEY”, “EXPOSICIÓN DE MOTIVOS”) to the first trailing marker (e.g. “CONSEJO DIRECTIVO DEL CONGRESO”), if any. Heading/marker search is uppercase-only, so original casing and accents are preserved. Stores the content body of the bill in different steps of the legislative process.
 
 | Column | Type | Key | Description |
 |---|---|---|---|
@@ -141,16 +141,14 @@ Represents a member of the peruvian parliament
 
 | Column | Type | Key | Description |
 |---|---|---|---|
-| congresista_id | Integer | PK | Auto-increment |
-| nombre | String | UQ | Full name |
-| leg_period | Enum(LegPeriod) | UQ | Legislative period |
-| party_name | String | | Political party name |
-| current_bancada | String | | Current parliamentary group name |
-| votes_in_election | Integer | | Votes received in election |
-| dist_electoral | String | | Electoral district |
-| condicion | String | | Status (e.g., active, inactive) |
-| website | String | | Official website URL |
+| id | Integer | PK | Auto-increment |
+| full_name | String |  | Full name of the person |
+| first_name | String |  | First name of the person |
+| last_name | String | | Last name of the person |
+| dni | String | | National Identification Number of the person |
+| gender | Integer | | Indicates the gender of the person |
 | photo_url | String | | Official photo URL |
+| website | String | | Official website URL |
 
 
 ### Ley
@@ -201,7 +199,7 @@ Junction table linking motions to congresistas. Composite PK on `(motion_id, per
 | Column | Type | Key | Description |
 |---|---|---|---|
 | motion_id | String | PK, FK → motions.motion_id | |
-| person_id | Integer | PK, FK → congresistas.congresista_id | |
+| person_id | Integer | PK, FK → congresistas.id | |
 | role_type | Enum(RoleTypeBill) | | Role: author, coauthor, adherente, etc. |
 
 

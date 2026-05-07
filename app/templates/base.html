@@ -1,18 +1,50 @@
-<link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Open Congress</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
 </head>
 <body>
-    {# {% include "components/navbar.html" %} #}
+    <nav class="navbar">
+        <a class="nav-brand" href="{{ url_for('landing.index') }}">
+            <img class="nav-isotipo" src="{{ url_for('static', filename='images/home2.svg') }}" alt="Open Congress">
+        </a>
+
+
+        
+        <!-- Hamburger -->
+        <a href="#menu" class="menu-toggle">☰</a>
+
+        <!--<label for="menu-toggle" class="menu-toggle">Menu</label>-->
+
+         <ul class="nav-links" id="menu">
+            <li class="menu-close">
+            <a href="#">X</a>
+            </li>
+
+            <li><a href="#about">About</a></li>
+            <li><a href="{{ url_for('bills.index') }}">Bills</a></li>
+            <li><a href="/congress">Congressmen</a></li>
+            <li><a href="#data">Data</a></li>
+            <li><a href="#data">Contact</a></li>
+
+         </ul>
+    </nav>
 
     <main>
         {% block content %}{% endblock %}
     </main>
+
+    <footer class="footer">
+        <div class="container footer-row">
+            <ul class="footer-links">
+                <li><a href="#">About</a></li>
+                <li><a href="#">Terms of Service</a></li>
+                <li><a href="#">Privacy</a></li>
+                <li><a href="#">Contact</a></li>
+            </ul>
+        </div>
+    </footer>
 </body>
 </html>

@@ -178,6 +178,8 @@ Skip loading documents during processing
 uv run python -m backend --scrape --no-documents
 ```
 
+With documents enabled, bill PDFs fill `bill_documents`, and the heading-based slice per file is stored in `billtext` (see `docs/data-model.md`).
+
 ### Processing limits
 
 Limit the number of raw rows processed (useful for debugging)

@@ -129,17 +129,14 @@ def test_membership_date_validation():
 
 def test_congresista_creation():
     congresista = Congresista(
-        nombre="Juan Pérez",
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        party_name="Partido X",
-        current_bancada="Bancada X",
-        votes_in_election=25000,
-        dist_electoral="Lima",
-        condicion="Activo",
-        website="http://congreso.gob.pe/juanperez",
-        photo_url="http://congreso.gob.pe/juanperez/foto",
+        full_name="Ana Maria Torres Torres",
+        first_name="Ana Maria",
+        last_name="Torres Torres",
+        dni="12345678",
+        photo_url="https://example.com/photo",
+        website="https://example.com",
     )
-    assert congresista.nombre == "Juan Pérez"
+    assert congresista.full_name == "Ana Maria Torres Torres"
 
 
 def test_organization_creation():

@@ -44,7 +44,7 @@ def normalize_party_name(name: str) -> str:
     return name
 
 
-def gen_congresistas_df(session: Session) -> None:
+def gen_congresistas_df(session: Session, save: bool = False) -> None:
     """
     Extracts additional information from congresistas that are not in their
     profile page, but in the bills responses.
@@ -59,11 +59,10 @@ def gen_congresistas_df(session: Session) -> None:
     )
     motions_congresistas = (
         session.query(RawMotion.congresistas)
-        .filter(RawBill.last_update)
+        .filter(RawMotion.last_update)
         .distinct()
         .all()
     )
-
     all_cong = []
 
     for (json_str,) in bills_congresistas + motions_congresistas:
@@ -75,14 +74,17 @@ def gen_congresistas_df(session: Session) -> None:
             continue
 
     unique_by_congresista = {
-        d["congresistaId"]: d for d in all_cong if "congresistaId" in d
+        d["congresistaId"]: d
+        for d in all_cong
+        if ("congresistaId" in d) and ("dni" in d)
     }
 
     df = pl.DataFrame(list(unique_by_congresista.values()))
 
-    df.write_json(directories.PROCESSED_DATA / "cong_info_2021_2026.json")
+    if save:
+        df.write_json(directories.PROCESSED_DATA / "cong_info_2021_2026.json")
 
-    return None
+    return df
 
 
 def get_current_leg_year(timestamp: str) -> LegislativeYear:

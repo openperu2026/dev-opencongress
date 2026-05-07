@@ -61,19 +61,17 @@ def test_create_organization(session):
 
 def test_create_congresista(session):
     congresista = Congresista(
-        nombre="Ana Torres",
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        party_name="Partido 1",
-        current_bancada="Bancada 1",
-        votes_in_election=25000,
-        dist_electoral="Lima",
-        condicion="Activo",
-        website="https://example.com",
+        full_name="Ana Maria Torres Torres",
+        first_name="Ana Maria",
+        last_name="Torres Torres",
+        dni="12345678",
         photo_url="https://example.com/photo",
+        website="https://example.com",
     )
     session.add(congresista)
     session.commit()
-    assert congresista.nombre == "Ana Torres"
+    assert congresista.first_name == "Ana Maria"
+    assert congresista.dni == "12345678"
 
 
 def test_create_bill(session):
