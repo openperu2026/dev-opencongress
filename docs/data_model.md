@@ -285,7 +285,7 @@ Tracks the procedural history of a motion.
 
 ### Organization
 
-Represents legislative organizations: committees, bancadas, parties, chambers and administratives (Junta de Portavoces, Consejo Directivo, Mesa Directiva, Comisión Permanente). Uniqueness on `(org_name, org_type)`.
+Represents legislative organizations: committees, bancadas, parties, chambers and administratives (Junta de Portavoces, Consejo Directivo, Mesa Directiva, Comisión Permanente). Uniqueness on `(org_name, org_type, parent_org_id)`.
 
 | Column | Type | Key | Description |
 |---|---|---|---|
@@ -294,7 +294,7 @@ Represents legislative organizations: committees, bancadas, parties, chambers an
 | org_type | String | UQ | Organization type |
 | org_subtype | String | | Organization subtype, if applicable |
 | org_link | String | | Website URL |
-| parent_org_id | String | | Unique identification of the organization's parent |
+| parent_org_id | String | UQ | Unique identification of the organization's parent |
 | date_founding | String | | Date of establishment of the organization if applicable |
 | date_dissolution | String | | Date of dissolution of the organization if applicable |
 
