@@ -111,7 +111,7 @@ class RawMotionDocumentScraper:
                 logger.success(f"Successfully extracted text from {url}")
 
                 file_name = self._build_filename(motion_id, step_id, file_id)
-                dest_path = directories.BILL_DOCUMENTS / file_name
+                dest_path = directories.MOTION_DOCUMENTS / file_name
 
                 if download_local:
                     self._download_to_path(url, dest_path)
@@ -186,7 +186,7 @@ class RawMotionDocumentScraper:
                 session.add_all(self.pages)
                 session.commit()
                 logger.success(
-                    f"Added {len(self.pages)} documents to Raw Bill Documents table"
+                    f"Added {len(self.pages)} documents to Raw Motion Documents table"
                 )
                 return True
 
