@@ -228,6 +228,22 @@ Tracks a person's role in an organization during a time period.
 | start_date | DateTime | | Start of membership |
 | end_date | DateTime | | End of membership |
 
+### Membership Polymorphism
+
+Memberships use SQLAlchemy joined-table inheritance. The `memberships` table stores the fields shared by every membership record, and each specialized membership table stores only the fields that are specific to that organization type. The `membership_type` column is the polymorphic discriminator configured with `polymorphic_on`.
+
+| membership_type | ORM class | Table |
+|---|---|---|
+| Bancada | BancadaMembership | bancada_memberships |
+| Partido | PartyMembership | party_memberships |
+| Cámara | ChamberMembership | chamber_memberships |
+| Comisión | CommitteeMembership | committee_memberships |
+| Administrativo | AdminMembership | admin_memberships |
+
+Each subtype table uses the same `id` as the base row through a primary-key foreign key to `memberships.id`. In practice, inserting a `BancadaMembership` creates one row in `memberships` and one row in `bancada_memberships` with the same identifier. `ChamberMembership` is currently the only subtype with extra columns: `condicion`, `votes_in_election`, and `dist_electoral`.
+
+The processing layer calls `upsert_membership()`, which maps the normalized `membership_type` value to the correct ORM subclass before inserting or updating the record. Querying the base `Membership` model can return polymorphic ORM instances, while querying a subtype such as `CommitteeMembership` restricts results to that subtype.
+
 ### Motion
 
 Represents a motion (moción).
