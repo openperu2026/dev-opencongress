@@ -9,7 +9,6 @@ RUN pip install --no-cache-dir \
     "loguru>=0.7.3",
 
 COPY backend /app/backend
-COPY db /app/db
 COPY data/raw/OpenPeruRaw.db /app/data/raw/OpenPeruRaw.db
 
 ENV SQLITE_PATH=/app/data/raw/OpenPeruRaw.db

@@ -122,8 +122,9 @@ Only the person publishing the shared seed image needs the local
 Build and push the image:
 
 ```bash
-docker build \
-  -f db/RawMigration.Dockerfile \
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -f backend/database/migration/migration.Dockerfile \
   -t cesarnunezh/opencongress-raw-migration:latest \
   .
 
