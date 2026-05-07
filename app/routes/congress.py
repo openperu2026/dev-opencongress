@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from flask import Blueprint, render_template, request
 from sqlalchemy import select, text
 from backend.database.models import Bill, Congresista
@@ -13,10 +15,21 @@ def index():
 
     if q:
         with SessionProcessed() as db:
-            stmt = (
-                select(Congresista).where(Congresista.nombre.ilike(f"%{q}%")).limit(50)
+            rows = db.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM congresistas
+                    WHERE lower(nombre) LIKE lower(:q)
+                    LIMIT 50
+                    """
+                ),
+                {"q": f"%{q}%"},
+            ).mappings()
+            congresistas = (
+                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
             )
-            congresistas = db.execute(stmt).scalars().all()
+            congresistas = list(congresistas)
 
     return render_template("congress/search.html", q=q, congresistas=congresistas)
 
@@ -24,7 +37,14 @@ def index():
 @congress_bp.route("/congress/<congresista_id>")
 def congress_detail(congresista_id):
     with SessionProcessed() as db:
-        congresista = db.get(Congresista, congresista_id)
+        row = db.execute(
+            text("SELECT * FROM congresistas WHERE id = :id"),
+            {"id": congresista_id},
+        ).mappings().first()
+
+        congresista = (
+            SimpleNamespace(**row, full_name=row["nombre"]) if row is not None else None
+        )
         if not congresista:
             return "Not Found", 404
 

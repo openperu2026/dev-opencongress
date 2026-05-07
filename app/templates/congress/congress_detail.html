@@ -3,14 +3,14 @@
 {% block content %}
 <div class="congress-detail-page">
     <section class="congress-profile">
-        <h1>{{ congresista.nombre }}</h1>
+        <h1>{{ congresista.full_name }}</h1>
 
         <div class="congress-profile-summary">
             <div class="congress-photo-wrap">
                 <img
                     class="congress-photo"
                     src="{{ congresista.photo_url.replace('https://www.congreso.gob.pe', 'https://www3.congreso.gob.pe') }}"
-                    alt="Photo of {{ congresista.nombre }}"
+                    alt="Photo of {{ congresista.full_name }}"
                 >
             </div>
 
