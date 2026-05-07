@@ -3,41 +3,36 @@
 {% block content %}
 <div class="congress-detail-page">
     <section class="congress-profile">
-        <h1>{{ congresista.nombre }}</h1>
+        <h1>{{ congresista.full_name }}</h1>
 
         <div class="congress-profile-summary">
             <div class="congress-photo-wrap">
                 <img
                     class="congress-photo"
-                    src="{{ congresista.photo_url }}"
-                    alt="Photo of {{ congresista.nombre }}"
+                    src="{{ congresista.photo_url.replace('https://www.congreso.gob.pe', 'https://www3.congreso.gob.pe') }}"
+                    alt="Photo of {{ congresista.full_name }}"
                 >
             </div>
 
             <dl class="congress-info">
                 <div>
-                    <dt>Region</dt>
-                    <dd>{{ congresista.dist_electoral or "Not available" }}</dd>
+                    <dt>Region: {{ congresista.dist_electoral or "Not available" }} </dt>
                 </div>
                 <div>
-                    <dt>Party</dt>
-                    <dd>{{ congresista.party_name }}</dd>
+                    <dt>Party: {{ congresista.party_name }}</dt>
+                    <dd></dd>
                 </div>
                 <div>
-                    <dt>Bancada</dt>
-                    <dd>{{ congresista.current_bancada }}</dd>
+                    <dt>Bancada: {{ congresista.current_bancada }}</dt>
+                    <dd></dd>
                 </div>
                 <div>
-                    <dt>Status</dt>
-                    <dd>{{ congresista.condicion }}</dd>
+                    <dt>Status: {{ congresista.condicion }}</dt>
+                    <dd></dd>
                 </div>
                 <div>
-                    <dt>Legislative Period</dt>
-                    <dd>{{ congresista.leg_period }}</dd>
-                </div>
-                <div>
-                    <dt>Election Votes</dt>
-                    <dd>{{ "{:,}".format(congresista.votes_in_election) }}</dd>
+                    <dt>Election Votes: {{ "{:,}".format(congresista.votes_in_election) }}</dt>
+                    <dd></dd>
                 </div>
             </dl>
         </div>

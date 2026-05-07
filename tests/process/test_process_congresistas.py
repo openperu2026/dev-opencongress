@@ -83,7 +83,7 @@ def test_process_profile_content_parses_fields_and_votes_int(
     assert cong.photo_url == "https://www.congreso.gob.pe/FotosCongresista/juan.jpg"
     assert [org.org_name for org in orgs] == ["Accion Popular", "Cámara de Diputados"]
     assert memberships[0].org_name == "Accion Popular"
-    assert memberships[0].votes_in_election == 12345
+    assert memberships[1].votes_in_election == 12345
     assert memberships[1].org_name == "Cámara de Diputados"
 
 

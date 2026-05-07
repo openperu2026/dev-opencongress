@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import backend.process.motions as mod
-from backend import MotionStepType, RoleTypeBill
+from backend import TypeMotionStep, TypeRoleBill
 
 
 def _raw_motion(
@@ -85,9 +85,9 @@ def test_process_motion_with_firmantes_sets_author_and_cong_list():
     assert len(congs) == 2
     assert congs[0].motion_id == "MO_999"
     assert congs[0].nombre == "Juan Perez"
-    assert congs[0].role_type == RoleTypeBill.AUTHOR
+    assert congs[0].role_type == TypeRoleBill.AUTHOR
     assert congs[1].nombre == "Maria Lopez"
-    assert congs[1].role_type == RoleTypeBill.COAUTHOR
+    assert congs[1].role_type == TypeRoleBill.COAUTHOR
 
 
 def test_process_motion_without_firmantes_sets_author_none_and_empty_cong_list():
@@ -162,17 +162,17 @@ def test_process_motion_steps_vote_detection_and_vote_id_increment():
     assert len(out) == 3
     assert out[0].step_id == 123
     assert out[0].motion_id == "2021_777"
-    assert out[0].step_type == MotionStepType.ETAPA_EN_COMISION
+    assert out[0].step_type == TypeMotionStep.ETAPA_EN_COMISION
     assert out[0].vote_step is False
     assert out[0].vote_event_id is None
 
     assert out[1].step_id == 234
-    assert out[1].step_type == MotionStepType.VOTACION_O_DECISION
+    assert out[1].step_type == TypeMotionStep.VOTACION_O_DECISION
     assert out[1].vote_step is True
     assert out[1].vote_event_id == "M_2021_777_1"
 
     assert out[2].step_id == 345
-    assert out[2].step_type == MotionStepType.VOTACION_O_DECISION
+    assert out[2].step_type == TypeMotionStep.VOTACION_O_DECISION
     assert out[2].vote_step is True
     assert out[2].vote_event_id == "M_2021_777_2"
 

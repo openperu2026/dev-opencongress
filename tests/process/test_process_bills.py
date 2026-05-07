@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import backend.process.bills as mod
-from backend import BillStepType, RoleTypeBill
+from backend import TypeRoleBill, TypeBillStep
 
 
 def _raw_bill(
@@ -93,9 +93,9 @@ def test_process_bill_with_firmantes_sets_author_and_cong_list():
     assert len(congs) == 2
     assert congs[0].bill_id == "PL_999"
     assert congs[0].nombre == "Juan Perez"
-    assert congs[0].role_type == RoleTypeBill.AUTHOR
+    assert congs[0].role_type == TypeRoleBill.AUTHOR
     assert congs[1].nombre == "Maria Lopez"
-    assert congs[1].role_type == RoleTypeBill.COAUTHOR
+    assert congs[1].role_type == TypeRoleBill.COAUTHOR
 
 
 def test_process_bill_without_firmantes_sets_author_none_and_empty_cong_list():
@@ -165,13 +165,13 @@ def test_process_bill_steps_vote_detection_assigns_vote_event_id():
 
     assert len(out) == 2
     assert out[0].step_id == 1
-    assert out[0].step_type == BillStepType.EN_COMISION
+    assert out[0].step_type == TypeBillStep.EN_COMISION
     assert out[0].vote_step is False
     assert out[0].vote_event_id is None
     assert out[0].step_committees == []
 
     assert out[1].step_id == 2
-    assert out[1].step_type == BillStepType.VOTACION
+    assert out[1].step_type == TypeBillStep.VOTACION
     assert out[1].vote_step is True
     assert out[1].vote_event_id == "B_2021_777_1"
 

@@ -22,7 +22,7 @@
           <div class="timeline-content">
               <div class="timeline-type">{{ step.step_type }}</div>
             {% if step.vote_step and step.vote_event_id %}
-              <a href="/vote/{{ step.vote_event_id }}">View details</a>
+              <a href="/bills/{{ bill.id }}/vote/{{ step.vote_event_id }}">View details</a>
             {% endif %}
           </div>
         </div>
@@ -30,5 +30,10 @@
     {% endif %}
   </div>
 </div>
+
+<div class = mock_votes>
+  <a href="/bills/{{ bill.id }}/mock_votes">View details</a>
+</div>
+
 {% endblock %}
 

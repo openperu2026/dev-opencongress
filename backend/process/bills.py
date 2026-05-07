@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from backend import BillStepType
+from backend import TypeBillStep
 from backend.core.parsers import classify_des_estado
 from backend.database.raw_models import RawBill, RawBillPage
 from backend.process.schema import (
@@ -112,7 +112,7 @@ def process_bill(
 
 def is_bill_approved(steps: list[BillStep], status: str | None = None) -> bool:
     if steps:
-        return any(step.step_type == BillStepType.PUBLICADO for step in steps)
+        return any(step.step_type == TypeBillStep.PUBLICADO for step in steps)
     return status == "Publicada en el Diario Oficial El Peruano"
 
 
@@ -138,7 +138,7 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
             date = datetime.fromisoformat(step.get("fecha"))
             details = step.get("detalle") or ""
             step_type = classify_des_estado(step.get("desEstado"), details)
-            vote_step = step_type == BillStepType.VOTACION
+            vote_step = step_type == TypeBillStep.VOTACION
             raw_committees = step.get("desComisiones")
             if isinstance(raw_committees, str):
                 step_committees = json.loads(raw_committees or "[]")
@@ -190,15 +190,15 @@ def _get_committee_dates(
                 },
             )
 
-            if step.step_type == BillStepType.EN_COMISION:
+            if step.step_type == TypeBillStep.EN_COMISION:
                 committee["assignment_dates"].append(step.step_date)
 
                 if committee["first_assignment_date"] is None:
                     committee["first_assignment_date"] = step.step_date
 
             elif step.step_type in {
-                BillStepType.DICTAMEN_O_ACUERDO_DE_COMISION,
-                BillStepType.EXONERACION_DE_DICTAMEN,
+                TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
+                TypeBillStep.EXONERACION_DE_DICTAMEN,
             }:
                 committee["decision_dates"].append(step.step_date)
                 committee["last_decision_date"] = step.step_date
@@ -235,10 +235,10 @@ def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | datetime]:
 
     for step in sorted_steps:
         match step.step_type:
-            case BillStepType.PRESENTADO:
+            case TypeBillStep.PRESENTADO:
                 final_dict["presentation_date"] = step.step_date
 
-            case BillStepType.EN_COMISION:
+            case TypeBillStep.EN_COMISION:
                 current_committee_round = {
                     "committee_assignment_date": step.step_date,
                     "committee_decision_date": None,
@@ -246,8 +246,8 @@ def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | datetime]:
                 final_dict["committee_rounds"].append(current_committee_round)
 
             case (
-                BillStepType.DICTAMEN_O_ACUERDO_DE_COMISION
-                | BillStepType.EXONERACION_DE_DICTAMEN
+                TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION
+                | TypeBillStep.EXONERACION_DE_DICTAMEN
             ):
                 if current_committee_round is None:
                     current_committee_round = {
@@ -258,19 +258,19 @@ def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | datetime]:
 
                 current_committee_round["committee_decision_date"] = step.step_date
 
-            case BillStepType.AGENDA_DEL_PLENO:
+            case TypeBillStep.AGENDA_DEL_PLENO:
                 final_dict["plenary_agenda_dates"].append(step.step_date)
 
-            case BillStepType.DEBATE_EN_EL_PLENO:
+            case TypeBillStep.DEBATE_EN_EL_PLENO:
                 final_dict["plenary_debate_dates"].append(step.step_date)
 
-            case BillStepType.AGENDA_DE_LA_COMISION_PERMANENTE:
+            case TypeBillStep.AGENDA_DE_LA_COMISION_PERMANENTE:
                 final_dict["permanent_commission_agenda_dates"].append(step.step_date)
 
-            case BillStepType.DEBATE_EN_LA_COMISION_PERMANENTE:
+            case TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE:
                 final_dict["permanent_commission_debate_dates"].append(step.step_date)
 
-            case BillStepType.VOTACION:
+            case TypeBillStep.VOTACION:
                 vote = {
                     "vote_date": step.step_date,
                     "vote_event_id": step.vote_event_id,
