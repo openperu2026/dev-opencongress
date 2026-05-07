@@ -14,14 +14,14 @@ from backend.process.schema import (
     Membership,
 )
 from backend import (
-    RoleTypeBill,
+    TypeRoleBill,
     Proponents,
-    BillStepType,
+    TypeBillStep,
     LegPeriod,
     TypeOrganization,
     RoleOrganization,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     TypeCommittee,
 )
 
@@ -58,7 +58,7 @@ def sample_vote_event(sample_votes, sample_attendance):
         bill_motion_id="123",
         date=datetime.now(),
         result=VoteResult.APROBADO,
-        majority_type=MajorityType.SIMPLE,
+        majority_type=TypeMajority.SIMPLE,
         votes=sample_votes,
         attendance=sample_attendance,
     )
@@ -150,16 +150,16 @@ def test_bill_congresistas_creation():
         bill_id="b001",
         nombre="Juan Perez",
         leg_period=LegPeriod.PERIODO_2021_2026,
-        role_type=RoleTypeBill.ADHERENTE,
+        role_type=TypeRoleBill.ADHERENTE,
     )
-    assert relation.role_type == RoleTypeBill.ADHERENTE
+    assert relation.role_type == TypeRoleBill.ADHERENTE
 
 
 def test_bill_step_creation():
     step = BillStep(
         bill_id="b001",
         step_id=123,
-        step_type=BillStepType.VOTACION,
+        step_type=TypeBillStep.VOTACION,
         vote_step=True,
         vote_event_id=None,
         step_date=datetime.now(),

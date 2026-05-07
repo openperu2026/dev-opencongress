@@ -9,7 +9,7 @@ from backend.process.schema import (
     MotionDocument,
 )
 from backend.core.parsers import classify_motion_des_estado
-from backend.core.enums import MotionStepType
+from backend.core.enums import TypeMotionStep
 from backend.process.utils import create_vote_ids
 
 VOTE_PATTERN = re.compile(
@@ -111,7 +111,7 @@ def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep] | None:
             status = classify_motion_des_estado(
                 step.get("desEstadoMocion"), details
             ).value
-            vote_step = status == MotionStepType.VOTACION_O_DECISION.value
+            vote_step = status == TypeMotionStep.VOTACION_O_DECISION.value
 
             files = step.get("adjuntos") or []
             file_ids = [

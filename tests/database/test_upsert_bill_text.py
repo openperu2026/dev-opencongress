@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from backend.database.crud.pipeline_bills import upsert_bill_text
 from backend.database.models import Base, Bill, BillStep, BillText, Organization
-from backend import BillStepType, Proponents, TypeOrganization
+from backend import TypeBillStep, Proponents, TypeOrganization
 
 
 @pytest.fixture()
@@ -50,7 +50,7 @@ def _minimal_bill_and_step(db, bill_id: str, step_id: int):
             bill_id=bill_id,
             vote_step=False,
             vote_event_id=None,
-            step_type=BillStepType.VOTACION.value,
+            step_type=TypeBillStep.VOTACION.value,
             step_date=datetime(2024, 1, 2),
             step_detail="d",
         )
