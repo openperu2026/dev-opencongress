@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import func, tuple_
+from sqlalchemy import func, tuple_, select
 from sqlalchemy.orm import Session
 from datetime import datetime
 from dataclasses import dataclass
@@ -30,23 +30,39 @@ def _normalize_leg_year(leg_year) -> str:
 
 
 def find_congresista(
-    db: Session, name: str, leg_period, website: str | None = None
+    db: Session, name: str, website: str | None = None
 ) -> db_models.Congresista | None:
+    """
+    Find a congressperson by website or full name.
+
+    The function first searches by website when a website is provided, since it is
+    expected to be a more stable identifier than the person's name. If no match is
+    found by website, or if no website is provided, it falls back to searching by
+    full name.
+
+    Args:
+        db (Session): Active SQLAlchemy database session.
+        name (str): Full name of the congressperson to search for.
+        website (str | None, optional): Congressperson website URL. Defaults to None.
+
+    Returns:
+        db_models.Congresista | None: The matching congressperson if found;
+        otherwise, None.
+    """
     if website:
-        by_web = (
-            db.query(db_models.Congresista)
-            .filter(db_models.Congresista.website == website)
-            .first()
+        by_web = db.scalar(
+            select(db_models.Congresista).where(
+                db_models.Congresista.website == website
+            )
         )
         if by_web is not None:
             return by_web
-    return (
-        db.query(db_models.Congresista)
-        .filter(
-            db_models.Congresista.nombre == name,
-            db_models.Congresista.leg_period == leg_period,
+
+    # TODO: implement a Fuzzy Match. .filter(func.jarowinkler(User.name, 'Jerry') > 0.85) --> with PostgreSQL and pg_similarity extension
+    return db.scalar(
+        select(db_models.Congresista).where(
+            db_models.Congresista.full_name == name,
         )
-        .first()
     )
 
 
@@ -67,7 +83,7 @@ def find_organization(
 def upsert_congresista(
     db: Session, schema: schema.Congresista
 ) -> db_models.Congresista:
-    existing = find_congresista(db, schema.nombre, schema.leg_period, schema.website)
+    existing = find_congresista(db, schema.full_name, schema.website)
     payload = schema.model_dump()
 
     if existing is None:

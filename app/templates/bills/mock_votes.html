@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bill-header">
+  <h1>Title: {{ bill.title }}</h1>
+  <div class="bill-meta">
+    {% if latest_step %}
+        <p><strong>Step:</strong> {{ latest_step.step_type }}</p>
+    {% endif %}
+    <p><strong>Status:</strong> {{ bill.status }}</p>
+  </div>
+</div>
+
+<div class="vote-results">
+  <h2>Voting Results</h2>
+  
+  <div class="vote-summary">
+    <table class="vote-table">
+      <thead>
+        <tr>
+          <th>IN FAVOR</th>
+          <th>AGAINST</th>
+          <th>ABST</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="vote-count in-favor">{{ vote_counts.get('yes', 0) }}</td>
+          <td class="vote-count against">{{ vote_counts.get('no', 0) }}</td>
+          <td class="vote-count abst">{{ vote_counts.get('abstain', 0) }}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="seats-wrapper">
+  <svg id="seatsSvg" width="800" height="300" viewBox="0 0 800 300"></svg>
+  <div id="seatTooltip" class="seat-tooltip" role="tooltip" ></div>
+</div>
+
+<script>
+(function(){
+  const seats = {{ seats | tojson}} || [];
+  if (seats.length === 0) return;
+  
+  const svg = document.getElementById('seatsSvg');
+  const tooltip = document.getElementById('seatTooltip');
+  const wrapper = document.querySelector('.seats-wrapper');
+  
+  svg.setAttribute('viewBox', '0 0 800 300');
+  svg.setAttribute('height', 300);
+  
+  // Draw circles
+  
+  svg.innerHTML = seats.map(s => {
+    return `<circle cx="${s.x}" cy="${s.y}" r="${s.r}" fill="${s.color}" data-label="${s.label || ''}"></circle>`;
+  }).join('');
+  
+  // Tooltip on hover
+  document.querySelectorAll('circle').forEach((circle) => {
+    circle.addEventListener('mousemove', function(e) {
+      if (!circle.dataset.label) return;
+      tooltip.style.display = 'block';
+      tooltip.setAttribute('aria-hidden', 'false');
+      tooltip.textContent = circle.dataset.label;
+      
+      const wrapperRect = wrapper.getBoundingClientRect();
+      const tooltipWidth = tooltip.offsetWidth || 120;
+      const tooltipHeight = tooltip.offsetHeight || 28;
+      let tx = e.clientX - wrapperRect.left + 12;
+      let ty = e.clientY - wrapperRect.top - tooltipHeight - 10;
+      
+      if (tx + tooltipWidth > wrapperRect.width - 8) {
+        tx = e.clientX - wrapperRect.left - tooltipWidth - 12;
+      }
+      if (ty < 8) {
+        ty = e.clientY - wrapperRect.top + 14;
+      }
+      
+      tooltip.style.left = Math.max(8, tx) + 'px';
+      tooltip.style.top = Math.max(8, ty) + 'px';
+    });
+  
+    circle.addEventListener('mouseleave', function() {
+      tooltip.style.display = 'none';
+      tooltip.setAttribute('aria-hidden', 'true');
+    });
+
+  });
+})();
+</script>
+
+{% endblock %}
