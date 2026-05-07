@@ -344,7 +344,8 @@ class Congresista(Base):
 
 class Organization(Base):
     """
-    Represents a legislative organization, such as a parliament or congress.
+    Represents a legislative organization, such as a chamber, political group (bancada),
+    party, committee or administrative organization.
 
     Attributes:
         org_id (int): Unique identification of the organization.
@@ -370,7 +371,9 @@ class Organization(Base):
     date_founding: Mapped[datetime | None] = mapped_column(nullable=True)
     date_dissolution: Mapped[datetime | None] = mapped_column(nullable=True)
 
-    __table_args__ = (UniqueConstraint("org_name", "org_type", name="org_uniq"),)
+    __table_args__ = (
+        UniqueConstraint("org_name", "org_type", "parent_org_id", name="org_uniq"),
+    )
 
 
 class Membership(Base):

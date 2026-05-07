@@ -18,11 +18,11 @@ from backend.database.models import (
     CommitteeMembership,
 )
 from backend import (
-    BillStepType,
+    TypeBillStep,
     RoleOrganization,
     VoteOption,
     AttendanceStatus,
-    RoleTypeBill,
+    TypeRoleBill,
     Proponents,
     LegPeriod,
     VoteResult,
@@ -127,13 +127,13 @@ def test_bill_step(session):
         step_id=1,
         vote_step=True,
         vote_event_id=None,
-        step_type=BillStepType.VOTACION.value,
+        step_type=TypeBillStep.VOTACION.value,
         step_date=datetime.now(),
         step_detail="Votación en pleno",
     )
     session.add(step)
     session.commit()
-    assert step.step_type == BillStepType.VOTACION
+    assert step.step_type == TypeBillStep.VOTACION
 
 
 def test_membership_validation(session):
@@ -171,11 +171,11 @@ def test_bill_congresistas(session):
         bill_id="B001",
         person_id=1,
         bancada_id=10,
-        role_type=RoleTypeBill.COAUTHOR.value,
+        role_type=TypeRoleBill.COAUTHOR.value,
     )
     session.add(relation)
     session.commit()
-    assert relation.role_type == RoleTypeBill.COAUTHOR
+    assert relation.role_type == TypeRoleBill.COAUTHOR
 
 
 def test_bill_organization(session):

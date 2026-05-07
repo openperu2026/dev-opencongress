@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 
-from backend.core.enums import MotionStepType
+from backend.core.enums import TypeMotionStep
 from backend.core.parsers import classify_motion_des_estado
 from backend.database.raw_models import RawMotion, RawMotionPage
 from backend.process.schema import (
@@ -100,9 +100,9 @@ def process_motion(
 
 def is_motion_approved(steps: list[MotionStep], status: str | None = None) -> bool:
     if steps:
-        return any(step.step_type == MotionStepType.PUBLICADO for step in steps)
+        return any(step.step_type == TypeMotionStep.PUBLICADO for step in steps)
     return (
-        classify_motion_des_estado(status, None) == MotionStepType.PUBLICADO
+        classify_motion_des_estado(status, None) == TypeMotionStep.PUBLICADO
         if status
         else False
     )
@@ -122,7 +122,7 @@ def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep]:
         date = _parse_datetime(step.get("fecSeguimiento"))
         details = step.get("detalle") or ""
         step_type = classify_motion_des_estado(step.get("desEstadoMocion"), details)
-        vote_step = step_type == MotionStepType.VOTACION_O_DECISION
+        vote_step = step_type == TypeMotionStep.VOTACION_O_DECISION
 
         final_steps.append(
             MotionStep(
@@ -150,14 +150,14 @@ def _get_motion_dates(
 
     for step in sorted(motion_steps, key=lambda item: item.step_date):
         if (
-            step.step_type == MotionStepType.PRESENTADO
+            step.step_type == TypeMotionStep.PRESENTADO
             and dates["presentation_date"] is None
         ):
             dates["presentation_date"] = step.step_date
 
         if step.step_type in {
-            MotionStepType.VOTACION_O_DECISION,
-            MotionStepType.PUBLICADO,
+            TypeMotionStep.VOTACION_O_DECISION,
+            TypeMotionStep.PUBLICADO,
         }:
             dates["final_chamber_decision_date"] = step.step_date
 

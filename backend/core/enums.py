@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class MajorityType(str, Enum):
+class TypeMajority(str, Enum):
     SIMPLE = "Simple"
     ABSOLUTA = "Absoluta"
     CALIFICADA = "Calificada"
@@ -27,7 +27,7 @@ class AttendanceStatus(str, Enum):
     SUSPENDIDO = "Suspendido"
 
 
-class MotionType(str, Enum):
+class TypeMotion(str, Enum):
     SALUDO = "Saludo"
     CENSURA_MESA = "Censura Mesa Directiva del Congreso"
     CENSURA_MINISTRO = "Censura al Consejo de Ministros"
@@ -44,7 +44,7 @@ class MotionType(str, Enum):
     OTRAS = "Otras"
 
 
-class MotionStepType(str, Enum):
+class TypeMotionStep(str, Enum):
     PRESENTADO = "Presentado"
     ADMISION = "Admisión a debate"
     ETAPA_EN_COMISION = "En Comisión"
@@ -71,7 +71,7 @@ class MotionStepType(str, Enum):
     SIN_CATEGORIA = "Sin categoría"
 
 
-class BillStepType(str, Enum):
+class TypeBillStep(str, Enum):
     PRESENTADO = "Presentado"
     EN_COMISION = "En Comisión"
     DICTAMEN_O_ACUERDO_DE_COMISION = "Dictamen o Acuerdo de Comisión"
@@ -96,7 +96,7 @@ class BillStepType(str, Enum):
     SIN_CATEGORIA = "Sin categoría"
 
 
-class RoleTypeBill(str, Enum):
+class TypeRoleBill(str, Enum):
     AUTHOR = "Autor"
     COAUTHOR = "Coautor"
     ADHERENTE = "Adherente"
