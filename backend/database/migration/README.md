@@ -124,6 +124,7 @@ Build and push the image:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
+  --push \
   -f backend/database/migration/migration.Dockerfile \
   -t cesarnunezh/opencongress-raw-migration:latest \
   .
