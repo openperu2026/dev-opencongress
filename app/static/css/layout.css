@@ -190,6 +190,81 @@ font-weight: bold;
 font-size: 16px;
 }
 
+/* votes page */
+.vote-results {
+    margin-top: 2rem;
+  }
+  
+.vote-summary {
+  border: 2px solid #999;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  padding: 1rem;
+}
+
+.vote-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.vote-table th {
+  background-color: transparent;
+  padding: 1rem;
+  text-align: center;
+  font-weight: bold;
+  border: none;
+}
+
+.vote-table td {
+  padding: 1.5rem;
+  text-align: center;
+  border: none;
+  background-color: transparent;
+}
+
+.vote-count {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.vote-count.in-favor {
+  color: #91c7b1;
+}
+
+.vote-count.against {
+  color: #cf294a;
+}
+
+.vote-count.abst {
+  color: #e3d081;
+}
+
+.seats-wrapper {
+  margin-top: 1.5rem;
+  position: relative;
+  text-align: center;
+  background-color: white;
+}
+
+.seat-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  font-size: 0.9rem;
+  display: none;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+svg#seatsSvg circle { cursor: default; }
+
+
+
 /*footer and menu hamurger*/
 
 
