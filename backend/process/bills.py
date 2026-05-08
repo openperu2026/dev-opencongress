@@ -10,7 +10,7 @@ from backend.process.schema import (
     BillDocument,
 )
 from backend.core.parsers import classify_des_estado
-from backend.core.enums import BillStepType
+from backend.core.enums import TypeBillStep
 from backend.process.utils import create_vote_ids
 
 VOTE_PATTERN = re.compile(
@@ -115,7 +115,7 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
             date = step.get("fecha")
             details = step.get("detalle") or ""
             status = classify_des_estado(step.get("desEstado"), details).value
-            vote_step = status == BillStepType.VOTACION.value
+            vote_step = status == TypeBillStep.VOTACION.value
 
             files = step.get("archivos") or []
             file_ids = [

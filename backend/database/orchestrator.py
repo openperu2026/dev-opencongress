@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Type, Callable
 
 from loguru import logger
@@ -39,7 +39,7 @@ from backend.process.bills import (
     process_bill_steps,
 )
 from backend.process.congresistas import (
-    process_memberships,
+    process_cong_memberships,
     process_profile_content,
     get_cong_data,
 )
@@ -50,11 +50,13 @@ from backend.process.motions import (
     process_motion_steps,
 )
 from backend.process.organizations import (
+    process_chambers,
     process_committee,
-    process_org,
-    process_org_membership,
+    process_admin_org,
 )
 from backend.process.leyes import process_leyes
+from backend.process.schema import Membership, Organization
+from backend.process.utils import get_current_leg_year
 from backend.scrapers.bancadas import RawBancadaScraper
 from backend.scrapers.bills import RawBillScraper
 from backend.scrapers.bills_documents import RawBillDocumentScraper
@@ -333,8 +335,9 @@ class OpenPeruOrchestrator:
         summary: dict[str, ProcessStats] = {}
 
         if process_others:
-            summary["organizations"] = self._process_organizations()
+            summary["organizations"] = self._process_organization_definitions()
             summary["congresistas"] = self._process_congresistas()
+            summary["admin_memberships"] = self._process_admin_memberships()
             summary["bancadas"] = self._process_bancadas()
         if process_bills:
             summary["bills"] = self._process_bills(
@@ -487,6 +490,62 @@ class OpenPeruOrchestrator:
     # -----------------------------
     # Processing internals
     # -----------------------------
+    def _membership_dates(self, membership: Membership) -> tuple[date, date]:
+        seed = membership.start_date or membership.time_stamp
+        leg_year = get_current_leg_year(seed)
+        derived_start = date(leg_year, 7, 28)
+        derived_end = date(leg_year + 1, 7, 28)
+
+        start = membership.start_date or derived_start
+        if isinstance(start, datetime):
+            start = start.date()
+
+        end = membership.end_date
+        if isinstance(end, datetime):
+            end = end.date()
+        if end is None or end < start:
+            end = derived_end
+
+        return start, end
+
+    def _upsert_organization_with_count(
+        self, db, org_schema: Organization
+    ) -> tuple[db_models.Organization, bool]:
+        pre = crud_core.find_organization(
+            db,
+            org_name=org_schema.org_name,
+            org_type=org_schema.org_type,
+        )
+        org = crud_core.upsert_organization(db, org_schema)
+        return org, pre is None
+
+    def _upsert_membership_schema(
+        self,
+        db,
+        *,
+        cong: db_models.Congresista,
+        org: db_models.Organization,
+        membership: Membership,
+    ) -> db_models.Membership:
+        start_date, end_date = self._membership_dates(membership)
+        extra_fields = {
+            "condicion": membership.condicion,
+            "votes_in_election": membership.votes_in_election,
+            "dist_electoral": membership.dist_electoral,
+        }
+        extra_fields = {k: v for k, v in extra_fields.items() if v is not None}
+        return crud_core.upsert_membership(
+            db=db,
+            person_id=cong.id,
+            org_id=org.org_id,
+            leg_period=membership.leg_period,
+            membership_type=org.org_type,
+            role=membership.role,
+            start_date=start_date,
+            end_date=end_date,
+            extra_fields=extra_fields,
+        )
+
     def _process_congresistas(self) -> ProcessStats:
         stats = ProcessStats()
         clean_inserted = 0
@@ -514,7 +573,9 @@ class OpenPeruOrchestrator:
                         raw_cong.processed = False
                         stats.skipped += 1
                         continue
-                    cong_schema = process_profile_content(raw_cong, dict_cong_data)
+                    cong_schema, org_schemas, profile_memberships = (
+                        process_profile_content(raw_cong, dict_cong_data)
+                    )
                     pre = crud_core.find_congresista(
                         db,
                         name=cong_schema.full_name,
@@ -526,26 +587,29 @@ class OpenPeruOrchestrator:
                     else:
                         clean_updated += 1
 
+                    for org_schema in org_schemas:
+                        self._upsert_organization_with_count(db, org_schema)
+
+                    memberships = profile_memberships
                     if raw_cong.memberships_content:
-                        memberships = process_memberships(raw_cong, cong_schema)
-                        for ms in memberships:
-                            org = crud_core.find_organization(
-                                db=db,
-                                org_name=ms.org_name,
-                                leg_period=ms.leg_period,
-                                leg_year=ms.start_date.year,
-                            )
-                            if org is None:
-                                stats.skipped += 1
-                                continue
-                            crud_core.upsert_membership(
-                                db=db,
-                                person_id=cong.id,
-                                org_id=org.org_id,
-                                role=ms.role,
-                                start_date=ms.start_date,
-                                end_date=ms.end_date,
-                            )
+                        memberships.extend(
+                            process_cong_memberships(raw_cong, cong_schema)
+                        )
+                    for ms in memberships:
+                        org = crud_core.find_organization(
+                            db=db,
+                            org_name=ms.org_name,
+                            org_type=ms.org_type,
+                        )
+                        if org is None:
+                            stats.skipped += 1
+                            continue
+                        self._upsert_membership_schema(
+                            db,
+                            cong=cong,
+                            org=org,
+                            membership=ms,
+                        )
 
                     raw_cong.processed = True
                     stats.processed += 1
@@ -562,11 +626,19 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_organizations(self) -> ProcessStats:
+    def _process_organization_definitions(self) -> ProcessStats:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.RawSession() as raw_db, self.DBSession() as db:
+            for org_schema in process_chambers():
+                _, inserted = self._upsert_organization_with_count(db, org_schema)
+                if inserted:
+                    clean_inserted += 1
+                else:
+                    clean_updated += 1
+
+            # Committees
             committees = (
                 raw_db.query(RawCommittee)
                 .filter(
@@ -584,19 +656,10 @@ class OpenPeruOrchestrator:
                         stats.skipped += 1
                         continue
                     for org_schema in process_committee(raw_comm):
-                        pre = (
-                            db.query(db_models.Organization)
-                            .filter(
-                                db_models.Organization.leg_period
-                                == org_schema.leg_period,
-                                db_models.Organization.leg_year == org_schema.leg_year,
-                                db_models.Organization.org_name == org_schema.org_name,
-                                db_models.Organization.org_type == org_schema.org_type,
-                            )
-                            .first()
+                        _, inserted = self._upsert_organization_with_count(
+                            db, org_schema
                         )
-                        org = crud_core.upsert_organization(db, org_schema)
-                        if pre is None:
+                        if inserted:
                             clean_inserted += 1
                         else:
                             clean_updated += 1
@@ -609,6 +672,8 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
+            # Administrative organization definitions. RawOrganization is marked
+            # processed only after its memberships are loaded.
             organizations = (
                 raw_db.query(RawOrganization)
                 .filter(
@@ -624,40 +689,12 @@ class OpenPeruOrchestrator:
                         raw_org.processed = False
                         stats.skipped += 1
                         continue
-                    org_schema = process_org(raw_org)
-                    pre = (
-                        db.query(db_models.Organization)
-                        .filter(
-                            db_models.Organization.leg_period == org_schema.leg_period,
-                            db_models.Organization.leg_year == org_schema.leg_year,
-                            db_models.Organization.org_name == org_schema.org_name,
-                            db_models.Organization.org_type == org_schema.org_type,
-                        )
-                        .first()
-                    )
-                    org = crud_core.upsert_organization(db, org_schema)
-                    if pre is None:
+                    org_schema, _ = process_admin_org(raw_org)
+                    _, inserted = self._upsert_organization_with_count(db, org_schema)
+                    if inserted:
                         clean_inserted += 1
                     else:
                         clean_updated += 1
-                    for ms in process_org_membership(raw_org, org_schema):
-                        cong = crud_core.find_congresista(
-                            db,
-                            name=ms.nombre,
-                            website=ms.web_page,
-                        )
-                        if cong is None:
-                            stats.skipped += 1
-                            continue
-                        crud_core.upsert_membership(
-                            db=db,
-                            person_id=cong.id,
-                            org_id=org.org_id,
-                            role=ms.role,
-                            start_date=ms.start_date,
-                            end_date=ms.end_date,
-                        )
-                    raw_org.processed = True
                     stats.processed += 1
                 except Exception as exc:
                     logger.exception(
@@ -669,7 +706,59 @@ class OpenPeruOrchestrator:
             db.commit()
             raw_db.commit()
         logger.info(
-            f"[organizations] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+            f"[organization_definitions] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+        )
+        return stats
+
+    def _process_admin_memberships(self) -> ProcessStats:
+        stats = ProcessStats()
+        with self.RawSession() as raw_db, self.DBSession() as db:
+            organizations = (
+                raw_db.query(RawOrganization)
+                .filter(
+                    RawOrganization.last_update.is_(True),
+                    RawOrganization.processed.is_(False),
+                )
+                .all()
+            )
+            for raw_org in organizations:
+                try:
+                    if raw_org.legislative_year not in range(2016, 2027):
+                        raw_org.processed = False
+                        stats.skipped += 1
+                        continue
+                    org_schema, membership_list = process_admin_org(raw_org)
+                    org, _ = self._upsert_organization_with_count(db, org_schema)
+                    missing = False
+                    for ms in membership_list:
+                        cong = crud_core.find_congresista(
+                            db,
+                            name=ms.cong_name,
+                            website=ms.website,
+                        )
+                        if cong is None:
+                            missing = True
+                            stats.skipped += 1
+                            continue
+                        self._upsert_membership_schema(
+                            db,
+                            cong=cong,
+                            org=org,
+                            membership=ms,
+                        )
+                    raw_org.processed = not missing
+                    stats.processed += 1
+                except Exception as exc:
+                    logger.exception(
+                        f"Error processing RawOrganization memberships id={raw_org.id}: {exc}"
+                    )
+                    db.rollback()
+                    stats.errors += 1
+
+            db.commit()
+            raw_db.commit()
+        logger.info(
+            f"[admin_memberships] raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
         )
         return stats
 
@@ -694,39 +783,37 @@ class OpenPeruOrchestrator:
                         stats.skipped += 1
                         continue
                     bancadas, memberships = process_bancada(raw_bancada)
-                    bancada_rows = [
-                        (bancada.leg_year, bancada.bancada_name) for bancada in bancadas
-                    ]
-                    bancadas_index, inserted_count, existing_count = (
-                        crud_core.upsert_bancadas_bulk(db, bancada_rows)
-                    )
-                    clean_inserted += inserted_count
-                    clean_updated += existing_count
-
-                    membership_rows: list[tuple[str, int, int]] = []
-                    for ms in memberships:
-                        leg_year_value = (
-                            ms.leg_year.value
-                            if hasattr(ms.leg_year, "value")
-                            else ms.leg_year
+                    org_index: dict[tuple[str, str], db_models.Organization] = {}
+                    for bancada in bancadas:
+                        org, inserted = self._upsert_organization_with_count(
+                            db, bancada
                         )
+                        org_index[(org.org_name.lower(), org.org_type)] = org
+                        if inserted:
+                            clean_inserted += 1
+                        else:
+                            clean_updated += 1
+
+                    missing = False
+                    for ms in memberships:
                         cong = crud_core.find_congresista(
                             db,
                             name=ms.cong_name,
                             website=ms.website,
                         )
-                        bancada = bancadas_index.get(
-                            (str(leg_year_value), ms.bancada_name.lower())
-                        )
-                        if cong is None or bancada is None:
+                        org = org_index.get((ms.org_name.lower(), ms.org_type.value))
+                        if cong is None or org is None:
+                            missing = True
                             stats.skipped += 1
                             continue
-                        membership_rows.append(
-                            (str(leg_year_value), cong.id, bancada.bancada_id)
+                        self._upsert_membership_schema(
+                            db,
+                            cong=cong,
+                            org=org,
+                            membership=ms,
                         )
-                    crud_core.upsert_bancada_memberships_bulk(db, membership_rows)
 
-                    raw_bancada.processed = True
+                    raw_bancada.processed = not missing
                     stats.processed += 1
                 except Exception as exc:
                     logger.exception(

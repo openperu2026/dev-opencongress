@@ -15,15 +15,14 @@ from backend.process.schema import (
     Membership,
 )
 from backend import (
-    RoleTypeBill,
+    TypeRoleBill,
     Proponents,
     Legislature,
-    LegislativeYear,
     LegPeriod,
     TypeOrganization,
     RoleOrganization,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     TypeCommittee,
 )
 
@@ -60,7 +59,7 @@ def sample_vote_event(sample_votes, sample_attendance):
         bill_motion_id="123",
         date=datetime.now(),
         result=VoteResult.APROBADO,
-        majority_type=MajorityType.SIMPLE,
+        majority_type=TypeMajority.SIMPLE,
         votes=sample_votes,
         attendance=sample_attendance,
     )
@@ -116,12 +115,12 @@ def test_bill_creation(sample_bill):
 def test_membership_date_validation():
     with pytest.raises(ValueError):
         Membership(
-            role=RoleOrganization.MIEMBRO,
-            nombre="Jaime",
-            leg_period=LegPeriod.PERIODO_2021_2026,
+            cong_name="Jaime",
             org_name="Committee",
-            org_type="Comision",
-            comm_type=TypeCommittee.COM_INVESTIGADORA,
+            org_type=TypeOrganization.COMMITTEE,
+            leg_period=LegPeriod.PERIODO_2021_2026,
+            role=RoleOrganization.MIEMBRO,
+            time_stamp=datetime.now(),
             start_date=datetime.now(),
             end_date=datetime.now() - timedelta(days=1),
         )
@@ -141,11 +140,9 @@ def test_congresista_creation():
 
 def test_organization_creation():
     org = Organization(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        leg_year=LegislativeYear.YEAR_2025_2026,
         org_name="Comisión de Justicia",
-        org_type=TypeOrganization.COMISON,
-        comm_type=TypeCommittee.COM_INVESTIGADORA,
+        org_type=TypeOrganization.COMMITTEE,
+        org_subtype=TypeCommittee.COM_INVESTIGADORA,
         org_link="http://congreso.gob.pe/comision_investigadora",
     )
     assert org.org_name == "Comisión de Justicia"
@@ -156,9 +153,9 @@ def test_bill_congresistas_creation():
         bill_id="b001",
         nombre="Juan Perez",
         leg_period=LegPeriod.PERIODO_2021_2026,
-        role_type=RoleTypeBill.ADHERENTE,
+        role_type=TypeRoleBill.ADHERENTE,
     )
-    assert relation.role_type == RoleTypeBill.ADHERENTE
+    assert relation.role_type == TypeRoleBill.ADHERENTE
 
 
 def test_bill_committees_creation():

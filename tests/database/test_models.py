@@ -15,21 +15,22 @@ from backend.database.models import (
     BillStep,
     Congresista,
     Organization,
-    Membership,
+    CommitteeMembership,
+)
+from backend import (
+    TypeBillStep,
+    RoleOrganization,
     VoteOption,
     AttendanceStatus,
-    RoleTypeBill,
+    TypeRoleBill,
     Proponents,
     LegPeriod,
     Legislature,
-    LegislativeYear,
-    TypeOrganization,
-    RoleOrganization,
-    TypeCommittee,
     VoteResult,
-    MajorityType,
+    TypeMajority,
+    TypeCommittee,
+    TypeOrganization,
 )
-from backend import BillStepType
 
 
 @pytest.fixture()
@@ -47,11 +48,9 @@ def session():
 
 def test_create_organization(session):
     org = Organization(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        leg_year=LegislativeYear.YEAR_2021_2022,
         org_name="Congreso del Perú",
-        org_type=TypeOrganization.COMISON,
-        comm_type=TypeCommittee.COM_ETICA,
+        org_type=TypeOrganization.COMMITTEE.value,
+        org_subtype=TypeCommittee.COM_ETICA.value,
         org_link="www.congreso.gob.pe/comision",
     )
     session.add(org)
@@ -102,7 +101,7 @@ def test_create_vote_event_and_vote(session):
         bill_motion_id="B001",
         date=datetime.now(),
         result=VoteResult.APROBADO,
-        majority_type=MajorityType.SIMPLE,
+        majority_type=TypeMajority.SIMPLE,
     )
     session.add(vote_event)
     vote = Vote(vote_event_id="VOT123", voter_id=1, option=VoteOption.SI, bancada_id=10)
@@ -124,21 +123,23 @@ def test_bill_step(session):
         bill_id="B001",
         vote_step=True,
         vote_event_id=None,
-        step_type=BillStepType.VOTACION,
+        step_type=TypeBillStep.VOTACION,
         step_date=datetime.now(),
         step_detail="Votación en pleno",
     )
     session.add(step)
     session.commit()
-    assert step.step_type == BillStepType.VOTACION
+    assert step.step_type == TypeBillStep.VOTACION
 
 
 def test_membership_validation(session):
-    membership = Membership(
+    membership = CommitteeMembership(
         id=1,
-        role=RoleOrganization.MIEMBRO,
         person_id=1,
         org_id=1,
+        leg_period=LegPeriod.PERIODO_2021_2026.value,
+        membership_type=TypeOrganization.COMMITTEE.value,
+        role=RoleOrganization.MIEMBRO.value,
         start_date=datetime.now() - timedelta(days=30),
         end_date=datetime.now(),
     )
@@ -163,20 +164,18 @@ def test_unique_vote_constraint(session):
 
 def test_bill_congresistas(session):
     relation = BillCongresistas(
-        bill_id="B001", person_id=1, role_type=RoleTypeBill.COAUTHOR
+        bill_id="B001", person_id=1, role_type=TypeRoleBill.COAUTHOR
     )
     session.add(relation)
     session.commit()
-    assert relation.role_type == RoleTypeBill.COAUTHOR
+    assert relation.role_type == TypeRoleBill.COAUTHOR
 
 
 def test_bill_committees(session):
     committee = Organization(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        leg_year=LegislativeYear.YEAR_2021_2022,
         org_name="Congreso del Perú",
-        org_type=TypeOrganization.COMISON,
-        comm_type=TypeCommittee.COM_ETICA,
+        org_type=TypeOrganization.COMMITTEE.value,
+        org_subtype=TypeCommittee.COM_ETICA.value,
         org_link="www.congreso.gob.pe/comision",
     )
     session.add(committee)

@@ -1,18 +1,19 @@
-from pydantic import BaseModel, field_validator, ConfigDict
+from typing_extensions import Self
+from pydantic import BaseModel, field_validator, ConfigDict, model_validator
 from backend import (
     VoteOption,
     VoteResult,
-    MajorityType,
+    TypeMajority,
     AttendanceStatus,
-    RoleTypeBill,
+    TypeRoleBill,
     LegPeriod,
     Legislature,
-    LegislativeYear,
     Proponents,
     TypeOrganization,
     RoleOrganization,
     TypeCommittee,
-    MotionType,
+    TypeAdmin,
+    TypeMotion,
     parse_leg_period,
     parse_legislature,
     parse_role_bill,
@@ -20,7 +21,7 @@ from backend import (
     parse_motion_type,
 )
 from typing import Optional
-from datetime import datetime
+from datetime import datetime, date
 
 
 class PrintableModel(BaseModel):
@@ -80,7 +81,7 @@ class VoteEvent(PrintableModel):
     bill_motion_id: str
     date: datetime
     result: VoteResult
-    majority_type: MajorityType | None
+    majority_type: TypeMajority | None
     votes: Optional[list[Vote]] = None
     attendance: Optional[list[Attendance]] = None
 
@@ -224,7 +225,7 @@ class BillCongresistas(PrintableModel):
     bill_id: str
     nombre: str
     leg_period: LegPeriod
-    role_type: RoleTypeBill
+    role_type: TypeRoleBill
     web_page: str | None = None
 
     @field_validator("leg_period", mode="before")
@@ -237,7 +238,7 @@ class BillCongresistas(PrintableModel):
     @field_validator("role_type", mode="before")
     @classmethod
     def validate_role_type(cls, v):
-        if isinstance(v, RoleTypeBill):
+        if isinstance(v, TypeRoleBill):
             return v
         return parse_role_bill(v)
 
@@ -331,7 +332,7 @@ class Motion(PrintableModel):
     leg_period: LegPeriod
     legislature: Legislature
     presentation_date: datetime
-    motion_type: MotionType
+    motion_type: TypeMotion
     summary: str
     observations: str | None
     complete_text: str | None
@@ -359,7 +360,7 @@ class Motion(PrintableModel):
     @field_validator("motion_type", mode="before")
     @classmethod
     def validate_motion_type(cls, v):
-        if isinstance(v, MotionType):
+        if isinstance(v, TypeMotion):
             return v
         return parse_motion_type(v)
 
@@ -380,7 +381,7 @@ class MotionCongresistas(PrintableModel):
     motion_id: str
     nombre: str
     leg_period: LegPeriod
-    role_type: RoleTypeBill
+    role_type: TypeRoleBill
     web_page: str | None = None
 
     @field_validator("leg_period", mode="before")
@@ -393,7 +394,7 @@ class MotionCongresistas(PrintableModel):
     @field_validator("role_type", mode="before")
     @classmethod
     def validate_role_type(cls, v):
-        if isinstance(v, RoleTypeBill):
+        if isinstance(v, TypeRoleBill):
             return v
         return parse_role_bill(v)
 
@@ -485,49 +486,62 @@ class Congresista(PrintableModel):
         return None
 
 
-class Bancada(PrintableModel):
-    """
-    Represent a Bancada in the peruvian government
-
-    Attributes:
-        leg_year (str): Year period of the bancada
-        bancada_name (str): Name of the bancada
-    """
-
-    leg_year: LegislativeYear
-    bancada_name: str
-
-    model_config = ConfigDict(use_enum_values=False)
-
-
 class Organization(PrintableModel):
     """
     Represents a legislative organization inside the parliament, such as a committee.
 
     Attributes:
-        leg_period (str): Legislative period.
-        leg_year (str): Legislative year.
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
-        comm_type (str): Type of committee (e.g. ordinaria, especial, etc)
+        org_subtype (str): Subtype of organization (e.g. ordinaria, especial, etc)
         org_link (str): Url of the organization's website.
+        parent_org_name (str): Name of other organization where this organization belongs to
+        parent_org_type (TypeOrganization): Type of organization of parent
+        date_founding (date): Date of establishment of the organization
+        date_dissolution (date): Date of dissolution of the organization
     """
-
-    leg_period: LegPeriod
-    leg_year: LegislativeYear
 
     # Attributes that fit in Popolo structure
     org_name: str
     org_type: TypeOrganization
-    comm_type: TypeCommittee | None
-    org_link: str
+    org_subtype: TypeCommittee | TypeAdmin | None = None
+    org_link: str | None = None
+    parent_org_name: str | None = None
+    parent_org_type: TypeOrganization | None = None
+    date_founding: date | None = None
+    date_dissolution: date | None = None
 
-    @field_validator("leg_period", mode="before")
+    @model_validator(mode="after")
+    def validate_org_subtype(self):
+        if self.org_type == TypeOrganization.COMMITTEE:
+            if not isinstance(self.org_subtype, TypeCommittee):
+                self.org_subtype = None
+
+        elif self.org_type == TypeOrganization.ADMINISTRATIVE:
+            if not isinstance(self.org_subtype, TypeAdmin):
+                self.org_subtype = None
+
+        else:
+            self.org_subtype = None
+
+        return self
+
+    @field_validator("org_name", "parent_org_name", mode="before")
     @classmethod
-    def validate_leg_period(cls, v):
-        if isinstance(v, LegPeriod):
-            return v
-        return parse_leg_period(v)
+    def clean_string_fields(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
+
+    @model_validator(mode="after")
+    def validate_parent_org(self) -> Self:
+        has_parent_name = bool(self.parent_org_name)
+        has_parent_type = self.parent_org_type is not None
+
+        if has_parent_name != has_parent_type:
+            raise ValueError("If there is a parent, it should have name and org_type")
+
+        return self
 
     model_config = ConfigDict(use_enum_values=False)
 
@@ -537,26 +551,32 @@ class Membership(PrintableModel):
     Represents a person's role in an organization during a specific time period.
 
     Attributes:
-        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
-        nombre (str): Name of the person.
-        leg_period (str): Legislative period.
+        cong_name (str): Name of the congresista.
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
-        comm_type (str): Type of committee (e.g. ordinaria, especial, etc)
+        leg_period (str): Legislative period.
+        role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
+        time_stamp (datetime): Date of the scraped record.
         start_date (datetime): Date of the beginning of the membership
         end_date (datetime): Date of the end of the membership
+        condicion (str): Current status of their membership into the
+        votes_in_election (int): Votes obtained in the election
+        dist_electoral (str): Electoral district
     """
 
     # Attributes that fit in Popolo structure
-    role: RoleOrganization
-    nombre: str
-    web_page: str
-    leg_period: LegPeriod
+    cong_name: str
     org_name: str
     org_type: TypeOrganization
-    comm_type: TypeCommittee | None
-    start_date: datetime
-    end_date: datetime | None
+    leg_period: LegPeriod
+    role: RoleOrganization
+    time_stamp: datetime
+    website: str | None = None
+    start_date: date | datetime | None = None
+    end_date: date | datetime | None = None
+    condicion: str | None = None
+    votes_in_election: int | None = None
+    dist_electoral: str | None = None
 
     model_config = ConfigDict(use_enum_values=False)
 
@@ -567,29 +587,18 @@ class Membership(PrintableModel):
             return v
         return parse_leg_period(v)
 
-    @field_validator("end_date")
-    def check_end_after_start(cls, end, info):
-        start = info.data.get("start_date")
-        if start and end and end < start:
-            raise ValueError("end_date must be after start_date")
-        return end
+    @field_validator("start_date", "end_date", mode="before")
+    @classmethod
+    def validate_date_fields(cls, v):
+        if isinstance(v, datetime):
+            return v.date()
+        return v
 
-
-class BancadaMembership(PrintableModel):
-    """
-    Represents a person's membership in a bancada during a specific time period.
-
-    Attributes:
-        leg_year (str): Year period of the membership
-        cong_name (str): Name of the congresista
-        website (str): Congresista's website
-        bancada_name (str): Bancada's name
-    """
-
-    leg_year: LegislativeYear
-    cong_name: str
-    website: str
-    bancada_name: str
+    @model_validator(mode="after")
+    def validate_dates(self) -> Self:
+        if self.start_date and self.end_date and self.end_date < self.start_date:
+            raise ValueError("end_date cannot be earlier than start_date")
+        return self
 
 
 class Ley(PrintableModel):

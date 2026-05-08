@@ -15,7 +15,7 @@ from backend.database.models import (
     Legislature,
     Proponents,
 )
-from backend import BillStepType
+from backend import TypeBillStep
 
 
 @pytest.fixture()
@@ -55,7 +55,7 @@ def _minimal_bill_and_document(db, bill_id: str, step_id: int, archivo_id: int):
             bill_id=bill_id,
             vote_step=False,
             vote_event_id=None,
-            step_type=BillStepType.VOTACION,
+            step_type=TypeBillStep.VOTACION,
             step_date=datetime(2024, 1, 2),
             step_detail="d",
         )

@@ -1,7 +1,7 @@
 from enum import Enum
 
 
-class MajorityType(str, Enum):
+class TypeMajority(str, Enum):
     SIMPLE = "Simple"
     ABSOLUTA = "Absoluta"
     CALIFICADA = "Calificada"
@@ -27,7 +27,7 @@ class AttendanceStatus(str, Enum):
     SUSPENDIDO = "Suspendido"
 
 
-class MotionType(str, Enum):
+class TypeMotion(str, Enum):
     SALUDO = "Saludo"
     CENSURA_MESA = "Censura Mesa Directiva del Congreso"
     CENSURA_MINISTRO = "Censura al Consejo de Ministros"
@@ -44,7 +44,7 @@ class MotionType(str, Enum):
     OTRAS = "Otras"
 
 
-class MotionStepType(str, Enum):
+class TypeMotionStep(str, Enum):
     PRESENTADO = "Presentado"
     ADMISION = "Admisión a debate"
     ETAPA_EN_COMISION = "En Comisión"
@@ -71,7 +71,7 @@ class MotionStepType(str, Enum):
     SIN_CATEGORIA = "Sin categoría"
 
 
-class BillStepType(str, Enum):
+class TypeBillStep(str, Enum):
     PRESENTADO = "Presentado"
     EN_COMISION = "En Comisión"
     DICTAMEN_O_ACUERDO_DE_COMISION = "Dictamen o Acuerdo de Comisión"
@@ -96,7 +96,7 @@ class BillStepType(str, Enum):
     SIN_CATEGORIA = "Sin categoría"
 
 
-class RoleTypeBill(str, Enum):
+class TypeRoleBill(str, Enum):
     AUTHOR = "Autor"
     COAUTHOR = "Coautor"
     ADHERENTE = "Adherente"
@@ -155,24 +155,14 @@ class Legislature(str, Enum):
     LEGISLATURA_2016_2 = "2016-II"
 
 
-class LegislativeYear(str, Enum):
-    YEAR_2026_2027 = "2026"
-    YEAR_2025_2026 = "2025"
-    YEAR_2024_2025 = "2024"
-    YEAR_2023_2024 = "2023"
-    YEAR_2022_2023 = "2022"
-    YEAR_2021_2022 = "2021"
-    YEAR_2020_2021 = "2020"
-    YEAR_2019_2020 = "2019"
-    YEAR_2018_2019 = "2018"
-    YEAR_2017_2018 = "2017"
-    YEAR_2016_2017 = "2016"
-
-
 class RoleOrganization(str, Enum):
     # For Bancadas | Partidos
     VOCERO = "Vocero"
     MIEMBRO = "Miembro"
+
+    # For Cámaras
+    DIPUTADO = "Diputado"
+    SENADOR = "Senador"
 
     # For Comisiones, Mesa Directiva, Junta de Portavoces
     PRESIDENTE = "Presidente"
@@ -181,19 +171,26 @@ class RoleOrganization(str, Enum):
     TITULAR = "Titular"
     SUPLENTE = "Suplente"
     ACCESITARIO = "Accesitario"
+    SEGUNDO_VICE = "Segundo Vicepresidente"
+    TERCER_VICE = "Tercer Vicepresidente"
 
 
 class TypeOrganization(str, Enum):
-    COMISON = "Comisión"
+    COMMITTEE = "Comisión"
+    CHAMBER = "Cámara"
+    BANCADA = "Bancada"
+    PARTY = "Partido"
+    ADMINISTRATIVE = "Administrativo"
+
+
+class TypeAdmin(str, Enum):
     JUNTA_DE_PORTAVOCES = "Junta de Portavoces"
     MESA_DIRECTIVA = "Mesa Directiva"
     COMISION_PERMANENTE = "Comisión Permanente"
     CONSEJO_DIRECTIVO = "Consejo Directivo"
-    SUBCOM_ACUSACIONES = "Subcomisión de Acusaciones Constitucionales"
 
 
 class TypeCommittee(str, Enum):
-    # For Committees
     COM_INVESTIGADORA = "Comisiones Investigadoras"
     GRUPO_TRABAJO = "Grupo de Trabajo"
     SUBCOM_AC = "Subcomisión de Acusaciones Constitucionales"
