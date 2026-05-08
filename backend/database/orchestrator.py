@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from datetime import datetime, timedelta
 from typing import Type, Callable
@@ -44,6 +45,7 @@ from backend.process.congresistas import (
     get_cong_data,
 )
 from backend.process.billtext import extract_bill_body
+from backend.process.diff import compute_bill_difference
 from backend.process.motions import (
     process_motion,
     process_motion_document,
@@ -828,6 +830,8 @@ class OpenPeruOrchestrator:
                             )
                             raw_doc.processed = True
 
+                    self._compute_bill_differences(db, bill.id)
+
                     raw_bill.processed = True
                     stats.processed += 1
                 except Exception as exc:
@@ -843,6 +847,44 @@ class OpenPeruOrchestrator:
             f"[bills] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
         return stats
+
+    def _compute_bill_differences(self, db, bill_id: str) -> None:
+        """Compute and store text diffs for every step of a bill against the preceding step."""
+        from sqlalchemy import select as sa_select
+
+        steps = (
+            db.execute(
+                sa_select(db_models.BillStep)
+                .where(db_models.BillStep.bill_id == bill_id)
+                .order_by(db_models.BillStep.step_date.asc())
+            )
+            .scalars()
+            .all()
+        )
+
+        for i, step in enumerate(steps):
+            new_bt = crud_bills.get_billtext_for_step(db, step.id)
+            old_bt = (
+                crud_bills.get_billtext_for_step(db, steps[i - 1].id) if i > 0 else None
+            )
+
+            result = compute_bill_difference(
+                old_bt.text if old_bt else None,
+                new_bt.text if new_bt else None,
+            )
+
+            crud_bills.upsert_bill_difference(
+                db,
+                step_id=step.id,
+                bill_id=bill_id,
+                prev_step_id=steps[i - 1].id if i > 0 else None,
+                new_archivo_id=new_bt.archivo_id if new_bt else None,
+                old_archivo_id=old_bt.archivo_id if old_bt else None,
+                difference_type=result["type"],
+                difference_content=json.dumps(result["content"])
+                if result["content"]
+                else None,
+            )
 
     def _process_motions(
         self, *, include_documents: bool, limit: int | None

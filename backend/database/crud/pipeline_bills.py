@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Iterable
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from backend.database import models as db_models
@@ -189,5 +190,60 @@ def upsert_bill_text(
     existing.step_date = step_date
     existing.seguimiento_id = seguimiento_id
     existing.text = text
+    db.flush()
+    return existing
+
+
+def get_billtext_for_step(db: Session, step_id: int) -> db_models.BillText | None:
+    """
+    Return the BillText for a given step_id, preferring a non-vote document.
+    Falls back to any document if all are vote docs.
+    """
+    stmt = (
+        select(db_models.BillText)
+        .join(
+            db_models.BillDocument,
+            db_models.BillText.archivo_id == db_models.BillDocument.archivo_id,
+        )
+        .where(db_models.BillDocument.step_id == step_id)
+        .order_by(
+            db_models.BillDocument.vote_doc.asc(),
+            db_models.BillDocument.archivo_id.asc(),
+        )
+    )
+    return db.execute(stmt).scalars().first()
+
+
+def upsert_bill_difference(
+    db: Session,
+    *,
+    step_id: int,
+    bill_id: str,
+    prev_step_id: int | None,
+    new_archivo_id: int | None,
+    old_archivo_id: int | None,
+    difference_type: str,
+    difference_content: str | None,
+) -> db_models.BillDifference:
+    existing = db.get(db_models.BillDifference, step_id)
+    if existing is None:
+        row = db_models.BillDifference(
+            step_id=step_id,
+            bill_id=bill_id,
+            prev_step_id=prev_step_id,
+            new_archivo_id=new_archivo_id,
+            old_archivo_id=old_archivo_id,
+            difference_type=difference_type,
+            difference_content=difference_content,
+        )
+        db.add(row)
+        db.flush()
+        return row
+    existing.bill_id = bill_id
+    existing.prev_step_id = prev_step_id
+    existing.new_archivo_id = new_archivo_id
+    existing.old_archivo_id = old_archivo_id
+    existing.difference_type = difference_type
+    existing.difference_content = difference_content
     db.flush()
     return existing

@@ -5,6 +5,7 @@ from __future__ import annotations
 # marker; slice returned from the original raw text.
 
 _HEADINGS = (
+    # ── Two-line exact forms (original) ──────────────────────────────────────
     """EL CONGRESO DE LA REPÚBLICA
 HA DADO LA LEY SIGUIENTE""",
     """EL CONGRESO DE LA REPÚBLICA
@@ -31,6 +32,25 @@ HA DADO LA LEY SIGUIENTE:""",
 HA DADO LA LEY SIGUIENTE: """,
     """EL CONGRESO DE LA REPÚBLICА;
 HA DADO LA LEY SIGUIENTE:""",
+    # ── Standalone second-line anchors (high-priority) ───────────────────────
+    # El Peruano two-column OCR inserts phone numbers / codes between the two
+    # heading lines, so the combined form never matches. The second line alone
+    # is reliable enough to anchor the body start.
+    "HA DADO LA LEY SIGUIENTE:",
+    "HA DADO LA LEY SIGUIENTE: ",
+    "HA DADO LA SIGUIENTE LEY:",
+    "HA DADO LA SIGUIENTE LEY: ",
+    "HA DADO LA RESOLUCIÓN LEGISLATIVA SIGUIENTE:",
+    "HA DADO LA RESOLUCIÓN LEGISLATIVA DEL CONGRESO SIGUIENTE:",
+    # ── Committee substitute / consensus texts (medium-priority) ─────────────
+    "TEXTO SUSTITUTORIO",
+    "TEXTO SUSTITUTORIO:",
+    "TEXTO CONSENSUADO",
+    "TEXTO CONSENSUADO:",
+    # ── OCR-mangled variants (low-priority) ───────────────────────────────────
+    "A DADO LA LEY SIGUIENTE:",  # leading H dropped by OCR
+    "HA DADO LA LY SIGUENTE:",  # vowel dropout
+    "HA DADO LA SIGUIENTE LEY DE REFORMA CONSTITUCIONAL",
 )
 
 _END_MARKERS = (

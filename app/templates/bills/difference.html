@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="bill-header">
+  <h1>BILL Nº {{ bill.id }}: {{ bill.title }}</h1>
+  <div class="bill-meta">
+    <p><strong>Step:</strong> {{ step.step_type }}</p>
+    <p><strong>Date:</strong> {{ step.step_date.strftime('%Y-%m-%d') if step.step_date else '—' }}</p>
+  </div>
+  <a class="diff-back-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">← Back to bill</a>
+</div>
+
+<div class="diff-versions">
+  <div class="diff-column">
+    <h2>Version 1</h2>
+    {% if old_version_text %}
+      <pre class="diff-text">{{ old_version_text }}</pre>
+    {% else %}
+      <p class="diff-unavailable">No text available</p>
+    {% endif %}
+  </div>
+  <div class="diff-column">
+    <h2>Version 2</h2>
+    {% if new_version_text %}
+      <pre class="diff-text">{{ new_version_text }}</pre>
+    {% else %}
+      <p class="diff-unavailable">No text available</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="diff-differences">
+  <h2>Differences</h2>
+  {% if difference_type == 'no_change' %}
+    <p>No changes between versions.</p>
+  {% elif difference_type == 'first_version' %}
+    <p>This is the first version — no previous text to compare.</p>
+  {% elif difference_type == 'unavailable' %}
+    <p>Text could not be extracted for comparison.</p>
+  {% elif difference_content %}
+    <div class="diff-lines">
+      {% for line in difference_content %}
+        {% if line.startswith('+ ') %}
+          <div class="diff-added">{{ line }}</div>
+        {% elif line.startswith('- ') %}
+          <div class="diff-removed">{{ line }}</div>
+        {% elif line.startswith('  ') %}
+          <div class="diff-equal">{{ line }}</div>
+        {% endif %}
+      {% endfor %}
+    </div>
+  {% else %}
+    <p>No difference data available.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -2,6 +2,7 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
+    Text,
     Enum,
     Boolean,
     DateTime,
@@ -551,3 +552,22 @@ class BillText(Base):
     seguimiento_id = Column(String, nullable=False)
     text = Column(String, nullable=True)  # NULL if no anchor matched
     __table_args__ = (Index("ix_billtext_bill_id", "bill_id"),)
+
+
+class BillDifference(Base):
+    """
+    Precomputed text diff between a bill step and the preceding step.
+    One row per BillStep; step_id is the "new" version.
+    """
+
+    __tablename__ = "bill_differences"
+
+    step_id = Column(Integer, ForeignKey("bill_steps.id"), primary_key=True)
+    bill_id = Column(String, ForeignKey("bills.id"), nullable=False)
+    prev_step_id = Column(Integer, ForeignKey("bill_steps.id"), nullable=True)
+    new_archivo_id = Column(Integer, ForeignKey("billtext.archivo_id"), nullable=True)
+    old_archivo_id = Column(Integer, ForeignKey("billtext.archivo_id"), nullable=True)
+    difference_type = Column(String, nullable=False)
+    difference_content = Column(Text, nullable=True)  # JSON list of ndiff lines
+
+    __table_args__ = (Index("ix_billdifference_bill_id", "bill_id"),)

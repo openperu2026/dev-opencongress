@@ -24,6 +24,7 @@
             {% if step.vote_step and step.vote_event_id %}
               <a href="/vote/{{ step.vote_event_id }}">View details</a>
             {% endif %}
+            <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.id) }}">View changes</a>
           </div>
         </div>
       {% endfor %}

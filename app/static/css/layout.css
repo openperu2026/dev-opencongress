@@ -381,3 +381,93 @@ item-list{*/
 
 /*Format of source and download links
 source-list{*/
+
+/* Bill difference page */
+.diff-back-link {
+    display: inline-block;
+    margin-top: 8px;
+    color: var(--color-frame);
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.diff-back-link:hover {
+    text-decoration: underline;
+}
+
+.diff-versions {
+    display: flex;
+    gap: 1rem;
+    margin: 24px 16px;
+}
+
+.diff-column {
+    flex: 1;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    padding: 12px;
+    background: #fff;
+}
+
+.diff-column h2 {
+    font-size: 15px;
+    margin: 0 0 10px;
+    color: var(--color-frame);
+}
+
+.diff-text {
+    white-space: pre-wrap;
+    font-family: monospace;
+    font-size: 13px;
+    margin: 0;
+    overflow-y: auto;
+    max-height: 400px;
+}
+
+.diff-unavailable {
+    color: #999;
+    font-style: italic;
+}
+
+.diff-differences {
+    margin: 24px 16px;
+}
+
+.diff-differences h2 {
+    font-size: 16px;
+    color: var(--color-frame);
+    margin-bottom: 12px;
+}
+
+.diff-lines {
+    font-family: monospace;
+    font-size: 13px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    overflow-x: auto;
+    background: #fff;
+}
+
+.diff-added {
+    background: #c8e6c9;
+    display: block;
+    white-space: pre;
+}
+
+.diff-removed {
+    background: #ffcdd2;
+    display: block;
+    white-space: pre;
+}
+
+.diff-equal {
+    color: #666;
+    display: block;
+    white-space: pre;
+}
+
+@media (max-width: 500px) {
+    .diff-versions {
+        flex-direction: column;
+    }
+}
