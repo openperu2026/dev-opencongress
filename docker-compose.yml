@@ -32,8 +32,11 @@ services:
     environment:
       DB_URL: postgresql+psycopg://opencongress:opencongress@db:5432/opencongress
       SQLITE_PATH: /app/data/raw/OpenPeruRaw.db
+    volumes:
+      - opencongress_logs:/app/logs
     profiles:
       - migration
 
 volumes:
   opencongress_pgdata:
+  opencongress_logs:
