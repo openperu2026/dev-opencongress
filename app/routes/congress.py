@@ -10,7 +10,7 @@ congress_bp = Blueprint("congress", __name__, template_folder="../templates")
 
 @congress_bp.route("/congress")
 def index():
-    #q = request.args.get("q", "").strip()
+    # q = request.args.get("q", "").strip()
 
     name_q = request.args.get("name_q", "").strip()
     party_q = request.args.get("party_q", "").strip()
@@ -36,9 +36,6 @@ def index():
                 SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
             )
             congresistas = list(congresistas)
-            
-
-
 
     if party_q:
         with SessionProcessed() as db:
@@ -59,9 +56,6 @@ def index():
             )
             congresistas = list(congresistas)
 
-
-    
-
     if region_q:
         with SessionProcessed() as db:
             rows = db.execute(
@@ -81,17 +75,26 @@ def index():
             )
             congresistas = list(congresistas)
 
-    return render_template("congress/search.html", name_q=name_q, 
-                           party_q=party_q, region_q=region_q, congresistas=congresistas)
+    return render_template(
+        "congress/search.html",
+        name_q=name_q,
+        party_q=party_q,
+        region_q=region_q,
+        congresistas=congresistas,
+    )
 
 
 @congress_bp.route("/congress/<congresista_id>")
 def congress_detail(congresista_id):
     with SessionProcessed() as db:
-        row = db.execute(
-            text("SELECT * FROM congresistas WHERE id = :id"),
-            {"id": congresista_id},
-        ).mappings().first()
+        row = (
+            db.execute(
+                text("SELECT * FROM congresistas WHERE id = :id"),
+                {"id": congresista_id},
+            )
+            .mappings()
+            .first()
+        )
 
         congresista = (
             SimpleNamespace(**row, full_name=row["nombre"]) if row is not None else None
