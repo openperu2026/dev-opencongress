@@ -1,0 +1,108 @@
+import warnings
+from transformers import AutoModelForImageTextToText, AutoProcessor
+from chandra.model.hf import generate_hf
+from chandra.model.schema import BatchInputItem
+from chandra.output import parse_markdown
+from PIL import Image
+import torch
+import fitz
+import os
+import sys
+
+warnings.filterwarnings("ignore", category=UserWarning)
+
+# Model Loading
+print("Loading Chandra OCR 2 model...")
+model = AutoModelForImageTextToText.from_pretrained(
+    "datalab-to/chandra-ocr-2",
+    dtype=torch.bfloat16,  # Recommended for better performance on compatible GPUs
+    device_map="auto",  # Automatically maps the model to available devices (GPU)
+)
+model.eval()  # Set model to evaluation mode
+model.processor = AutoProcessor.from_pretrained("datalab-to/chandra-ocr-2")
+model.processor.tokenizer.padding_side = "left"
+print("Model loaded successfully.")
+
+
+def get_images(pdf_file: str):
+    """
+    Converting a PDF page to an image and processing it. The Chandra model
+    expects image input
+    """
+    input_images = []
+    try:
+        pdf_document = fitz.open(pdf_file)
+        for page_num in range(len(pdf_document)):
+            page = pdf_document.load_page(page_num)
+            pix = page.get_pixmap(dpi=300)
+            img_data = pix.samples
+            img_width = pix.width
+            img_height = pix.height
+            pil_image = Image.frombytes("RGB", [img_width, img_height], img_data)
+            input_images.append(pil_image)
+        pdf_document.close()
+        print(f"Converted {len(input_images)} page(s) from {pdf_file} to images.")
+    except Exception as e:
+        print(
+            f"Error processing PDF: {e}. Please ensure '{pdf_file}' exists and is a valid PDF, or provide an image file."
+        )
+        # Fallback if PDF conversion fails or if user intends to use an image directly
+        if not input_images:
+            print(
+                "No valid input image or PDF found. Please provide an image file or a PDF."
+            )
+
+    # Get the path for the raw ocr output
+    base_filename = os.path.splitext(os.path.abspath(pdf_file))[0]
+    raw_filename = f"{base_filename}_raw.txt"
+
+    return input_images, raw_filename
+
+
+def run_ocr(input_images, raw_filename):
+    """
+    OCR Generation & Raw Output Saving
+    """
+    if input_images:
+        batch = [
+            BatchInputItem(image=img, prompt_type="ocr_layout") for img in input_images
+        ]
+        results = generate_hf(batch, model)
+
+        # Collect raw markdown from all pages
+        all_raw_markdown = []
+        for result in results:
+            markdown = parse_markdown(
+                result.raw, include_headers_footers=False, include_images=False
+            )
+            all_raw_markdown.append(markdown)
+
+        raw_output_text = "\n\n--- PAGE BREAK ---\n\n".join(all_raw_markdown)
+
+        with open(raw_filename, "w") as f:
+            f.write(raw_output_text)
+
+        print(f"Saved raw OCR results to {raw_filename}")
+    else:
+        print("No images to process")
+
+
+def get_pdf_folder(folder):
+    pdf_lst = []
+    for file in os.listdir(folder):
+        if file.endswith(".pdf"):
+            pdf_lst.append(os.path.join(folder, file))
+    return pdf_lst
+
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: uv run chandra_2 <folder_path>")
+        sys.exit(1)
+
+    folder = sys.argv[1]
+    pdf_lst = get_pdf_folder(folder)
+
+    for pdf_file in pdf_lst:
+        input_images, raw_filename = get_images(pdf_file)
+        run_ocr(input_images, raw_filename)
