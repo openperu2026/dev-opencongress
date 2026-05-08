@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="congress-bills-page">
+    <p class="congress-bills-eyebrow">Bills authored by:</p>
+    <h1>{{ congresista.full_name }}</h1>
+
+    {% if bills_authored %}
+        <ul class="congress-bills-list">
+            {% for bill in bills_authored %}
+                <li>
+                    <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">
+                        Bill N {{ bill.id }}: {{ bill.title }}
+                    </a>
+                </li>
+            {% endfor %}
+        </ul>
+    {% else %}
+        <p>No authored bills found.</p>
+    {% endif %}
+</section>
+{% endblock %}
