@@ -11,17 +11,25 @@ import sys
 
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# Model Loading
-print("Loading Chandra OCR 2 model...")
-model = AutoModelForImageTextToText.from_pretrained(
-    "datalab-to/chandra-ocr-2",
-    dtype=torch.bfloat16,  # Recommended for better performance on compatible GPUs
-    device_map="auto",  # Automatically maps the model to available devices (GPU)
-)
-model.eval()  # Set model to evaluation mode
-model.processor = AutoProcessor.from_pretrained("datalab-to/chandra-ocr-2")
-model.processor.tokenizer.padding_side = "left"
-print("Model loaded successfully.")
+# Lazy-loaded model
+_model = None
+
+
+def _load_model():
+    """Lazy load the model only when needed"""
+    global _model
+    if _model is None:
+        print("Loading Chandra OCR 2 model...")
+        _model = AutoModelForImageTextToText.from_pretrained(
+            "datalab-to/chandra-ocr-2",
+            dtype=torch.bfloat16,
+            device_map="auto",
+        )
+        _model.eval()
+        _model.processor = AutoProcessor.from_pretrained("datalab-to/chandra-ocr-2")
+        _model.processor.tokenizer.padding_side = "left"
+        print("Model loaded successfully.")
+    return _model
 
 
 def get_images(pdf_file: str):
@@ -64,6 +72,7 @@ def run_ocr(input_images, raw_filename):
     OCR Generation & Raw Output Saving
     """
     if input_images:
+        model = _load_model()
         batch = [
             BatchInputItem(image=img, prompt_type="ocr_layout") for img in input_images
         ]
