@@ -46,9 +46,11 @@ docker compose run --rm migrate-raw
 ```
 
 The migration creates the current application schema, creates the current raw
-schema, imports latest raw SQLite data, and validates the result. Raw tables are
-filtered to rows where `last_update = True`; `scraper_runs` is imported as-is
-because it has no `last_update` column.
+schema, imports latest raw SQLite data, validates the result, and then runs
+raw-to-clean processing for the currently supported clean tables. Clean
+document text loading is disabled, so `bill_texts` and `motion_texts` are left
+empty. Raw tables are filtered to rows where `last_update = True`;
+`scraper_runs` is imported as-is because it has no `last_update` column.
 
 Imported with data:
 
@@ -109,6 +111,12 @@ you are logged into DockerHub if the repository is private:
 echo "$OPENPERU_RAW_MIGRATION_IMAGE"
 docker login
 docker compose run --rm migrate-raw
+```
+
+For raw-only debugging, skip clean processing:
+
+```bash
+docker compose run --rm migrate-raw --skip-clean-processing
 ```
 
 If the migration fails because raw tables are not empty, reset the volume using

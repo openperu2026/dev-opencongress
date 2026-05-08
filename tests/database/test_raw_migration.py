@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import sqlite3
+from types import SimpleNamespace
 from datetime import datetime
 
 import pytest
 from sqlalchemy import create_engine, func, select
 
 from backend.database.models import Base
+from backend.database.migration import __main__ as migration_main
 from backend.database.migration.migration import (
     BILL_DOCUMENTS,
     MOTION_DOCUMENTS,
@@ -289,3 +291,127 @@ def test_assert_raw_tables_empty_fails_when_any_raw_table_has_rows(target_engine
 
         with pytest.raises(RuntimeError, match="target raw tables are not empty"):
             assert_raw_tables_empty(conn)
+
+
+def test_migrate_runs_clean_processing_after_raw_import(monkeypatch):
+    source = make_source()
+    engine = create_engine("sqlite:///:memory:")
+    calls = []
+
+    monkeypatch.setattr(migration_main, "enable_extensions", lambda engine: None)
+    monkeypatch.setattr(
+        migration_main, "assert_raw_tables_empty", lambda conn: calls.append("empty")
+    )
+    monkeypatch.setattr(
+        migration_main,
+        "import_direct_tables",
+        lambda sqlite_conn, conn: calls.append("direct"),
+    )
+    monkeypatch.setattr(
+        migration_main,
+        "import_document_tables",
+        lambda sqlite_conn, conn: calls.append("documents"),
+    )
+    monkeypatch.setattr(
+        migration_main, "reset_sequences", lambda conn: calls.append("sequences")
+    )
+    monkeypatch.setattr(
+        migration_main,
+        "validate_import",
+        lambda sqlite_conn, conn, *, validate_checksums: calls.append(
+            f"validate={validate_checksums}"
+        ),
+    )
+    monkeypatch.setattr(
+        migration_main, "run_clean_processing", lambda engine: calls.append("clean")
+    )
+
+    migration_main.migrate(source, engine, validate_checksums=False)
+
+    assert calls == [
+        "empty",
+        "direct",
+        "documents",
+        "sequences",
+        "validate=False",
+        "clean",
+    ]
+    engine.dispose()
+
+
+def test_migrate_can_skip_clean_processing(monkeypatch):
+    source = make_source()
+    engine = create_engine("sqlite:///:memory:")
+    calls = []
+
+    monkeypatch.setattr(migration_main, "enable_extensions", lambda engine: None)
+    monkeypatch.setattr(migration_main, "assert_raw_tables_empty", lambda conn: None)
+    monkeypatch.setattr(
+        migration_main, "import_direct_tables", lambda sqlite_conn, conn: None
+    )
+    monkeypatch.setattr(
+        migration_main, "import_document_tables", lambda sqlite_conn, conn: None
+    )
+    monkeypatch.setattr(migration_main, "reset_sequences", lambda conn: None)
+    monkeypatch.setattr(
+        migration_main,
+        "validate_import",
+        lambda sqlite_conn, conn, *, validate_checksums: None,
+    )
+    monkeypatch.setattr(
+        migration_main, "run_clean_processing", lambda engine: calls.append("clean")
+    )
+
+    migration_main.migrate(source, engine, process_clean=False)
+
+    assert calls == []
+    engine.dispose()
+
+
+def test_run_clean_processing_disables_documents_and_uses_engine_url():
+    engine = create_engine("sqlite:///clean.db")
+    calls = []
+
+    class FakeOrchestrator:
+        def __init__(self, db_url):
+            calls.append(("init", db_url))
+
+        def run_processing(self, **kwargs):
+            calls.append(("run_processing", kwargs))
+            return {"bills": SimpleNamespace(errors=0)}
+
+    migration_main.run_clean_processing(engine, orchestrator_cls=FakeOrchestrator)
+
+    assert calls == [
+        ("init", "sqlite:///clean.db"),
+        (
+            "run_processing",
+            {
+                "process_bills": True,
+                "process_motions": True,
+                "process_leyes": True,
+                "process_others": True,
+                "include_documents": False,
+            },
+        ),
+    ]
+    engine.dispose()
+
+
+def test_run_clean_processing_raises_on_stage_errors():
+    engine = create_engine("sqlite:///:memory:")
+
+    class FakeOrchestrator:
+        def __init__(self, db_url):
+            pass
+
+        def run_processing(self, **kwargs):
+            return {
+                "bills": SimpleNamespace(errors=2),
+                "motions": SimpleNamespace(errors=0),
+            }
+
+    with pytest.raises(RuntimeError, match="bills=2"):
+        migration_main.run_clean_processing(engine, orchestrator_cls=FakeOrchestrator)
+
+    engine.dispose()

@@ -185,8 +185,8 @@ class Bill(Base):
     status: Mapped[str] = mapped_column(nullable=False)
     proponent: Mapped[str] = mapped_column(nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=True)
-    bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+    bancada_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=True
     )
     bill_approved: Mapped[bool] = mapped_column(nullable=False)
     summary_oc: Mapped[str] = mapped_column(Text, nullable=False)
@@ -276,9 +276,7 @@ class BillStep(Base):
     step_id: Mapped[int] = mapped_column(primary_key=True)
     step_type: Mapped[str] = mapped_column(nullable=False)
     vote_step: Mapped[bool] = mapped_column(nullable=False)
-    vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.vote_event_id"), nullable=True
-    )
+    vote_event_id: Mapped[str] = mapped_column(nullable=True)
     step_date: Mapped[datetime] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 
@@ -675,9 +673,7 @@ class MotionStep(Base):
     step_id: Mapped[int] = mapped_column(primary_key=True, nullable=False)
     step_type: Mapped[str] = mapped_column(nullable=False)
     vote_step: Mapped[bool] = mapped_column(nullable=False)
-    vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.vote_event_id"), nullable=True
-    )
+    vote_event_id: Mapped[str] = mapped_column(nullable=True)
     step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 

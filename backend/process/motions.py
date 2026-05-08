@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
 
 from backend.core.enums import TypeMotionStep
 from backend.core.parsers import classify_motion_des_estado
@@ -180,10 +180,16 @@ def process_motion_organizations(
             motion_id=raw_motion.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=dates["presentation_date"],
-            decission_date=dates["final_chamber_decision_date"],
+            presentation_date=_as_date(dates["presentation_date"]),
+            decission_date=_as_date(dates["final_chamber_decision_date"]),
         )
     ]
+
+
+def _as_date(value: date | datetime | None) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    return value
 
 
 def find_motion_organization_schema(

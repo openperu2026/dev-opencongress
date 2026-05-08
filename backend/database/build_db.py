@@ -20,6 +20,25 @@ def _enable_extensions(engine) -> None:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_similarity;"))
 
 
+def drop_step_vote_event_fks(engine) -> None:
+    if engine.dialect.name != "postgresql":
+        return
+
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "ALTER TABLE bill_steps "
+                "DROP CONSTRAINT IF EXISTS bill_steps_vote_event_id_fkey;"
+            )
+        )
+        conn.execute(
+            text(
+                "ALTER TABLE motion_steps "
+                "DROP CONSTRAINT IF EXISTS motion_steps_vote_event_id_fkey;"
+            )
+        )
+
+
 def create_database(db_url: str = settings.DB_URL) -> bool:
     """
     Create all database tables in PostgreSQL using SQLAlchemy metadata.
@@ -33,6 +52,7 @@ def create_database(db_url: str = settings.DB_URL) -> bool:
         _enable_extensions(engine)
 
         Base.metadata.create_all(bind=engine)
+        drop_step_vote_event_fks(engine)
 
         inspector = inspect(engine)
         tables = inspector.get_table_names()

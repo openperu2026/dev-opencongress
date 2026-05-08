@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from backend.core.enums import TypeBillStep, TypeMotionStep
-from backend.core.parsers import classify_des_estado, classify_motion_des_estado
+from backend.core.enums import RoleOrganization, TypeBillStep, TypeMotionStep
+from backend.core.parsers import (
+    classify_des_estado,
+    classify_motion_des_estado,
+    normalize_membership_role,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -136,3 +140,11 @@ def test_classify_motion_vote_detail_keeps_vote_family():
     )
 
     assert label is TypeMotionStep.VOTACION_O_DECISION
+
+
+def test_normalize_membership_role_maps_presidency_encargado_variant():
+    role = normalize_membership_role(
+        "primer vicepresidente encargado de la presidencia del congreso de la república"
+    )
+
+    assert role is RoleOrganization.VICEPRESIDENTE

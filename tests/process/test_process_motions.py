@@ -207,6 +207,7 @@ def test_process_motion_organizations_chamber_only_and_dates():
     assert orgs[0].org_name == "Cámara de Diputados"
     assert orgs[0].org_type == "Cámara"
     assert orgs[0].presentation_date.isoformat() == "2026-01-01"
+    assert type(orgs[0].presentation_date).__name__ == "date"
     assert orgs[0].decission_date.isoformat() == "2026-01-07"
 
 

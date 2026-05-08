@@ -32,7 +32,12 @@ def main() -> None:
     engine = create_engine(args.db_url, pool_pre_ping=True)
 
     try:
-        migrate(sqlite_conn, engine, validate_checksums=not args.skip_checksums)
+        migrate(
+            sqlite_conn,
+            engine,
+            validate_checksums=not args.skip_checksums,
+            process_clean=not args.skip_clean_processing,
+        )
     finally:
         sqlite_conn.close()
         engine.dispose()
@@ -57,6 +62,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Only validate row counts after import.",
     )
+    parser.add_argument(
+        "--skip-clean-processing",
+        action="store_true",
+        help="Only import raw tables; do not seed clean tables from raw data.",
+    )
     return parser.parse_args()
 
 
@@ -65,6 +75,7 @@ def migrate(
     engine: Engine,
     *,
     validate_checksums: bool = True,
+    process_clean: bool = True,
 ) -> None:
     enable_extensions(engine)
     Base.metadata.create_all(engine)
@@ -75,6 +86,33 @@ def migrate(
         import_document_tables(sqlite_conn, pg_conn)
         reset_sequences(pg_conn)
         validate_import(sqlite_conn, pg_conn, validate_checksums=validate_checksums)
+
+    if process_clean:
+        run_clean_processing(engine)
+
+
+def run_clean_processing(engine: Engine, orchestrator_cls=None) -> None:
+    if orchestrator_cls is None:
+        from backend.database.orchestrator import OpenPeruOrchestrator
+
+        orchestrator_cls = OpenPeruOrchestrator
+
+    db_url = engine.url.render_as_string(hide_password=False)
+    orchestrator = orchestrator_cls(db_url=db_url)
+    summary = orchestrator.run_processing(
+        process_bills=True,
+        process_motions=True,
+        process_leyes=True,
+        process_others=True,
+        include_documents=False,
+    )
+
+    failed = {stage: stats.errors for stage, stats in summary.items() if stats.errors}
+    if failed:
+        details = ", ".join(
+            f"{stage}={errors}" for stage, errors in sorted(failed.items())
+        )
+        raise RuntimeError(f"Clean processing failed with errors: {details}")
 
 
 if __name__ == "__main__":

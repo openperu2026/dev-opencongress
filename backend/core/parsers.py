@@ -600,6 +600,9 @@ def find_leg_period(value: date | datetime):
     if value is None:
         raise ValueError("date cannot be null")
 
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value)
+
     if isinstance(value, datetime):
         value = value.date()
 
@@ -651,6 +654,7 @@ def normalize_membership_role(raw: str) -> RoleOrganization:
         "accesitaria": RoleOrganization.ACCESITARIO,
         "accesitario": RoleOrganization.ACCESITARIO,
         "presidente (e) del congreso de la república": RoleOrganization.PRESIDENTE,
+        "primer vicepresidente encargado de la presidencia del congreso de la república": RoleOrganization.VICEPRESIDENTE,
         "segundo vicepresidente": RoleOrganization.SEGUNDO_VICE,
         "tercer vicepresidente": RoleOrganization.TERCER_VICE,
         "diputado": RoleOrganization.DIPUTADO,

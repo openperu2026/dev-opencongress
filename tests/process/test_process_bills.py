@@ -176,6 +176,26 @@ def test_process_bill_steps_vote_detection_assigns_vote_event_id():
     assert out[1].vote_event_id == "B_2021_777_1"
 
 
+def test_process_bill_steps_parses_semicolon_committee_text():
+    steps = [
+        {
+            "seguimientoPleyId": 1,
+            "fecha": "2026-01-01",
+            "desEstado": "En Comisión",
+            "detalle": "Pasa a comisión",
+            "desComisiones": "Comisión de Economía; Comisión de Justicia ; ",
+        },
+    ]
+    rb = _raw_bill(id="2021_777", steps=steps)
+
+    out = mod.process_bill_steps(rb)
+
+    assert out[0].step_committees == [
+        "Comisión de Economía",
+        "Comisión de Justicia",
+    ]
+
+
 def test_process_bill_organizations_uses_step_committees_only_and_dates():
     steps = [
         {
@@ -215,10 +235,12 @@ def test_process_bill_organizations_uses_step_committees_only_and_dates():
     committee = orgs[0]
     assert committee.org_type == "Comisión"
     assert committee.presentation_date.isoformat() == "2026-01-02"
+    assert type(committee.presentation_date).__name__ == "date"
     assert committee.decission_date.isoformat() == "2026-01-05"
     chamber = orgs[1]
     assert chamber.org_type == "Cámara"
     assert chamber.presentation_date.isoformat() == "2026-01-01"
+    assert type(chamber.presentation_date).__name__ == "date"
 
 
 def test_process_bill_organizations_no_steps_uses_raw_presentation_date():
