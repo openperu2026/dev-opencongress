@@ -35,8 +35,38 @@
 </div>
 
 <div class="seats-wrapper">
-  <svg id="seatsSvg" width="800" height="300" viewBox="0 0 800 300"></svg>
-  <div id="seatTooltip" class="seat-tooltip" role="tooltip" ></div>
+  <div class="seats-container">
+    <svg id="seatsSvg" width="800" height="300" viewBox="0 0 800 300"></svg>
+    <div id="seatTooltip" class="seat-tooltip" role="tooltip" ></div>
+  </div>
+  <div class="seats-legend">
+    <div class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>In favor</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--no"></span>Against</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>Abst</div>
+  </div>
+</div>
+
+<div class="bancada-chart">
+  {% if bancada_rows %}
+  <svg id="bancadaSvg" viewBox="0 0 760 {{ bancada_chart_height }}" preserveAspectRatio="xMidYMin meet">
+    {% for row in bancada_rows %}
+    <g class="bancada-row">
+      <text class="bancada-label" x="6" y="{{ row.y + 6 }}">{{ row.name }}</text>
+      {% for segment in row.segments %}
+      <rect x="{{ segment.x }}" y="{{ row.y - 11 }}" width="{{ segment.width }}" height="22" fill="{{ {'yes': '#d8f0ee', 'no': '#f3d7dc', 'abstain': '#fff0c7'}[segment.key] }}" stroke="{{ {'yes': '#2fa9a1', 'no': '#d53f57', 'abstain': '#f1c53a'}[segment.key] }}" stroke-width="2">
+        <title>{{ segment.key }}: {{ row[segment.key] }}</title>
+      </rect>
+      {% endfor %}
+      <text class="bancada-total" x="{{ row.total_x }}" y="{{ row.y + 6 }}">{{ row.total }}</text>
+    </g>
+    {% endfor %}
+  </svg>
+  {% endif %}
+  <div class="bancada-legend">
+    <span class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>In favor</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--no"></span>Against</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>Abst</span>
+  </div>
 </div>
 
 <script>
@@ -46,7 +76,7 @@
   
   const svg = document.getElementById('seatsSvg');
   const tooltip = document.getElementById('seatTooltip');
-  const wrapper = document.querySelector('.seats-wrapper');
+  const container = document.querySelector('.seats-container');
   
   svg.setAttribute('viewBox', '0 0 800 300');
   svg.setAttribute('height', 300);
@@ -65,17 +95,17 @@
       tooltip.setAttribute('aria-hidden', 'false');
       tooltip.textContent = circle.dataset.label;
       
-      const wrapperRect = wrapper.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
       const tooltipWidth = tooltip.offsetWidth || 120;
       const tooltipHeight = tooltip.offsetHeight || 28;
-      let tx = e.clientX - wrapperRect.left + 12;
-      let ty = e.clientY - wrapperRect.top - tooltipHeight - 10;
+      let tx = e.clientX - containerRect.left + 12;
+      let ty = e.clientY - containerRect.top - tooltipHeight - 10;
       
-      if (tx + tooltipWidth > wrapperRect.width - 8) {
-        tx = e.clientX - wrapperRect.left - tooltipWidth - 12;
+      if (tx + tooltipWidth > containerRect.width - 8) {
+        tx = e.clientX - containerRect.left - tooltipWidth - 12;
       }
       if (ty < 8) {
-        ty = e.clientY - wrapperRect.top + 14;
+        ty = e.clientY - containerRect.top + 14;
       }
       
       tooltip.style.left = Math.max(8, tx) + 'px';

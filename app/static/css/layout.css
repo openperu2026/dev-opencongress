@@ -146,6 +146,25 @@ main {
     transform: translateY(-2px);
 }
 
+/* View details button in timeline */
+.timeline-content a {
+    margin-top: -8px;
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: #0066cc;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.timeline-content a:hover {
+    background-color: #0052a3;
+    transform: translateY(-1px);
+}
+
 /* Bills */
 /* detail page */
 .timeline-container {
@@ -178,7 +197,7 @@ padding-left: 70px;
 .timeline-dot {
 position: absolute;
 left: 8px;
-top: 5px;
+top: 10px;
 width: 16px;
 height: 16px;
 background-color: #666;
@@ -251,10 +270,29 @@ font-size: 16px;
 }
 
 .seats-wrapper {
-  margin-top: 1.5rem;
-  position: relative;
-  text-align: center;
+  margin-top: 13px;
   background-color: white;
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding-bottom: 50px;
+  align-items: flex-start;
+}
+
+.seats-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.seats-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+  color: #546170;
+  flex-shrink: 0;
+  padding-top: 100px;
+  width: 100px;
 }
 
 .seat-tooltip {
@@ -273,7 +311,91 @@ font-size: 16px;
 
 svg#seatsSvg circle { cursor: default; }
 
+.bancada-chart {
+    background-color: white;
+  }
 
+#bancadaSvg {
+  width: 66%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.bancada-label {
+  font-size: 18px;
+  fill: #2f3a45;
+}
+
+.bancada-total {
+  font-size: 13px;
+  fill: #73808f;
+}
+
+.bancada-bar-segment text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #24303b;
+}
+
+.bancada-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #546170;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seats-legend .legend-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.seats-legend .legend-swatch--yes {
+  background-color: #91c7b1;
+}
+
+.seats-legend .legend-swatch--no {
+  background-color: #cf294a;
+}
+
+.seats-legend .legend-swatch--abstain {
+  background-color: #e3d081;
+}
+
+.bancada-legend .legend-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.bancada-legend .legend-swatch--yes {
+  background-color: #d8f0ee;
+  border: 1.5px solid #2fa9a1;
+}
+
+.bancada-legend .legend-swatch--no {
+  background-color: #f3d7dc;
+  border: 1.5px solid #d53f57;
+}
+
+.bancada-legend .legend-swatch--abstain {
+  background-color: #fff0c7;
+  border: 1.5px solid #f1c53a;
+}
 
 /*footer and menu hamurger*/
 
