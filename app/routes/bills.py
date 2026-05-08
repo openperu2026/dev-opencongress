@@ -4,9 +4,24 @@ from backend.database.models import Bill, BillStep
 from .processed_session import SessionProcessed
 import json
 import os
+import sqlite3
 from .generate_seats import generate_seats
+from .build_bancada_bars import build_bancada_bars
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
+
+
+def load_voter_bancada_dict():
+    """Load voter-bancada mapping from DB into dict"""
+    db_path = os.path.join(
+        os.path.dirname(__file__), "..", "mock_data", "example_voter_bancada.db"
+    )
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT voter, bancada FROM voter_bancada")
+    voter_bancada_map = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+    return voter_bancada_map
 
 
 @bills_bp.route("/bills")
@@ -73,12 +88,35 @@ def mock_votes(bill_id):
         # Generate seat positions and attributes server-side
         seats = generate_seats(vote_counts, groups)
 
+        # Load voter-bancada mapping and aggregate by bancada
+        voter_bancada_map = load_voter_bancada_dict()
+        bancada_votes = {}
+
+        # reparsing the votes list
+        for vote_type, names in groups.items():
+            for name in names:
+                bancada = voter_bancada_map.get(name, "unknown")
+                if bancada not in bancada_votes:
+                    bancada_votes[bancada] = {
+                        "yes": 0,
+                        "no": 0,
+                        "abstain": 0,
+                        "total": 0,
+                    }
+                if vote_type in bancada_votes[bancada]:
+                    bancada_votes[bancada][vote_type] += 1
+                    bancada_votes[bancada]["total"] += 1
+
+        bancada_rows, bancada_chart_height = build_bancada_bars(bancada_votes)
+
         return render_template(
             "bills/mock_votes.html",
             bill=bill,
             latest_step=latest_step,
             vote_counts=vote_counts,
             seats=seats,
+            bancada_rows=bancada_rows,
+            bancada_chart_height=bancada_chart_height,
         )
 
 

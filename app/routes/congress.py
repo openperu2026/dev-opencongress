@@ -10,10 +10,15 @@ congress_bp = Blueprint("congress", __name__, template_folder="../templates")
 
 @congress_bp.route("/congress")
 def index():
-    q = request.args.get("q", "").strip()
+    # q = request.args.get("q", "").strip()
+
+    name_q = request.args.get("name_q", "").strip()
+    party_q = request.args.get("party_q", "").strip()
+    region_q = request.args.get("region_q", "").strip()
+
     congresistas = []
 
-    if q:
+    if name_q:
         with SessionProcessed() as db:
             rows = db.execute(
                 text(
@@ -21,17 +26,62 @@ def index():
                     SELECT *
                     FROM congresistas
                     WHERE lower(nombre) LIKE lower(:q)
+
                     LIMIT 50
                     """
                 ),
-                {"q": f"%{q}%"},
+                {"q": f"%{name_q}%"},
             ).mappings()
             congresistas = (
                 SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
             )
             congresistas = list(congresistas)
 
-    return render_template("congress/search.html", q=q, congresistas=congresistas)
+    if party_q:
+        with SessionProcessed() as db:
+            rows = db.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM congresistas
+                    WHERE lower(party_name) LIKE lower(:q)
+
+                    LIMIT 50
+                    """
+                ),
+                {"q": f"%{party_q}%"},
+            ).mappings()
+            congresistas = (
+                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
+            )
+            congresistas = list(congresistas)
+
+    if region_q:
+        with SessionProcessed() as db:
+            rows = db.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM congresistas
+                    WHERE lower(dist_electoral) LIKE lower(:q)
+
+                    LIMIT 50
+                    """
+                ),
+                {"q": f"%{region_q}%"},
+            ).mappings()
+            congresistas = (
+                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
+            )
+            congresistas = list(congresistas)
+
+    return render_template(
+        "congress/search.html",
+        name_q=name_q,
+        party_q=party_q,
+        region_q=region_q,
+        congresistas=congresistas,
+    )
 
 
 @congress_bp.route("/congress/<congresista_id>")
@@ -131,4 +181,39 @@ def congress_detail(congresista_id):
             bills_authored=bills_authored,
             profile_stats=profile_stats,
             recent_votes=recent_votes,
+        )
+
+
+@congress_bp.route("/congress/<congresista_id>/bills")
+def congress_bills(congresista_id):
+    with SessionProcessed() as db:
+        row = (
+            db.execute(
+                text("SELECT * FROM congresistas WHERE id = :id"),
+                {"id": congresista_id},
+            )
+            .mappings()
+            .first()
+        )
+
+        congresista = (
+            SimpleNamespace(**row, full_name=row["nombre"]) if row is not None else None
+        )
+        if not congresista:
+            return "Not Found", 404
+
+        bills_authored = (
+            db.execute(
+                select(Bill)
+                .where(Bill.author_id == congresista.id)
+                .order_by(Bill.presentation_date.desc())
+            )
+            .scalars()
+            .all()
+        )
+
+        return render_template(
+            "congress/congress_bill.html",
+            congresista=congresista,
+            bills_authored=bills_authored,
         )
