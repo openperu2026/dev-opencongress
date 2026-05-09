@@ -3,6 +3,19 @@
 This directory contains the Docker setup for the shared OpenCongress PostgreSQL
 database and the raw data migration image.
 
+## Installing requirements
+
+- Install Docker. Follow the instructions to install Docker Desktop [here](https://docs.docker.com/desktop/). If using WSL, follow [these instructions](https://docs.docker.com/desktop/features/wsl/). Then verify with:
+  ```bash
+  docker --version 
+  ```
+
+- Clone this repository and checkout `dev` or `feature/data_migration` branch.
+  ```bash
+  git clone git@github.com:openperu2026/dev-opencongress.git
+  git switch feature/data_migration
+  ```
+
 ## Run PostgreSQL
 
 Start the database:
@@ -11,7 +24,7 @@ Start the database:
 docker compose up -d db
 ```
 
-The `db` service runs PostgreSQL 16 with `pgvector` and `pg_similarity`.
+The `db` service runs PostgreSQL 16 with `pgvector` and `pg_similarity`extensions.
 
 Connection settings:
 
@@ -24,14 +37,12 @@ POSTGRES_DB=opencongress
 Use this URL from the host machine:
 
 ```bash
-DB_URL=postgresql+psycopg://opencongress:opencongress@localhost:5432/opencongress
+export DB_URL=postgresql+psycopg://opencongress:opencongress@localhost:5432/opencongress
 ```
 
-## Raw Migration
+## Run Migration
 
-The raw migration image contains the old SQLite `OpenPeruRaw.db` seed data. The raw
-SQLite file is not committed to Git, so any contributor should use the published
-DockerHub image instead of building it locally.
+The migration image contains the old SQLite `OpenPeruRaw.db` seed data. The SQLite file is not committed to Git, so any contributor should use the published DockerHub image instead of building it locally.
 
 Set the image tag:
 
@@ -44,83 +55,6 @@ Run the migration:
 ```bash
 docker compose run --rm migrate-raw
 ```
-
-The migration creates the current application schema, creates the current raw
-schema, imports latest raw SQLite data, validates the result, and then runs
-raw-to-clean processing for the currently supported clean tables. Clean
-document text loading is disabled, so `bill_texts` and `motion_texts` are left
-empty. Raw tables are filtered to rows where `last_update = True`;
-`scraper_runs` is imported as-is because it has no `last_update` column.
-
-Imported with data:
-
-```text
-raw_bancadas
-raw_bills
-raw_bill_documents
-raw_committees
-raw_congresistas
-raw_leyes
-raw_motion_documents
-raw_motions
-raw_organizations
-scraper_runs
-```
-
-Created but intentionally left empty:
-
-```text
-raw_bill_pages
-raw_motion_pages
-```
-
-For document tables, the legacy SQLite `text` column is intentionally not
-imported. `s3_key` and `local_path` are generated from the document filename and
-S3 key rules used by the scrapers. Legacy document IDs are mapped as follows:
-
-```text
-seguimiento_id -> step_id
-archivo_id     -> file_id
-```
-
-Duplicate bill document keys are resolved by keeping the newest `timestamp`.
-
-Expected row counts for the current raw seed:
-
-```text
-raw_bancadas=121
-raw_bills=13989
-raw_bill_documents=24838
-raw_committees=272
-raw_congresistas=140
-raw_leyes=32492
-raw_motion_documents=225
-raw_motions=21709
-raw_organizations=0
-raw_bill_pages=0
-raw_motion_pages=0
-scraper_runs=0
-```
-
-## Troubleshooting
-
-If Docker reports `pull access denied`, confirm the image tag is set and that
-you are logged into DockerHub if the repository is private:
-
-```bash
-echo "$OPENPERU_RAW_MIGRATION_IMAGE"
-docker login
-docker compose run --rm migrate-raw
-```
-
-For raw-only debugging, skip clean processing:
-
-```bash
-docker compose run --rm migrate-raw --skip-clean-processing
-```
-
-If the migration fails because raw tables are not empty, reset the volume using
-the commands in the reset section.
 
 ## Maintainer Notes
 
@@ -140,5 +74,4 @@ docker buildx build \
 docker push cesarnunezh/opencongress-raw-migration:latest
 ```
 
-After pushing a new seed image, teammates can reset their local volume and rerun
-the migration.
+After pushing a new seed image, other contributors can reset their local volume and rerun the migration.
