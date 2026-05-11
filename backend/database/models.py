@@ -161,7 +161,7 @@ class Bill(Base):
     proponent: Mapped[str] = mapped_column(nullable=False)
     author_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=True)
     bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+        ForeignKey("organizations.org_id"), nullable=True
     )
     bill_approved: Mapped[bool] = mapped_column(nullable=False)
     summary_oc: Mapped[str] = mapped_column(nullable=False)
@@ -241,25 +241,26 @@ class BillStep(Base):
         step_type (BillStepType): Type of the step related to the bill
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (str): Id of the vote.
-        step_date (datetime): The date and time when the step occured.
+        step_date (date): The date and time when the step occured.
         step_detail (str): The details on the step
     """
 
     __tablename__ = "bill_steps"
 
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=False)
-    step_id: Mapped[int] = mapped_column(primary_key=True)
+    step_id: Mapped[int] = mapped_column(nullable=False)
     step_type: Mapped[str] = mapped_column(nullable=False)
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
         ForeignKey("vote_events.id"), nullable=True
     )
-    step_date: Mapped[datetime] = mapped_column(nullable=False)
+    step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
         Index("ix_billstep_bill_id", "bill_id"),
         Index("ix_billstep_vote_event_id", "vote_event_id"),
+        PrimaryKeyConstraint("bill_id", "step_id", "pk_bill_steps"),
     )
 
 
@@ -280,7 +281,9 @@ class BillText(Base):
     text: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
-        PrimaryKeyConstraint("file_id", "version_id", name="bill_texts"),
+        PrimaryKeyConstraint(
+            "bill_id", "step_id", "file_id", "version_id", name="bill_texts"
+        ),
         Index("ix_bill_texts_bill_id", "bill_id"),
         Index("ix_bill_texts_step_id", "step_id"),
         Index("ix_bill_texts_file_id", "file_id"),

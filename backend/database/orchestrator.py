@@ -974,6 +974,9 @@ class OpenPeruOrchestrator:
                                 text_schema = process_bill_text(pages)
                             except ValueError:
                                 stats.skipped += 1
+                                logger.error(
+                                    f"Error extracting Bill Text for bill_id {bill.id}, step_id: {raw_doc.step_id}, file_id: {raw_doc.file_id}"
+                                )
                                 continue
                             crud_bills.upsert_bill_text(
                                 db,

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, date
 from dataclasses import dataclass
 from typing import Type
+from enum import Enum
 
 from backend import TypeOrganization
 from backend.database import models as db_models
@@ -35,7 +36,7 @@ MEMBERSHIP_MODELS = {
 }
 
 
-def _enum_value(value) -> str:
+def _enum_value(value: Enum | str) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
@@ -84,6 +85,27 @@ def find_organization(
         select(db_models.Organization).where(
             db_models.Organization.org_name == org_name,
             db_models.Organization.org_type == org_type_value,
+        )
+    )
+
+
+def find_active_bancada_for_person(
+    db: Session, person_id: int, at_date: date | datetime
+) -> db_models.Organization | None:
+    if isinstance(at_date, datetime):
+        at_date = at_date.date()
+
+    return db.scalar(
+        select(db_models.Organization)
+        .join(
+            db_models.Membership,
+            db_models.Membership.org_id == db_models.Organization.org_id,
+        )
+        .where(
+            db_models.Membership.person_id == person_id,
+            db_models.Membership.membership_type == TypeOrganization.BANCADA.value,
+            db_models.Membership.start_date <= at_date,
+            db_models.Membership.end_date >= at_date,
         )
     )
 

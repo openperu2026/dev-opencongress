@@ -248,7 +248,7 @@ class BillStep(PrintableModel):
         step_type (TypeBillStep): Type of the step related to the bill
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (str): Id of the vote.
-        step_date (datetime): The date and time when the step occured.
+        step_date (date): The date and time when the step occured.
         step_detail (str): The details on the step
     """
 
@@ -257,7 +257,7 @@ class BillStep(PrintableModel):
     step_type: TypeBillStep
     vote_step: bool
     vote_event_id: str | None = None
-    step_date: datetime
+    step_date: date
     step_detail: str
     step_committees: str | list[str] | None
 
@@ -386,7 +386,7 @@ class MotionStep(PrintableModel):
         id (int): A unique identifier for each step record.
         motion_id (str): The identifier of the motion associated with this step.
         vote_step (bool): Records if the step is a vote or not.
-        step_date (datetime): The date and time when the step occured.
+        step_date (date): The date and time when the step occured.
         step_detail (str): The details on the step
         step_url (str): The url associated to the step
     """
@@ -395,7 +395,7 @@ class MotionStep(PrintableModel):
     motion_id: str
     vote_step: bool
     vote_event_id: str | None
-    step_date: datetime
+    step_date: date
     step_status: str | None = None
     step_detail: str
     step_files: list[int]
