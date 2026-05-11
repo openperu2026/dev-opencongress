@@ -103,7 +103,7 @@ def upsert_bill_organization(
         if hasattr(schema.org_type, "value")
         else schema.org_type,
         "presentation_date": schema.presentation_date,
-        "decission_date": schema.decission_date,
+        "decision_date": schema.decision_date,
     }
 
     if existing is not None:

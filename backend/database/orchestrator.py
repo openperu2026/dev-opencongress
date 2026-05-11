@@ -36,7 +36,6 @@ from backend.process.bills import (
     process_bill,
     process_bill_organizations,
     process_bill_text,
-    find_organization_schema,
 )
 from backend.process.congresistas import (
     process_cong_memberships,
@@ -55,7 +54,7 @@ from backend.process.organizations import (
 )
 from backend.process.leyes import process_leyes
 from backend.process.schema import Membership, Organization
-from backend.process.utils import get_current_leg_year
+from backend.process.utils import get_current_leg_year, find_organization_schema
 from backend.scrapers.bancadas import RawBancadaScraper
 from backend.scrapers.bills import RawBillScraper
 from backend.scrapers.bills_documents import RawBillDocumentScraper

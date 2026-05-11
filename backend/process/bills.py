@@ -60,7 +60,7 @@ def process_bill(
     title = general.get("titulo")
     summary_congreso = general.get("sumilla")
     observations = general.get("observaciones")
-    status = general.get("desEstado")
+    status = classify_des_estado(general.get("desEstado"))
     proponent = general.get("desProponente")
     bancada_name = general.get("desGpar")
 
@@ -108,10 +108,10 @@ def process_bill(
     return bill, cong_list, bill_steps
 
 
-def is_bill_approved(steps: list[BillStep], status: str | None = None) -> bool:
+def is_bill_approved(steps: list[BillStep], status: TypeBillStep | None = None) -> bool:
     if steps:
         return any([step.step_type == TypeBillStep.PUBLICADO for step in steps])
-    return status == "Publicada en el Diario Oficial El Peruano"
+    return status == TypeBillStep.PUBLICADO
 
 
 def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
@@ -322,7 +322,7 @@ def process_bill_organizations(
                 org_name=committee_name,
                 org_type="Comisión",
                 presentation_date=presentation_date,
-                decission_date=date_info.get("last_decision_date"),
+                decision_date=date_info.get("last_decision_date"),
             )
         )
 
@@ -332,26 +332,8 @@ def process_bill_organizations(
             org_name="Cámara de Diputados",
             org_type="Cámara",
             presentation_date=dates.get("presentation_date"),
-            decission_date=dates.get("final_plenary_decision_date"),
+            decision_date=dates.get("final_plenary_decision_date"),
         )
     )
 
     return list_orgs
-
-
-def find_organization_schema(
-    bill_orgs: list[BillOrganization],
-    *,
-    org_name: str,
-    org_type: str,
-) -> BillOrganization | None:
-    return next(
-        (
-            org
-            for org in bill_orgs
-            if org.org_name == org_name
-            and (org.org_type.value if hasattr(org.org_type, "value") else org.org_type)
-            == org_type
-        ),
-        None,
-    )
