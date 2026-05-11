@@ -75,7 +75,7 @@ def test_upsert_bill_text_insert(session):
     assert row.version_id == 1
     assert row.text == "PROYECTO DE LEY ..."
 
-    loaded = session.get(BillText, (9001, 1))
+    loaded = session.get(BillText, ("BILL_BT", 5001, 9001, 1))
     assert loaded is not None
     assert loaded.bill_id == "BILL_BT"
     assert loaded.step_id == 5001

@@ -260,7 +260,7 @@ class BillStep(Base):
     __table_args__ = (
         Index("ix_billstep_bill_id", "bill_id"),
         Index("ix_billstep_vote_event_id", "vote_event_id"),
-        PrimaryKeyConstraint("bill_id", "step_id", "pk_bill_steps"),
+        PrimaryKeyConstraint("bill_id", "step_id", name="pk_bill_steps"),
     )
 
 

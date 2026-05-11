@@ -186,7 +186,7 @@ def upsert_bill_text(
     version_id: int,
     text: str,
 ) -> db_models.BillText:
-    existing = db.get(db_models.BillText, (file_id, version_id))
+    existing = db.get(db_models.BillText, (bill_id, step_id, file_id, version_id))
     payload = {
         "bill_id": bill_id,
         "step_id": step_id,

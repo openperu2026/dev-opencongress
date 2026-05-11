@@ -342,6 +342,10 @@ class Motion(PrintableModel):
         return parse_motion_type(v)
 
 
+class MotionOrganization(PrintableModel):
+    pass
+
+
 class MotionCongresistas(PrintableModel):
     """
     Represents a relation between a motion and parliament members based on their
