@@ -227,14 +227,14 @@ class BillOrganization(PrintableModel):
         org_name (str): The identifier of the organization.
         org_type (str): Type of the organization.
         presentation_date (date): Date of presentation of the bill in the organization.
-        decission_date (date): Date of the final decission of the bill in the organization.
+        decision_date (date): Date of the final decision of the bill in the organization.
     """
 
     bill_id: str
     org_name: str
     org_type: TypeOrganization
     presentation_date: date
-    decission_date: date | None = None
+    decision_date: date | None = None
 
 
 class BillStep(PrintableModel):
@@ -247,8 +247,8 @@ class BillStep(PrintableModel):
         step_type (TypeBillStep): Type of the step related to the bill
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (str): Id of the vote.
-        step_date (datetime): The date and time when the step occured.
-        step_detail (str): The details on the step
+        step_date (date): The date and time when the step occured.
+        step_detail (list[str]): The details on the step
     """
 
     bill_id: str
@@ -256,9 +256,9 @@ class BillStep(PrintableModel):
     step_type: TypeBillStep
     vote_step: bool
     vote_event_id: str | None = None
-    step_date: datetime
+    step_date: date
     step_detail: str
-    step_committees: str | list[str] | None
+    step_committees: list[str] | None
 
     model_config = ConfigDict(use_enum_values=False)
 

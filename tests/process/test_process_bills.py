@@ -215,7 +215,7 @@ def test_process_bill_organizations_uses_step_committees_only_and_dates():
     committee = orgs[0]
     assert committee.org_type == "Comisión"
     assert committee.presentation_date.isoformat() == "2026-01-02"
-    assert committee.decission_date.isoformat() == "2026-01-05"
+    assert committee.decision_date.isoformat() == "2026-01-05"
     chamber = orgs[1]
     assert chamber.org_type == "Cámara"
     assert chamber.presentation_date.isoformat() == "2026-01-01"
