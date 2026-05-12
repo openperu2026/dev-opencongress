@@ -1,5 +1,5 @@
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 from backend.core.enums import TypeMotionStep
 from backend.core.parsers import classify_motion_des_estado
@@ -14,12 +14,14 @@ from backend.process.schema import (
 from backend.process.utils import create_vote_ids
 
 
-def _parse_datetime(value: str) -> datetime:
-    return datetime.fromisoformat(value)
+def _parse_datetime(value: str | None) -> date | None:
+    if value:
+        return datetime.fromisoformat(value).date()
+    return None
 
 
 def summarize_motion(
-    motion_id: str, presentation_date: datetime, steps: list[MotionStep]
+    motion_id: str, presentation_date: date, steps: list[MotionStep]
 ) -> str:
     # TODO: Connect in another PR with summarization.
     return f"{motion_id}: PENDING SUMMARY with {len(steps)} steps presented on {presentation_date}"
@@ -180,9 +182,7 @@ def process_motion_organizations(
             motion_id=raw_motion.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=presentation_date.date()
-            if presentation_date is not None
-            else None,
-            decision_date=decision_date.date() if decision_date is not None else None,
+            presentation_date=presentation_date,
+            decision_date=decision_date,
         )
     ]

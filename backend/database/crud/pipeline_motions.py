@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Iterable
 
 from sqlalchemy.orm import Session
+from enum import Enum
 
 from backend.database import models as db_models
 from backend.process import schema
@@ -48,7 +49,7 @@ def upsert_motion_congresista(
     motion_id: str,
     person_id: int,
     bancada_id: int,
-    role_type,
+    role_type: Enum | str,
 ) -> db_models.MotionCongresistas:
     existing = db.get(db_models.MotionCongresistas, (motion_id, person_id))
     role_type = _enum_value(role_type)

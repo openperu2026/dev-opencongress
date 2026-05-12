@@ -446,7 +446,7 @@ class Congresista(PrintableModel):
     @field_validator("dni", mode="before")
     @classmethod
     def validate_dni(cls, v):
-        if len(v) == 8 and isinstance(v, str):
+        if isinstance(v, str) and len(v) == 8:
             return v
         return None
 
