@@ -48,7 +48,7 @@ Records attendance at vote events. Unique on `(event_id, attendee_id)`.
 |---|---|---|---|
 | event_id | Integer | PK, FK → vote_events.id | |
 | attendee_id | Integer | FK → congresistas.id | |
-| status | Enum(AttendanceStatus) | | Present, absent, licencia |
+| status | String | | Present, absent, licencia |
 
 ### BancadaMembership
 
@@ -330,12 +330,14 @@ Represents a vote event in a plenary session. Unique on `(leg_period, bill_or_mo
 | Column | Type | Key | Description |
 |---|---|---|---|
 | vote_event_id | Integer | PK | Auto-increment |
-| leg_period | Enum(LegPeriod) | UQ | Legislative period |
-| bill_or_motion | String | UQ | Whether this vote is on a bill or motion |
-| bill_motion_id | String | UQ | Identifier for the bill or motion voted on |
-| date | DateTime | UQ | Date of the vote |
-| result | Enum(VoteResult) | | Outcome: aprobado, rechazado, etc. |
-| majority_type | Enum(MajorityType) | | Type of majority required |
+| org_id | Integer | FK → organizations.org_id | Unique identifier for the organization where the vote event occur
+| bill_id | String | FK → bills.id | Unique identifier for the bill associated with the vote.
+| motion_id | String | FK → motions.id | Unique identifier for the motion associated with the vote.
+| event_date | Date |  | The date of the vote event.
+| result | String |  | Final result of the vote event
+| votes_in_favor | Integer |  | Number of votes in favor
+| votes_against | Integer |  | Number of votes against
+| votes_abstention | Integer |  | Number of votes in abstention
 
 ### Vote
 
@@ -345,8 +347,8 @@ Records how each congresista voted. Unique on `(vote_event_id, voter_id)`.
 |---|---|---|---|
 | vote_event_id | String | PK, FK → vote_events.vote_event_id | |
 | voter_id | Integer | FK → congresistas.id | |
-| option | Enum(VoteOption) | | Vote cast: yes, no, abstain |
-| bancada_id | Integer | FK → bancadas.bancada_id | Voter's bancada at time of vote |
+| option | String | | Vote cast: yes, no, abstain |
+| bancada_id | Integer | FK → organizations.org_id | Voter's bancada at time of vote |
 
 ### VoteCounts
 
@@ -354,10 +356,10 @@ Pre-aggregated vote counts by bancada. Composite PK on `(vote_event_id, option, 
 
 | Column | Type | Key | Description |
 |---|---|---|---|
-| vote_event_id | String | PK, FK → vote_events.id | |
-| option | Enum(VoteOption) | PK | Vote option |
-| bancada_id | Integer | PK, FK → bancadas.bancada_id | |
-| count | Integer | | Number of votes |
+| vote_event_id | String | PK, FK → vote_events.id | Unique identifier for the vote event. |
+| option | String | PK | Vote option |
+| bancada_id | Integer | PK, FK → organizations.org_id | The political group of the voter. |
+| count | Integer | | Number of votes for the option. |
 
 ## Raw Database - Raw Layer
 
