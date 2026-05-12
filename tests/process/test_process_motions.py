@@ -168,17 +168,17 @@ def test_process_motion_steps_vote_detection_and_vote_id_increment():
     assert out[0].id == 123
     assert out[0].motion_id == "MO_777"
     assert out[0].vote_step is False
-    assert out[0].vote_id is None
+    assert out[0].vote_event_id is None
     assert out[0].step_files == [1]
 
     # Step 2
     assert out[1].vote_step is True
-    assert out[1].vote_id == "MO_777_1"
+    assert out[1].vote_event_id == "MO_777_1"
     assert out[1].step_files == [2, 3]
 
     # Step 3
     assert out[2].vote_step is True
-    assert out[2].vote_id == "MO_777_2"
+    assert out[2].vote_event_id == "MO_777_2"
     assert out[2].step_files == []
 
 

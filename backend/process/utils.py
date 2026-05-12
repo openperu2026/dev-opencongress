@@ -8,7 +8,12 @@ from operator import attrgetter
 from backend import PARTY_ALIASES
 from backend.config import directories
 from backend.database.raw_models import RawBill, RawMotion
-from backend.process.schema import BillStep, MotionStep
+from backend.process.schema import (
+    BillStep,
+    MotionStep,
+    BillOrganization,
+    MotionOrganization,
+)
 
 
 def extract_text(text: str, initial: str = None, final: str = None) -> str:
@@ -164,7 +169,7 @@ def create_vote_ids(
                 vote_id = f"{step.bill_id}_{vote_step_counter}"
             elif isinstance(step, MotionStep):
                 vote_id = f"{step.motion_id}_{vote_step_counter}"
-            step.vote_id = vote_id
+            step.vote_event_id = vote_id
 
         final_list.append(step)
 
@@ -178,3 +183,21 @@ def split_and_sort_name(name: str) -> tuple[str, str, str]:
         return full_name, first_name, last_name
     except ValueError:
         return name, None, None
+
+
+def find_organization_schema(
+    orgs: list[BillOrganization | MotionOrganization],
+    *,
+    org_name: str,
+    org_type: str,
+) -> BillOrganization | MotionOrganization | None:
+    return next(
+        (
+            org
+            for org in orgs
+            if org.org_name == org_name
+            and (org.org_type.value if hasattr(org.org_type, "value") else org.org_type)
+            == org_type
+        ),
+        None,
+    )

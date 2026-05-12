@@ -33,17 +33,15 @@ from backend.database.raw_models import (
 )
 from backend.process.bancadas import process_bancada
 from backend.process.bills import (
-    get_committees,
     process_bill,
-    process_bill_document,
-    process_bill_steps,
+    process_bill_organizations,
+    process_bill_text,
 )
 from backend.process.congresistas import (
     process_cong_memberships,
     process_profile_content,
     get_cong_data,
 )
-from backend.process.billtext import extract_bill_body
 from backend.process.motions import (
     process_motion,
     process_motion_document,
@@ -56,7 +54,7 @@ from backend.process.organizations import (
 )
 from backend.process.leyes import process_leyes
 from backend.process.schema import Membership, Organization
-from backend.process.utils import get_current_leg_year
+from backend.process.utils import get_current_leg_year, find_organization_schema
 from backend.scrapers.bancadas import RawBancadaScraper
 from backend.scrapers.bills import RawBillScraper
 from backend.scrapers.bills_documents import RawBillDocumentScraper
@@ -106,7 +104,13 @@ class OpenPeruOrchestrator:
 
     def _get_approved_ids(self, model: Bill | Motion) -> list[str]:
         with self.DBSession() as db:
-            ids = db.query(model.id).filter(model.approved).all()
+            approved_col = (
+                model.bill_approved if model is Bill else model.motion_approved
+            )
+            ids = [
+                row[0]
+                for row in db.query(model.id).filter(approved_col.is_(True)).all()
+            ]
         return ids
 
     def _get_ids_to_update(
@@ -845,7 +849,61 @@ class OpenPeruOrchestrator:
 
             for raw_bill in rows:
                 try:
-                    bill_schema, bill_congs = process_bill(raw_bill)
+                    bill_schema, bill_congs, bill_steps = process_bill(raw_bill)
+
+                    author = None
+                    if bill_schema.author_name:
+                        author = crud_core.find_congresista(
+                            db,
+                            name=bill_schema.author_name,
+                            website=bill_schema.author_web,
+                        )
+                    if author is None:
+                        logger.warning(
+                            f"Skipping RawBill id={raw_bill.id}: author not found"
+                        )
+                        stats.skipped += 1
+                        continue
+
+                    bancada = None
+                    if bill_schema.bancada_name:
+                        bancada = crud_core.find_organization(
+                            db,
+                            org_name=bill_schema.bancada_name,
+                            org_type="Bancada",
+                        )
+                    if bancada is None:
+                        logger.warning(
+                            f"Skipping RawBill id={raw_bill.id}: bancada not found"
+                        )
+                        stats.skipped += 1
+                        continue
+
+                    bill_orgs = process_bill_organizations(raw_bill, bill_steps)
+                    chamber_schema = find_organization_schema(
+                        bill_orgs,
+                        org_name="Cámara de Diputados",
+                        org_type="Cámara",
+                    )
+
+                    if chamber_schema is None:
+                        logger.warning(
+                            f"Skipping RawBill id={raw_bill.id}: chamber relation not generated"
+                        )
+                        stats.skipped += 1
+                        continue
+                    chamber = crud_core.find_organization(
+                        db,
+                        org_name="Cámara de Diputados",
+                        org_type="Cámara",
+                    )
+                    if chamber is None:
+                        logger.warning(
+                            f"Skipping RawBill id={raw_bill.id}: Cámara de Diputados organization not found"
+                        )
+                        stats.skipped += 1
+                        continue
+
                     pre = db.get(db_models.Bill, bill_schema.id)
                     bill = crud_bills.upsert_bill(db, bill_schema)
                     if pre is None:
@@ -853,6 +911,26 @@ class OpenPeruOrchestrator:
                     else:
                         clean_updated += 1
 
+                    for step_schema in bill_steps:
+                        crud_bills.upsert_bill_step(db, step_schema)
+
+                    for org_schema in bill_orgs:
+                        org = crud_core.find_organization(
+                            db=db,
+                            org_name=org_schema.org_name,
+                            org_type=org_schema.org_type,
+                        )
+                        if org is None:
+                            logger.warning(
+                                f"Skipping BillOrganization bill_id={bill.id}, org={org_schema.org_name}: organization not found"
+                            )
+                            stats.skipped += 1
+                            continue
+                        crud_bills.upsert_bill_organization(
+                            db, bill.id, org.org_id, org_schema
+                        )
+
+                    presentation_date = chamber_schema.presentation_date
                     for cong_rel in bill_congs:
                         cong = crud_core.find_congresista(
                             db,
@@ -862,56 +940,50 @@ class OpenPeruOrchestrator:
                         if cong is None:
                             stats.skipped += 1
                             continue
-                        crud_bills.upsert_bill_congresista(
-                            db, bill.id, cong.id, cong_rel.role_type
+                        signer_bancada = crud_core.find_active_bancada_for_person(
+                            db, cong.id, presentation_date
                         )
-
-                    for comm in get_committees(raw_bill) or []:
-                        org = crud_core.find_organization(
-                            db=db,
-                            org_name=comm.committee_name,
-                            leg_period=bill_schema.leg_period,
-                            leg_year=bill_schema.presentation_date.year,
-                        )
-                        if org is None:
+                        if signer_bancada is None:
+                            logger.warning(
+                                f"Skipping BillCongresistas bill_id={bill.id}, person_id={cong.id}: active bancada not found"
+                            )
                             stats.skipped += 1
                             continue
-                        crud_bills.upsert_bill_committee(db, bill.id, org.org_id)
-
-                    for step_schema in process_bill_steps(raw_bill) or []:
-                        crud_bills.upsert_bill_step(
+                        crud_bills.upsert_bill_congresista(
                             db,
-                            step_schema.id,
                             bill.id,
-                            step_schema.step_date,
-                            step_schema.step_detail,
-                            step_schema.step_status,
-                            step_schema.vote_step,
-                            step_schema.vote_id,
+                            cong.id,
+                            signer_bancada.org_id,
+                            cong_rel.role_type.value
+                            if hasattr(cong_rel.role_type, "value")
+                            else cong_rel.role_type,
                         )
 
                     if include_documents:
                         for raw_doc in crud_bills.find_raw_bill_documents(
                             raw_db, bill.id
                         ):
-                            doc = process_bill_document(raw_doc)
-                            crud_bills.upsert_bill_document(
-                                db,
-                                doc.bill_id,
-                                doc.step_id,
-                                doc.archivo_id,
-                                doc.url,
-                                doc.text,
-                                doc.vote_doc,
+                            pages = crud_bills.find_raw_bill_pages(
+                                raw_db, bill.id, raw_doc.step_id, raw_doc.file_id
                             )
-                            body = extract_bill_body(raw_doc.text)
+                            if not pages:
+                                stats.skipped += 1
+                                continue
+                            try:
+                                text_schema = process_bill_text(pages)
+                            except ValueError:
+                                stats.skipped += 1
+                                logger.error(
+                                    f"Error extracting Bill Text for bill_id {bill.id}, step_id: {raw_doc.step_id}, file_id: {raw_doc.file_id}"
+                                )
+                                continue
                             crud_bills.upsert_bill_text(
                                 db,
-                                archivo_id=doc.archivo_id,  # from process_bill_document / raw_doc
-                                bill_id=bill_schema.id,
-                                step_date=raw_doc.step_date,
-                                seguimiento_id=str(raw_doc.seguimiento_id),
-                                text=body,
+                                bill_id=text_schema.bill_id,
+                                step_id=text_schema.step_id,
+                                file_id=text_schema.file_id,
+                                version_id=text_schema.version_id,
+                                text=text_schema.text,
                             )
                             raw_doc.processed = True
 

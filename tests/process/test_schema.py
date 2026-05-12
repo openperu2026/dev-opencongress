@@ -9,7 +9,6 @@ from backend.process.schema import (
     Bill,
     BillStep,
     BillCongresistas,
-    BillCommittees,
     Congresista,
     Organization,
     Membership,
@@ -17,7 +16,7 @@ from backend.process.schema import (
 from backend import (
     TypeRoleBill,
     Proponents,
-    Legislature,
+    TypeBillStep,
     LegPeriod,
     TypeOrganization,
     RoleOrganization,
@@ -69,18 +68,16 @@ def sample_vote_event(sample_votes, sample_attendance):
 def sample_bill():
     return Bill(
         id="b001",
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        legislature=Legislature.LEGISLATURA_2026_1,
-        presentation_date=datetime.now(),
         title="Ley de Prueba",
-        summary="Resumen",
+        summary_congreso="Resumen",
         observations="Observaciones",
-        complete_text="Texto completo",
         status="En trámite",
         proponent=Proponents.PODER_EJECUTIVO,
         author_name=None,
         author_web=None,
+        bancada_name="Bancada Test",
         bill_approved=True,
+        summary_oc="Resumen OC",
     )
 
 
@@ -158,19 +155,15 @@ def test_bill_congresistas_creation():
     assert relation.role_type == TypeRoleBill.ADHERENTE
 
 
-def test_bill_committees_creation():
-    relation = BillCommittees(bill_id="b001", committee_name="Comision de Justicia")
-    assert relation.committee_name == "Comision de Justicia"
-
-
 def test_bill_step_creation():
     step = BillStep(
-        id=123,
         bill_id="b001",
+        step_id=123,
+        step_type=TypeBillStep.VOTACION,
         vote_step=True,
-        vote_id="b001_1",
-        step_date=datetime.now(),
+        vote_event_id=None,
+        step_date=datetime.now().date(),
         step_detail="Se presentó el proyecto",
-        step_files=[1, 2, 3, 4],
+        step_committees=[],
     )
     assert step.step_detail == "Se presentó el proyecto"

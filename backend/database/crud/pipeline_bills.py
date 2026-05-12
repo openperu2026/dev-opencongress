@@ -1,38 +1,48 @@
 from __future__ import annotations
 
-from typing import Iterable
-
+from enum import Enum
 from sqlalchemy.orm import Session
 
 from backend.database import models as db_models
-from backend.database.crud.pipeline_core import find_congresista
-from backend.database.raw_models import RawBillDocument
+from backend.process import schema
+from backend.database.crud.pipeline_core import (
+    find_congresista,
+    find_organization,
+    _enum_value,
+)
+from backend.database.raw_models import RawBillDocument, RawBillPage
 
 
-def upsert_bill(db: Session, schema) -> db_models.Bill:
+def upsert_bill(db: Session, schema: schema.Bill) -> db_models.Bill:
     author = None
+    bancada = None
     if schema.author_name:
         author = find_congresista(
             db,
             name=schema.author_name,
-            leg_period=schema.leg_period,
             website=schema.author_web,
+        )
+
+    if schema.bancada_name:
+        bancada = find_organization(
+            db,
+            org_name=schema.bancada_name,
+            org_type="Bancada",
         )
 
     payload = {
         "id": schema.id,
-        "leg_period": schema.leg_period,
-        "legislature": schema.legislature,
-        "presentation_date": schema.presentation_date,
         "title": schema.title,
-        "summary": schema.summary,
+        "summary_congreso": schema.summary_congreso,
         "observations": schema.observations or "",
-        "complete_text": schema.complete_text or "",
         "status": schema.status,
-        "proponent": schema.proponent,
+        "proponent": schema.proponent.value
+        if hasattr(schema.proponent, "value")
+        else schema.proponent,
         "author_id": author.id if author else None,
-        "bancada_id": None,
+        "bancada_id": bancada.org_id if bancada else None,
         "bill_approved": schema.bill_approved,
+        "summary_oc": schema.summary_oc,
     }
 
     existing = db.get(db_models.Bill, schema.id)
@@ -49,37 +59,60 @@ def upsert_bill(db: Session, schema) -> db_models.Bill:
 
 
 def upsert_bill_congresista(
-    db: Session, bill_id: str, person_id: int, role_type
+    db: Session,
+    bill_id: str,
+    person_id: int,
+    bancada_id: int,
+    role_type: Enum | str,
 ) -> db_models.BillCongresistas:
+    role_type = _enum_value(role_type)
     existing = db.get(db_models.BillCongresistas, (bill_id, person_id))
+
     if existing is None:
         obj = db_models.BillCongresistas(
-            bill_id=bill_id, person_id=person_id, role_type=role_type
+            bill_id=bill_id,
+            person_id=person_id,
+            bancada_id=bancada_id,
+            role_type=role_type,
         )
         db.add(obj)
         db.flush()
         return obj
 
+    existing.bancada_id = bancada_id
     existing.role_type = role_type
     db.flush()
     return existing
 
 
-def upsert_bill_committee(
-    db: Session, bill_id: str, committee_id: int
-) -> db_models.BillCommittees:
+def upsert_bill_organization(
+    db: Session, bill_id: str, org_id: int, schema: schema.BillOrganization
+) -> db_models.BillOrganization:
     existing = (
-        db.query(db_models.BillCommittees)
+        db.query(db_models.BillOrganization)
         .filter(
-            db_models.BillCommittees.bill_id == bill_id,
-            db_models.BillCommittees.committee_id == committee_id,
+            db_models.BillOrganization.bill_id == bill_id,
+            db_models.BillOrganization.org_id == org_id,
         )
         .first()
     )
+    payload = {
+        "bill_id": bill_id,
+        "org_id": org_id,
+        "org_type": schema.org_type.value
+        if hasattr(schema.org_type, "value")
+        else schema.org_type,
+        "presentation_date": schema.presentation_date,
+        "decision_date": schema.decision_date,
+    }
+
     if existing is not None:
+        for key, value in payload.items():
+            setattr(existing, key, value)
+        db.flush()
         return existing
 
-    obj = db_models.BillCommittees(bill_id=bill_id, committee_id=committee_id)
+    obj = db_models.BillOrganization(**payload)
     db.add(obj)
     db.flush()
     return obj
@@ -87,40 +120,36 @@ def upsert_bill_committee(
 
 def upsert_bill_step(
     db: Session,
-    step_id: int,
-    bill_id: str,
-    step_date,
-    step_detail: str,
-    step_status: str | None = None,
-    vote_step: bool = False,
-    vote_id: str | None = None,
+    schema: schema.BillStep,
 ) -> db_models.BillStep:
-    existing = db.get(db_models.BillStep, step_id)
+    existing = db.get(db_models.BillStep, schema.step_id)
+    step_type = (
+        schema.step_type.value
+        if hasattr(schema.step_type, "value")
+        else schema.step_type
+    )
+    payload = {
+        "bill_id": schema.bill_id,
+        "step_id": schema.step_id,
+        "vote_step": schema.vote_step,
+        "vote_event_id": schema.vote_event_id,
+        "step_type": step_type,
+        "step_date": schema.step_date,
+        "step_detail": schema.step_detail,
+    }
     if existing is None:
-        obj = db_models.BillStep(
-            id=step_id,
-            bill_id=bill_id,
-            vote_step=vote_step,
-            vote_event_id=vote_id,
-            step_type=step_status,
-            step_date=step_date,
-            step_detail=step_detail,
-        )
+        obj = db_models.BillStep(**payload)
         db.add(obj)
         db.flush()
         return obj
 
-    existing.bill_id = bill_id
-    existing.vote_step = vote_step
-    existing.vote_event_id = vote_id
-    existing.step_type = step_status
-    existing.step_date = step_date
-    existing.step_detail = step_detail
+    for key, value in payload.items():
+        setattr(existing, key, value)
     db.flush()
     return existing
 
 
-def find_raw_bill_documents(raw_db: Session, bill_id: str) -> Iterable[RawBillDocument]:
+def find_raw_bill_documents(raw_db: Session, bill_id: str) -> list[RawBillDocument]:
     return (
         raw_db.query(RawBillDocument)
         .filter(
@@ -132,62 +161,45 @@ def find_raw_bill_documents(raw_db: Session, bill_id: str) -> Iterable[RawBillDo
     )
 
 
-def upsert_bill_document(
-    db: Session,
-    bill_id: str,
-    step_id: int,
-    archivo_id: int,
-    url: str,
-    text: str,
-    vote_doc: bool,
-) -> db_models.BillDocument:
-    existing = db.get(db_models.BillDocument, archivo_id)
-    if existing is None:
-        obj = db_models.BillDocument(
-            bill_id=bill_id,
-            step_id=step_id,
-            archivo_id=archivo_id,
-            url=url,
-            text=text,
-            vote_doc=vote_doc,
+def find_raw_bill_pages(
+    raw_db: Session, bill_id: str, step_id: str | int, file_id: str | int
+) -> list[RawBillPage]:
+    return (
+        raw_db.query(RawBillPage)
+        .filter(
+            RawBillPage.bill_id == bill_id,
+            RawBillPage.step_id == str(step_id),
+            RawBillPage.file_id == str(file_id),
+            RawBillPage.last_update.is_(True),
         )
-        db.add(obj)
-        db.flush()
-        return obj
-
-    existing.bill_id = bill_id
-    existing.step_id = step_id
-    existing.url = url
-    existing.text = text
-    existing.vote_doc = vote_doc
-    db.flush()
-    return existing
+        .order_by(RawBillPage.page_num)
+        .all()
+    )
 
 
 def upsert_bill_text(
     db: Session,
     *,
-    archivo_id: int,
     bill_id: str,
-    step_date,
-    seguimiento_id: str,
-    text: str | None,
+    step_id: int,
+    file_id: int,
+    version_id: int,
+    text: str,
 ) -> db_models.BillText:
-    existing = db.get(db_models.BillText, archivo_id)
+    existing = db.get(db_models.BillText, (bill_id, step_id, file_id, version_id))
+    payload = {
+        "bill_id": bill_id,
+        "step_id": step_id,
+        "file_id": file_id,
+        "version_id": version_id,
+        "text": text,
+    }
     if existing is None:
-        row = db_models.BillText(
-            archivo_id=archivo_id,
-            bill_id=bill_id,
-            step_date=step_date,
-            seguimiento_id=seguimiento_id,
-            text=text,
-        )
+        row = db_models.BillText(**payload)
         db.add(row)
         db.flush()
         return row
-    existing.bill_id = bill_id
-    existing.step_date = step_date
-    existing.seguimiento_id = seguimiento_id
-    existing.text = text
+    for key, value in payload.items():
+        setattr(existing, key, value)
     db.flush()
     return existing
