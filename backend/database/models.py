@@ -78,7 +78,7 @@ class VoteEvent(Base):
         org_id (int): Unique identifier for the organization where the vote event occur
         bill_id (str): Unique identifier for the bill associated with the vote.
         motion_id (str): Unique identifier for the motion associated with the vote.
-        date (str): The date of the vote event.
+        event_date (date): The date of the vote event.
         result (str): Final result of the vote event
         votes_in_favor (int): Number of votes in favor
         votes_against (int): Number of votes against
@@ -93,7 +93,7 @@ class VoteEvent(Base):
     )
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
     motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=True)
-    date: Mapped[datetime] = mapped_column(nullable=False)
+    event_date: Mapped[date] = mapped_column(nullable=False)
     result: Mapped[str] = mapped_column(nullable=False)
     votes_in_favor: Mapped[int] = mapped_column(nullable=False)
     votes_against: Mapped[int] = mapped_column(nullable=False)
@@ -133,7 +133,7 @@ class VoteCounts(Base):
     Attributes:
         vote_event_id (str): Unique identifier for the vote event.
         option (str): The voter's choice, e.g., 'yes', 'no', 'abstain'.
-        bancada (str): The political group of the voter.
+        bancada_id (str): The political group of the voter.
         count (int): Number of votes for the option.
     """
 

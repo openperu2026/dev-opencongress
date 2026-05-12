@@ -101,7 +101,7 @@ def test_create_vote_event_and_vote(session):
         vote_event_id="VOT123",
         org_id=1,
         bill_id="B001",
-        date=datetime.now(),
+        event_date=datetime.now(),
         result=VoteResult.APROBADO.value,
         votes_in_favor=100,
         votes_against=10,
