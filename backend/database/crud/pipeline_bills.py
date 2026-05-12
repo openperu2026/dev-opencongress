@@ -65,8 +65,8 @@ def upsert_bill_congresista(
     bancada_id: int,
     role_type: Enum | str,
 ) -> db_models.BillCongresistas:
-    role_type = _enum_value(role_type)
     existing = db.get(db_models.BillCongresistas, (bill_id, person_id))
+    role_type = _enum_value(role_type)
 
     if existing is None:
         obj = db_models.BillCongresistas(

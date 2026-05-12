@@ -41,7 +41,9 @@ def _enum_value(value: Enum | str) -> str:
 
 
 def find_congresista(
-    db: Session, name: str, website: str | None = None, leg_period=None
+    db: Session,
+    name: str,
+    website: str | None = None,
 ) -> db_models.Congresista | None:
     """
     Find a congressperson by website or full name.
