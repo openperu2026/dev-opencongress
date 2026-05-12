@@ -48,7 +48,7 @@ Records attendance at vote events. Unique on `(event_id, attendee_id)`.
 |---|---|---|---|
 | event_id | Integer | PK, FK → vote_events.id | |
 | attendee_id | Integer | FK → congresistas.id | |
-| status | String | | Present, absent, licencia |
+| status | String | | Present, absent, license |
 
 ### BancadaMembership
 
