@@ -651,8 +651,8 @@ class MotionStep(Base):
     step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 
-    __table_args__ = PrimaryKeyConstraint(
-        "motion_id", "step_id", name="pk_motion_steps"
+    __table_args__ = (
+        PrimaryKeyConstraint("motion_id", "step_id", name="pk_motion_steps"),
     )
 
 

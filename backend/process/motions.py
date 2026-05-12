@@ -171,12 +171,18 @@ def process_motion_organizations(
     motion_steps: list[MotionStep],
 ) -> list[MotionOrganization]:
     dates = _get_motion_dates(raw_motion, motion_steps)
+
+    presentation_date = dates.get("presentation_date", None)
+    decision_date = dates.get("final_chamber_decision_date", None)
+
     return [
         MotionOrganization(
             motion_id=raw_motion.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=dates["presentation_date"],
-            decission_date=dates["final_chamber_decision_date"],
+            presentation_date=presentation_date.date()
+            if presentation_date is not None
+            else None,
+            decision_date=decision_date.date() if decision_date is not None else None,
         )
     ]

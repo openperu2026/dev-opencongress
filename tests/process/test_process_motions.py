@@ -22,7 +22,7 @@ def _raw_motion(
             "desTipoMocion": "Otras",
             "sumilla": "Resumen moción",
             "observacion": "Obs",
-            "desEstadoMocion": "En trámite",
+            "desEstadoMocion": "En debate",
         }
     if congresistas is None:
         congresistas = []
@@ -75,7 +75,7 @@ def test_process_motion_with_firmantes_sets_author_and_cong_list():
     assert motion.motion_type == "Otras"
     assert motion.summary_congreso == "Resumen moción"
     assert motion.observations == "Obs"
-    assert motion.status == "En trámite"
+    assert motion.status == "En Debate"
     assert motion.summary_opencongress.startswith("MO_999: PENDING SUMMARY")
     assert steps == []
 
@@ -207,7 +207,7 @@ def test_process_motion_organizations_chamber_only_and_dates():
     assert orgs[0].org_name == "Cámara de Diputados"
     assert orgs[0].org_type == "Cámara"
     assert orgs[0].presentation_date.isoformat() == "2026-01-01"
-    assert orgs[0].decission_date.isoformat() == "2026-01-07"
+    assert orgs[0].decision_date.isoformat() == "2026-01-07"
 
 
 def test_process_motion_organizations_no_steps_uses_raw_presentation_date():
