@@ -122,7 +122,7 @@ def upsert_bill_step(
     db: Session,
     schema: schema.BillStep,
 ) -> db_models.BillStep:
-    existing = db.get(db_models.BillStep, schema.step_id)
+    existing = db.get(db_models.BillStep, (schema.bill_id, schema.step_id))
     step_type = (
         schema.step_type.value
         if hasattr(schema.step_type, "value")

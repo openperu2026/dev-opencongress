@@ -100,7 +100,7 @@ def upsert_motion_step(
     db: Session,
     schema: schema.MotionStep,
 ) -> db_models.MotionStep:
-    existing = db.get(db_models.MotionStep, schema.step_id)
+    existing = db.get(db_models.MotionStep, (schema.motion_id, schema.step_id))
     payload = {
         "motion_id": schema.motion_id,
         "step_id": schema.step_id,
