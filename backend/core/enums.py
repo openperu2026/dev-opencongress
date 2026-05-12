@@ -1,6 +1,14 @@
 from enum import Enum
 
 
+def enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
+def sql_value_list(enum_cls: type[Enum]) -> str:
+    return ", ".join(f"'{str(member.value)}'" for member in enum_cls)
+
+
 class TypeMajority(str, Enum):
     SIMPLE = "Simple"
     ABSOLUTA = "Absoluta"

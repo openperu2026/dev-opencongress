@@ -35,7 +35,7 @@ def _enable_vector(engine):
     Enables vectorized index using pgvector for sqlalchemy
     """
     with engine.begin() as conn:
-        conn.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
 
 
 def _ensure_columns(base, engine, cols: list[str] | None = None):

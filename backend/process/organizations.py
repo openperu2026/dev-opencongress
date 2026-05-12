@@ -6,7 +6,6 @@ from backend.core.parsers import parse_comm_type
 from backend import find_leg_period, normalize_membership_role
 
 from lxml.html import fromstring
-from datetime import datetime
 
 
 def process_chambers() -> list[Organization]:
@@ -75,7 +74,7 @@ def process_admin_org(
 
     final_lst = []
     html = fromstring(raw_org.raw_html)
-    current_leg_period = find_leg_period(datetime.fromisoformat(raw_org.timestamp))
+    current_leg_period = find_leg_period(raw_org.timestamp)
 
     raw_lst = html.xpath('//*[@class="congresistas"]/tbody/tr')
 

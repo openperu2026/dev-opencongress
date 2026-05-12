@@ -22,6 +22,8 @@ from backend.core.enums import (
     TypeOrganization,
     VoteOption,
     VoteResult,
+    enum_values,
+    sql_value_list,
 )
 from backend.core.parsers import (
     classify_des_estado,
@@ -66,4 +68,6 @@ __all__ = [
     "classify_des_estado",
     "find_leg_period",
     "normalize_membership_role",
+    "enum_values",
+    "sql_value_list",
 ]

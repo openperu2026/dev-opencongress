@@ -5,13 +5,55 @@ from sqlalchemy import (
     CheckConstraint,
     Index,
     Text,
+    Enum,
+    text,
 )
-from backend import TypeOrganization
+from backend import (
+    AttendanceStatus,
+    VoteResult,
+    VoteOption,
+    TypeOrganization,
+    TypeCommittee,
+    TypeAdmin,
+    Proponents,
+    TypeBillStep,
+    TypeMotion,
+    TypeMotionStep,
+    TypeRoleBill,
+    enum_values,
+    sql_value_list,
+)
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
 from datetime import datetime, date
 from pgvector.sqlalchemy import Vector
 
+EMBEDDING_DIM = 768
 Base = declarative_base()
+
+
+organization_type_enum = Enum(
+    TypeOrganization,
+    name="organization_type",
+    values_callable=enum_values,
+    native_enum=True,
+    validate_strings=True,
+)
+
+vote_option_enum = Enum(
+    VoteOption,
+    name="vote_option",
+    values_callable=enum_values,
+    native_enum=True,
+    validate_strings=True,
+)
+
+type_role_bill_enum = Enum(
+    TypeRoleBill,
+    name="type_role_bill",
+    values_callable=enum_values,
+    native_enum=True,
+    validate_strings=True,
+)
 
 
 class Vote(Base):
@@ -31,7 +73,7 @@ class Vote(Base):
         ForeignKey("vote_events.vote_event_id"), nullable=False
     )
     voter_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=False)
-    option: Mapped[str] = mapped_column(nullable=False)
+    option: Mapped[VoteOption] = mapped_column(vote_option_enum, nullable=False)
     bancada_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
@@ -62,7 +104,16 @@ class Attendance(Base):
     attendee_id: Mapped[int] = mapped_column(
         ForeignKey("congresistas.id"), nullable=False
     )
-    status: Mapped[str] = mapped_column(nullable=False)
+    status: Mapped[AttendanceStatus] = mapped_column(
+        Enum(
+            AttendanceStatus,
+            name="attendance_status",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
 
     __table_args__ = (
         PrimaryKeyConstraint("event_id", "attendee_id", name="pk_attendance"),
@@ -93,10 +144,21 @@ class VoteEvent(Base):
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
-    bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=True)
-    motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=True)
+    bill_id: Mapped[str | None] = mapped_column(ForeignKey("bills.id"), nullable=True)
+    motion_id: Mapped[str | None] = mapped_column(
+        ForeignKey("motions.id"), nullable=True
+    )
     event_date: Mapped[date] = mapped_column(nullable=False)
-    result: Mapped[str] = mapped_column(nullable=False)
+    result: Mapped[VoteResult] = mapped_column(
+        Enum(
+            VoteResult,
+            name="vote_result",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     votes_in_favor: Mapped[int] = mapped_column(nullable=False)
     votes_against: Mapped[int] = mapped_column(nullable=False)
     votes_abstention: Mapped[int] = mapped_column(nullable=False)
@@ -110,17 +172,30 @@ class VoteEvent(Base):
             """,
             name="ck_vote_event_exactly_one_target",
         ),
-        UniqueConstraint(
+        Index(
+            "uq_vote_event_org_bill_date",
             "org_id",
             "bill_id",
             "event_date",
-            name="uq_vote_event_bill",
+            unique=True,
+            postgresql_where=text("bill_id IS NOT NULL"),
         ),
-        UniqueConstraint(
+        Index(
+            "uq_vote_event_org_motion_date",
             "org_id",
             "motion_id",
             "event_date",
-            name="uq_vote_event_motion",
+            unique=True,
+            postgresql_where=text("motion_id IS NOT NULL"),
+        ),
+        CheckConstraint(
+            "votes_in_favor >= 0", name="ck_vote_event_votes_in_favor_nonnegative"
+        ),
+        CheckConstraint(
+            "votes_against >= 0", name="ck_vote_event_votes_against_nonnegative"
+        ),
+        CheckConstraint(
+            "votes_abstention >= 0", name="ck_vote_event_votes_abstention_nonnegative"
         ),
         Index("ix_vote_event_bill_id", "bill_id"),
         Index("ix_vote_event_motion_id", "motion_id"),
@@ -144,7 +219,7 @@ class VoteCounts(Base):
     vote_event_id: Mapped[str] = mapped_column(
         ForeignKey("vote_events.vote_event_id"), nullable=False
     )
-    option: Mapped[str] = mapped_column(nullable=False)
+    option: Mapped[VoteOption] = mapped_column(vote_option_enum, nullable=False)
     bancada_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
@@ -183,7 +258,16 @@ class Bill(Base):
     summary_congreso: Mapped[str] = mapped_column(Text, nullable=False)
     observations: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)
-    proponent: Mapped[str] = mapped_column(nullable=False)
+    proponent: Mapped[Proponents] = mapped_column(
+        Enum(
+            Proponents,
+            name="proponents",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     author_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=True)
     bancada_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=True
@@ -218,8 +302,7 @@ class BillCongresistas(Base):
     bancada_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
-    role_type: Mapped[str] = mapped_column(nullable=False)
-
+    role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
     __table_args__ = (
         PrimaryKeyConstraint("bill_id", "person_id"),
         Index("ix_billcongresistas_person_id", "person_id"),
@@ -245,7 +328,16 @@ class BillOrganization(Base):
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
-    org_type: Mapped[str] = mapped_column(nullable=False)
+    org_type: Mapped[TypeOrganization] = mapped_column(
+        Enum(
+            TypeOrganization,
+            name="type_organization",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     presentation_date: Mapped[date] = mapped_column(nullable=False)
     decision_date: Mapped[date | None] = mapped_column(nullable=True)
 
@@ -274,7 +366,16 @@ class BillStep(Base):
 
     bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=False)
     step_id: Mapped[int] = mapped_column(nullable=False)
-    step_type: Mapped[str] = mapped_column(nullable=False)
+    step_type: Mapped[TypeBillStep] = mapped_column(
+        Enum(
+            TypeBillStep,
+            name="type_bill_steps",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
         ForeignKey("vote_events.vote_event_id"), nullable=True
@@ -361,9 +462,14 @@ class Organization(Base):
 
     org_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     org_name: Mapped[str] = mapped_column(nullable=False)
-    org_type: Mapped[str] = mapped_column(nullable=False)
-    org_subtype: Mapped[str] = mapped_column(nullable=True)
-    org_link: Mapped[str] = mapped_column(nullable=True)
+
+    org_type: Mapped[TypeOrganization] = mapped_column(
+        organization_type_enum,
+        nullable=False,
+    )
+    org_subtype: Mapped[str | None] = mapped_column(nullable=True)
+    org_link: Mapped[str | None] = mapped_column(nullable=True)
+
     parent_org_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=True
     )
@@ -372,6 +478,28 @@ class Organization(Base):
 
     __table_args__ = (
         UniqueConstraint("org_name", "org_type", "parent_org_id", name="org_uniq"),
+        CheckConstraint(
+            f"""
+            (
+                org_type = '{TypeOrganization.COMMITTEE.value}'
+                AND org_subtype IN ({sql_value_list(TypeCommittee)})
+            )
+            OR
+            (
+                org_type = '{TypeOrganization.ADMINISTRATIVE.value}'
+                AND org_subtype IN ({sql_value_list(TypeAdmin)})
+            )
+            OR
+            (
+                org_type NOT IN (
+                    '{TypeOrganization.COMMITTEE.value}',
+                    '{TypeOrganization.ADMINISTRATIVE.value}'
+                )
+                AND org_subtype IS NULL
+            )
+            """,
+            name="ck_organization_subtype_matches_type",
+        ),
     )
 
 
@@ -384,7 +512,7 @@ class Membership(Base):
         person_id (int): Identifier for the person
         org_id (int): Identifier for the organization
         leg_period (str): Legislative period.
-        membership_type (str): Type of membership (e.g. bancada, partido, committee, etc)
+        organization_type (str): Type of membership (e.g. bancada, partido, committee, etc)
         role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         start_date (date): Date of the beginning of the membership
         end_date (date): Date of the end of the membership
@@ -401,7 +529,10 @@ class Membership(Base):
     )
     leg_period: Mapped[str] = mapped_column(nullable=False)
 
-    membership_type: Mapped[str] = mapped_column(nullable=False)
+    organization_type: Mapped[TypeOrganization] = mapped_column(
+        organization_type_enum,
+        nullable=False,
+    )
     role: Mapped[str] = mapped_column(nullable=False)
 
     start_date: Mapped[date] = mapped_column(nullable=False)
@@ -412,7 +543,7 @@ class Membership(Base):
             "person_id",
             "org_id",
             "leg_period",
-            "membership_type",
+            "organization_type",
             "role",
             "start_date",
             "end_date",
@@ -421,7 +552,7 @@ class Membership(Base):
     )
 
     __mapper_args__ = {
-        "polymorphic_on": membership_type,
+        "polymorphic_on": organization_type,
         "polymorphic_identity": "membership",
     }
 
@@ -585,7 +716,16 @@ class Motion(Base):
     __tablename__ = "motions"
 
     id: Mapped[str] = mapped_column(primary_key=True)
-    motion_type: Mapped[str] = mapped_column(nullable=False)
+    motion_type: Mapped[TypeMotion] = mapped_column(
+        Enum(
+            TypeMotion,
+            name="type_motion",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     summary_congreso: Mapped[str] = mapped_column(Text, nullable=False)
     observations: Mapped[str] = mapped_column(nullable=False)
     status: Mapped[str] = mapped_column(nullable=False)
@@ -612,7 +752,7 @@ class MotionCongresistas(Base):
     person_id: Mapped[int] = mapped_column(
         ForeignKey("congresistas.id"), nullable=False
     )
-    role_type: Mapped[str] = mapped_column(nullable=False)
+    role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
     bancada_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
@@ -643,7 +783,9 @@ class MotionOrganization(Base):
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
-    org_type: Mapped[str] = mapped_column(nullable=False)
+    org_type: Mapped[TypeOrganization] = mapped_column(
+        organization_type_enum, nullable=False
+    )
     presentation_date: Mapped[date] = mapped_column(nullable=False)
     decision_date: Mapped[date | None] = mapped_column(nullable=True)
 
@@ -672,7 +814,16 @@ class MotionStep(Base):
 
     motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=False)
     step_id: Mapped[int] = mapped_column(nullable=False)
-    step_type: Mapped[str] = mapped_column(nullable=False)
+    step_type: Mapped[TypeMotionStep] = mapped_column(
+        Enum(
+            TypeMotionStep,
+            name="type_motion_step",
+            values_callable=enum_values,
+            native_enum=True,
+            validate_strings=True,
+        ),
+        nullable=False,
+    )
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
         ForeignKey("vote_events.vote_event_id"), nullable=True
@@ -783,13 +934,15 @@ class SemanticBill(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     bill_id: Mapped[str] = mapped_column(
-        ForeignKey("bills.id"), nullable=False, index=True
+        ForeignKey("bills.id"), ondelete="CASCADE", nullable=False, index=True
     )
     chunk_index: Mapped[int] = mapped_column(nullable=False)
 
     text: Mapped[str] = mapped_column(Text, nullable=False)
 
-    embedding: Mapped[list[float]] = mapped_column(Vector(768), nullable=False)
+    embedding: Mapped[list[float]] = mapped_column(
+        Vector(EMBEDDING_DIM), nullable=False
+    )
     embedding_model: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
@@ -798,13 +951,5 @@ class SemanticBill(Base):
             "chunk_index",
             "embedding_model",
             name="uq_semantic_bills_bill_chunk_model",
-        ),
-        Index(
-            "ix_semantic_bills_embedding_hnsw",
-            "embedding",
-            postgresql_using="hnsw",
-            postgresql_ops={
-                "embedding": "vector_cosine_ops",
-            },
         ),
     )
