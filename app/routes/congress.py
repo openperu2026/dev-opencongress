@@ -18,62 +18,39 @@ def index():
 
     congresistas = []
 
-    if name_q:
-        with SessionProcessed() as db:
-            rows = db.execute(
-                text(
-                    """
-                    SELECT *
-                    FROM congresistas
-                    WHERE lower(nombre) LIKE lower(:q)
+    filters = []
+    params = {}
 
-                    LIMIT 50
-                    """
-                ),
-                {"q": f"%{name_q}%"},
-            ).mappings()
-            congresistas = (
-                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
-            )
-            congresistas = list(congresistas)
+    if name_q:
+        filters.append("lower(nombre) LIKE lower(:name_q)")
+        params["name_q"] = f"%{name_q}%"
 
     if party_q:
-        with SessionProcessed() as db:
-            rows = db.execute(
-                text(
-                    """
-                    SELECT *
-                    FROM congresistas
-                    WHERE lower(party_name) LIKE lower(:q)
-
-                    LIMIT 50
-                    """
-                ),
-                {"q": f"%{party_q}%"},
-            ).mappings()
-            congresistas = (
-                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
-            )
-            congresistas = list(congresistas)
+        filters.append("lower(party_name) LIKE lower(:party_q)")
+        params["party_q"] = f"%{party_q}%"
 
     if region_q:
-        with SessionProcessed() as db:
-            rows = db.execute(
-                text(
-                    """
-                    SELECT *
-                    FROM congresistas
-                    WHERE lower(dist_electoral) LIKE lower(:q)
+        filters.append("lower(dist_electoral) LIKE lower(:region_q)")
+        params["region_q"] = f"%{region_q}%"
 
-                    LIMIT 50
-                    """
-                ),
-                {"q": f"%{region_q}%"},
-            ).mappings()
-            congresistas = (
-                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
-            )
-            congresistas = list(congresistas)
+
+    if filters:
+        where_clause = " AND ".join(filters)
+
+        query = f"""
+            SELECT *
+            FROM congresistas
+            WHERE {where_clause}
+            LIMIT 50
+        """
+
+        with SessionProcessed() as db:
+            rows = db.execute(text(query), params).mappings()
+            congresistas = [
+                SimpleNamespace(**row, full_name=row["nombre"])
+                for row in rows
+            ]
+
 
     return render_template(
         "congress/search.html",
