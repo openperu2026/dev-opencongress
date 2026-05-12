@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from enum import Enum
 from sqlalchemy.orm import Session
 
 from backend.database import models as db_models
 from backend.process import schema
-from backend.database.crud.pipeline_core import find_congresista, find_organization
+from backend.database.crud.pipeline_core import (
+    find_congresista,
+    find_organization,
+    _enum_value,
+)
 from backend.database.raw_models import RawBillDocument, RawBillPage
 
 
@@ -58,10 +63,10 @@ def upsert_bill_congresista(
     bill_id: str,
     person_id: int,
     bancada_id: int,
-    role_type,
+    role_type: Enum | str,
 ) -> db_models.BillCongresistas:
-    role_type = role_type.value if hasattr(role_type, "value") else role_type
     existing = db.get(db_models.BillCongresistas, (bill_id, person_id))
+    role_type = _enum_value(role_type)
 
     if existing is None:
         obj = db_models.BillCongresistas(
@@ -98,7 +103,7 @@ def upsert_bill_organization(
         if hasattr(schema.org_type, "value")
         else schema.org_type,
         "presentation_date": schema.presentation_date,
-        "decission_date": schema.decission_date,
+        "decision_date": schema.decision_date,
     }
 
     if existing is not None:
@@ -181,7 +186,7 @@ def upsert_bill_text(
     version_id: int,
     text: str,
 ) -> db_models.BillText:
-    existing = db.get(db_models.BillText, (file_id, version_id))
+    existing = db.get(db_models.BillText, (bill_id, step_id, file_id, version_id))
     payload = {
         "bill_id": bill_id,
         "step_id": step_id,

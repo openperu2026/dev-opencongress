@@ -11,15 +11,17 @@ from backend.process.schema import (
     MotionStep,
     MotionText,
 )
-from backend.process.utils import create_vote_ids
+from backend.process.utils import create_vote_ids, as_date
 
 
-def _parse_datetime(value: str) -> datetime:
-    return datetime.fromisoformat(value)
+def _parse_datetime(value: str | None) -> date | None:
+    if value:
+        return datetime.fromisoformat(value).date()
+    return None
 
 
 def summarize_motion(
-    motion_id: str, presentation_date: datetime, steps: list[MotionStep]
+    motion_id: str, presentation_date: date, steps: list[MotionStep]
 ) -> str:
     # TODO: Connect in another PR with summarization.
     return f"{motion_id}: PENDING SUMMARY with {len(steps)} steps presented on {presentation_date}"
@@ -57,7 +59,7 @@ def process_motion(
     motion_type = general.get("desTipoMocion")
     summary_congreso = general.get("sumilla")
     observations = general.get("observacion")
-    status = general.get("desEstadoMocion")
+    status = classify_motion_des_estado(general.get("desEstadoMocion"))
 
     cong_list: list[MotionCongresistas] = []
     if firmantes:
@@ -100,12 +102,8 @@ def process_motion(
 
 def is_motion_approved(steps: list[MotionStep], status: str | None = None) -> bool:
     if steps:
-        return any(step.step_type == TypeMotionStep.PUBLICADO for step in steps)
-    return (
-        classify_motion_des_estado(status, None) == TypeMotionStep.PUBLICADO
-        if status
-        else False
-    )
+        return any([step.step_type == TypeMotionStep.PUBLICADO for step in steps])
+    return status == TypeMotionStep.PUBLICADO
 
 
 def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep]:
@@ -175,36 +173,16 @@ def process_motion_organizations(
     motion_steps: list[MotionStep],
 ) -> list[MotionOrganization]:
     dates = _get_motion_dates(raw_motion, motion_steps)
+
+    presentation_date = dates.get("presentation_date", None)
+    decision_date = dates.get("final_chamber_decision_date", None)
+
     return [
         MotionOrganization(
             motion_id=raw_motion.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=_as_date(dates["presentation_date"]),
-            decission_date=_as_date(dates["final_chamber_decision_date"]),
+            presentation_date=as_date(presentation_date),
+            decission_date=as_date(decision_date),
         )
     ]
-
-
-def _as_date(value: date | datetime | None) -> date | None:
-    if isinstance(value, datetime):
-        return value.date()
-    return value
-
-
-def find_motion_organization_schema(
-    motion_orgs: list[MotionOrganization],
-    *,
-    org_name: str,
-    org_type: str,
-) -> MotionOrganization | None:
-    return next(
-        (
-            org
-            for org in motion_orgs
-            if org.org_name == org_name
-            and (org.org_type.value if hasattr(org.org_type, "value") else org.org_type)
-            == org_type
-        ),
-        None,
-    )

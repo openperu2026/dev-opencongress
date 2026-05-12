@@ -12,12 +12,10 @@ from backend.process.schema import (
     BillText,
 )
 from backend.process.billtext import extract_bill_body
-from backend.process.utils import create_vote_ids
+from backend.process.utils import create_vote_ids, as_date
 
 
-def summarize_bill(
-    bill_id: str, presentation_date: datetime, steps: list[BillStep]
-) -> str:
+def summarize_bill(bill_id: str, presentation_date: date, steps: list[BillStep]) -> str:
     # TODO: Connect in another PR with summarization.
     return f"{bill_id}: PENDING SUMMARY with {len(steps)} steps presented on {presentation_date}"
 
@@ -62,7 +60,7 @@ def process_bill(
     title = general.get("titulo")
     summary_congreso = general.get("sumilla")
     observations = general.get("observaciones")
-    status = general.get("desEstado")
+    status = classify_des_estado(general.get("desEstado"))
     proponent = general.get("desProponente")
     bancada_name = general.get("desGpar")
 
@@ -89,7 +87,7 @@ def process_bill(
 
     bill_steps = process_bill_steps(raw_bill)
     bill_approved = is_bill_approved(bill_steps, status)
-    presentation_date = datetime.fromisoformat(general.get("fecPresentacion"))
+    presentation_date = datetime.fromisoformat(general.get("fecPresentacion")).date()
     summary_oc = summarize_bill(bill_id, presentation_date, bill_steps)
 
     # Creating Bill instance
@@ -110,10 +108,10 @@ def process_bill(
     return bill, cong_list, bill_steps
 
 
-def is_bill_approved(steps: list[BillStep], status: str | None = None) -> bool:
+def is_bill_approved(steps: list[BillStep], status: TypeBillStep | None = None) -> bool:
     if steps:
-        return any(step.step_type == TypeBillStep.PUBLICADO for step in steps)
-    return status == "Publicada en el Diario Oficial El Peruano"
+        return any([step.step_type == TypeBillStep.PUBLICADO for step in steps])
+    return status == TypeBillStep.PUBLICADO
 
 
 def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
@@ -135,7 +133,7 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
         for step in steps:
             # Extracting information from each step
             step_id = step.get("seguimientoPleyId")
-            date = datetime.fromisoformat(step.get("fecha"))
+            date = datetime.fromisoformat(step.get("fecha")).date()
             details = step.get("detalle") or ""
             step_type = classify_des_estado(step.get("desEstado"), details)
             vote_step = step_type == TypeBillStep.VOTACION
@@ -182,16 +180,10 @@ def _parse_step_committees(raw_committees) -> list[str]:
     return []
 
 
-def _as_date(value: date | datetime | None) -> date | None:
-    if isinstance(value, datetime):
-        return value.date()
-    return value
-
-
 def _get_committee_dates(
     bill_steps: list[BillStep],
-) -> dict[str, dict[str, list | datetime]]:
-    committee_dates: dict[str, dict[str, list | datetime]] = {}
+) -> dict[str, dict[str, list | date]]:
+    committee_dates: dict[str, dict[str, list | date]] = {}
 
     sorted_steps = sorted(bill_steps, key=lambda step: step.step_date)
 
@@ -228,7 +220,7 @@ def _get_committee_dates(
     return committee_dates
 
 
-def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | datetime]:
+def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | date]:
     """
     Obtain important dates from BillSteps.
 
@@ -240,7 +232,7 @@ def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | datetime]:
         plenary vote dates
         final plenary decision date
     """
-    final_dict: dict[str, list | datetime] = {
+    final_dict: dict[str, list | date] = {
         "presentation_date": None,
         "committee_rounds": [],
         "plenary_agenda_dates": [],
@@ -251,7 +243,7 @@ def _get_bills_dates(bill_steps: list[BillStep]) -> dict[str, list | datetime]:
         "final_plenary_decision_date": None,
     }
 
-    current_committee_round: dict[str, datetime | None] | None = None
+    current_committee_round: dict[str, date | None] | None = None
 
     sorted_steps = sorted(bill_steps, key=lambda step: step.step_date)
 
@@ -321,7 +313,9 @@ def process_bill_organizations(
         general = json.loads(raw_bill.general or "{}")
         raw_presentation_date = general.get("fecPresentacion")
         if raw_presentation_date:
-            dates["presentation_date"] = datetime.fromisoformat(raw_presentation_date)
+            dates["presentation_date"] = datetime.fromisoformat(
+                raw_presentation_date
+            ).date()
 
     committee_dates = _get_committee_dates(bill_steps)
 
@@ -343,8 +337,8 @@ def process_bill_organizations(
                 bill_id=raw_bill.id,
                 org_name=committee_name,
                 org_type="Comisión",
-                presentation_date=_as_date(presentation_date),
-                decission_date=_as_date(date_info.get("last_decision_date")),
+                presentation_date=as_date(presentation_date),
+                decission_date=as_date(date_info.get("last_decision_date")),
             )
         )
 
@@ -353,27 +347,9 @@ def process_bill_organizations(
             bill_id=raw_bill.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=_as_date(dates.get("presentation_date")),
-            decission_date=_as_date(dates.get("final_plenary_decision_date")),
+            presentation_date=as_date(dates.get("presentation_date")),
+            decission_date=as_date(dates.get("final_plenary_decision_date")),
         )
     )
 
     return list_orgs
-
-
-def find_organization_schema(
-    bill_orgs: list[BillOrganization],
-    *,
-    org_name: str,
-    org_type: str,
-) -> BillOrganization | None:
-    return next(
-        (
-            org
-            for org in bill_orgs
-            if org.org_name == org_name
-            and (org.org_type.value if hasattr(org.org_type, "value") else org.org_type)
-            == org_type
-        ),
-        None,
-    )
