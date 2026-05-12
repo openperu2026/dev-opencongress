@@ -33,7 +33,6 @@ def index():
         filters.append("lower(dist_electoral) LIKE lower(:region_q)")
         params["region_q"] = f"%{region_q}%"
 
-
     if filters:
         where_clause = " AND ".join(filters)
 
@@ -47,10 +46,8 @@ def index():
         with SessionProcessed() as db:
             rows = db.execute(text(query), params).mappings()
             congresistas = [
-                SimpleNamespace(**row, full_name=row["nombre"])
-                for row in rows
+                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
             ]
-
 
     return render_template(
         "congress/search.html",
