@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from dataclasses import dataclass
 from typing import Type
+from enum import Enum
 
 from backend import TypeOrganization
 from backend.database import models as db_models
@@ -35,7 +36,7 @@ MEMBERSHIP_MODELS = {
 }
 
 
-def _enum_value(value) -> str:
+def _enum_value(value: Enum | str) -> str:
     return value.value if hasattr(value, "value") else str(value)
 
 
@@ -106,8 +107,13 @@ def find_active_bancada_for_person(
             db_models.Membership.person_id == person_id,
             db_models.Membership.membership_type == TypeOrganization.BANCADA.value,
             db_models.Membership.start_date <= at_date,
-            db_models.Membership.end_date >= at_date,
+            or_(
+                db_models.Membership.end_date.is_(None),
+                db_models.Membership.end_date >= at_date,
+            ),
         )
+        .order_by(db_models.Membership.start_date.desc())
+        .limit(1)
     )
 
 

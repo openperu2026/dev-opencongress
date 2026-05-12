@@ -172,7 +172,7 @@ def test_bill_step_creation():
         step_type=TypeBillStep.VOTACION,
         vote_step=True,
         vote_event_id=None,
-        step_date=datetime.now(),
+        step_date=datetime.now().date(),
         step_detail="Se presentó el proyecto",
         step_committees=[],
     )

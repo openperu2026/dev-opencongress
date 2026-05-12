@@ -36,7 +36,6 @@ from backend.process.bills import (
     process_bill,
     process_bill_organizations,
     process_bill_text,
-    find_organization_schema,
 )
 from backend.process.congresistas import (
     process_cong_memberships,
@@ -44,7 +43,6 @@ from backend.process.congresistas import (
     get_cong_data,
 )
 from backend.process.motions import (
-    find_motion_organization_schema,
     process_motion,
     process_motion_organizations,
     process_motion_text,
@@ -56,7 +54,7 @@ from backend.process.organizations import (
 )
 from backend.process.leyes import process_leyes
 from backend.process.schema import Membership, Organization
-from backend.process.utils import get_current_leg_year
+from backend.process.utils import get_current_leg_year, find_organization_schema
 from backend.scrapers.bancadas import RawBancadaScraper
 from backend.scrapers.bills import RawBillScraper
 from backend.scrapers.bills_documents import RawBillDocumentScraper
@@ -975,6 +973,9 @@ class OpenPeruOrchestrator:
                                 text_schema = process_bill_text(pages)
                             except ValueError:
                                 stats.skipped += 1
+                                logger.error(
+                                    f"Error extracting Bill Text for bill_id {bill.id}, step_id: {raw_doc.step_id}, file_id: {raw_doc.file_id}"
+                                )
                                 continue
                             crud_bills.upsert_bill_text(
                                 db,
@@ -1037,7 +1038,7 @@ class OpenPeruOrchestrator:
                         continue
 
                     motion_orgs = process_motion_organizations(raw_motion, motion_steps)
-                    chamber_schema = find_motion_organization_schema(
+                    chamber_schema = find_organization_schema(
                         motion_orgs,
                         org_name="Cámara de Diputados",
                         org_type="Cámara",
