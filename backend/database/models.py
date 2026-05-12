@@ -574,7 +574,7 @@ class MotionCongresistas(Base):
         motion_id (str): A unique identifier for the motion.
         nombre (str): Name of the person.
         role_type (str): The type of role that the person has in the motion (e.g. author, coauthor, adherente, etc)
-        bancada_id (str): Unique identifier for the political group associated with the motion at the moment of presentation.
+        bancada_id (int): Unique identifier for the political group associated with the motion at the moment of presentation.
     """
 
     __tablename__ = "motions_congresistas"
@@ -605,7 +605,7 @@ class MotionOrganization(Base):
         org_name (str): The identifier of the organization.
         org_type (str): Type of the organization.
         presentation_date (date): Date of presentation of the motion in the organization.
-        decission_date (date): Date of the final decission of the motion in the organization.
+        decision_date (date): Date of the final decision of the motion in the organization.
     """
 
     __tablename__ = "motion_organizations"
@@ -616,7 +616,7 @@ class MotionOrganization(Base):
     )
     org_type: Mapped[str] = mapped_column(nullable=False)
     presentation_date: Mapped[date] = mapped_column(nullable=False)
-    decission_date: Mapped[date | None] = mapped_column(nullable=True)
+    decision_date: Mapped[date | None] = mapped_column(nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("motion_id", "org_id"),
@@ -642,7 +642,7 @@ class MotionStep(Base):
     __tablename__ = "motion_steps"
 
     motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=False)
-    step_id: Mapped[int] = mapped_column(primary_key=True, nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
     step_type: Mapped[str] = mapped_column(nullable=False)
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
@@ -651,10 +651,8 @@ class MotionStep(Base):
     step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 
-    __table_args__ = (
-        Index("ix_motionstep_motion_id", "motion_id"),
-        Index("ix_motionstep_step_id", "step_id"),
-        Index("ix_motionstep_vote_event_id", "vote_event_id"),
+    __table_args__ = PrimaryKeyConstraint(
+        "motion_id", "step_id", name="pk_motion_steps"
     )
 
 
@@ -681,11 +679,9 @@ class MotionText(Base):
     text: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (
-        PrimaryKeyConstraint("file_id", "version_id", name="motion_texts"),
-        Index("ix_motion_texts_motion_id", "motion_id"),
-        Index("ix_motion_texts_step_id", "step_id"),
-        Index("ix_motion_texts_file_id", "file_id"),
-        Index("ix_motion_texts_version_id", "version_id"),
+        PrimaryKeyConstraint(
+            "motion_id", "step_id", "file_id", "version_id", name="pk_motion_texts"
+        ),
     )
 
 

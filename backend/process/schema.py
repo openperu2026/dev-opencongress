@@ -248,7 +248,8 @@ class BillStep(PrintableModel):
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (str): Id of the vote.
         step_date (date): The date and time when the step occured.
-        step_detail (list[str]): The details on the step
+        step_detail (str): The details on the step
+        step_committees (list[str]): The committees associated with this step
     """
 
     bill_id: str
@@ -357,14 +358,14 @@ class MotionOrganization(PrintableModel):
         org_name (str): The identifier of the organization.
         org_type (str): Type of the organization.
         presentation_date (date): Date of presentation of the motion in the organization.
-        decission_date (date): Date of the final decission of the motion in the organization.
+        decision_date (date): Date of the final decision of the motion in the organization.
     """
 
     motion_id: str
     org_name: str
     org_type: TypeOrganization
     presentation_date: date
-    decission_date: date | None = None
+    decision_date: date | None = None
 
 
 class MotionStep(PrintableModel):

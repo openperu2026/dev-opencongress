@@ -43,7 +43,6 @@ from backend.process.congresistas import (
     get_cong_data,
 )
 from backend.process.motions import (
-    find_motion_organization_schema,
     process_motion,
     process_motion_organizations,
     process_motion_text,
@@ -1039,7 +1038,7 @@ class OpenPeruOrchestrator:
                         continue
 
                     motion_orgs = process_motion_organizations(raw_motion, motion_steps)
-                    chamber_schema = find_motion_organization_schema(
+                    chamber_schema = find_organization_schema(
                         motion_orgs,
                         org_name="Cámara de Diputados",
                         org_type="Cámara",

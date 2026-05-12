@@ -5,13 +5,9 @@ from typing import Iterable
 from sqlalchemy.orm import Session
 
 from backend.database import models as db_models
-from backend.database.crud.pipeline_core import find_congresista
-from backend.database.raw_models import RawMotionDocument, RawMotionPage
 from backend.process import schema
-
-
-def _enum_value(value):
-    return value.value if hasattr(value, "value") else value
+from backend.database.crud.pipeline_core import find_congresista, _enum_value
+from backend.database.raw_models import RawMotionDocument, RawMotionPage
 
 
 def upsert_motion(db: Session, schema: schema.Motion) -> db_models.Motion:
@@ -85,7 +81,7 @@ def upsert_motion_organization(
         "org_id": org_id,
         "org_type": _enum_value(schema.org_type),
         "presentation_date": schema.presentation_date,
-        "decission_date": schema.decission_date,
+        "decision_date": schema.decision_date,
     }
     if existing is None:
         obj = db_models.MotionOrganization(**payload)
@@ -164,7 +160,7 @@ def upsert_motion_text(
     version_id: int,
     text: str,
 ) -> db_models.MotionText:
-    existing = db.get(db_models.MotionText, (file_id, version_id))
+    existing = db.get(db_models.MotionText, (motion_id, step_id, file_id, version_id))
     payload = {
         "motion_id": motion_id,
         "step_id": step_id,

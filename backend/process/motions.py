@@ -57,7 +57,7 @@ def process_motion(
     motion_type = general.get("desTipoMocion")
     summary_congreso = general.get("sumilla")
     observations = general.get("observacion")
-    status = general.get("desEstadoMocion")
+    status = classify_motion_des_estado(general.get("desEstadoMocion"))
 
     cong_list: list[MotionCongresistas] = []
     if firmantes:
@@ -100,12 +100,8 @@ def process_motion(
 
 def is_motion_approved(steps: list[MotionStep], status: str | None = None) -> bool:
     if steps:
-        return any(step.step_type == TypeMotionStep.PUBLICADO for step in steps)
-    return (
-        classify_motion_des_estado(status, None) == TypeMotionStep.PUBLICADO
-        if status
-        else False
-    )
+        return any([step.step_type == TypeMotionStep.PUBLICADO for step in steps])
+    return status == TypeMotionStep.PUBLICADO
 
 
 def process_motion_steps(raw_motion: RawMotion) -> list[MotionStep]:
@@ -184,21 +180,3 @@ def process_motion_organizations(
             decission_date=dates["final_chamber_decision_date"],
         )
     ]
-
-
-def find_motion_organization_schema(
-    motion_orgs: list[MotionOrganization],
-    *,
-    org_name: str,
-    org_type: str,
-) -> MotionOrganization | None:
-    return next(
-        (
-            org
-            for org in motion_orgs
-            if org.org_name == org_name
-            and (org.org_type.value if hasattr(org.org_type, "value") else org.org_type)
-            == org_type
-        ),
-        None,
-    )
