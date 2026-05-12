@@ -338,7 +338,7 @@ def process_bill_organizations(
                 org_name=committee_name,
                 org_type="Comisión",
                 presentation_date=as_date(presentation_date),
-                decission_date=as_date(date_info.get("last_decision_date")),
+                decision_date=as_date(date_info.get("last_decision_date")),
             )
         )
 
@@ -348,7 +348,7 @@ def process_bill_organizations(
             org_name="Cámara de Diputados",
             org_type="Cámara",
             presentation_date=as_date(dates.get("presentation_date")),
-            decission_date=as_date(dates.get("final_plenary_decision_date")),
+            decision_date=as_date(dates.get("final_plenary_decision_date")),
         )
     )
 

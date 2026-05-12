@@ -183,6 +183,6 @@ def process_motion_organizations(
             org_name="Cámara de Diputados",
             org_type="Cámara",
             presentation_date=as_date(presentation_date),
-            decission_date=as_date(decision_date),
+            decision_date=as_date(decision_date),
         )
     ]

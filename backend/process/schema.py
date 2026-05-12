@@ -392,7 +392,7 @@ class MotionStep(PrintableModel):
         step_type (TypeMotionStep): Type of the step related to the motion
         vote_step (bool): Records if the step is a vote or not.
         vote_event_id (int): Id of the vote.
-        step_date (datetime): The date and time when the step occured.
+        step_date (date): The date and time when the step occured.
         step_detail (str): The details on the step
     """
 
@@ -401,7 +401,7 @@ class MotionStep(PrintableModel):
     step_type: TypeMotionStep
     vote_step: bool
     vote_event_id: str | None = None
-    step_date: datetime
+    step_date: date
     step_detail: str
 
     model_config = ConfigDict(use_enum_values=False)
@@ -536,8 +536,8 @@ class Membership(PrintableModel):
         leg_period (str): Legislative period.
         role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         time_stamp (datetime): Date of the scraped record.
-        start_date (datetime): Date of the beginning of the membership
-        end_date (datetime): Date of the end of the membership
+        start_date (date): Date of the beginning of the membership
+        end_date (date): Date of the end of the membership
         condicion (str): Current status of their membership into the
         votes_in_election (int): Votes obtained in the election
         dist_electoral (str): Electoral district
@@ -551,8 +551,8 @@ class Membership(PrintableModel):
     role: RoleOrganization
     time_stamp: datetime
     website: str | None = None
-    start_date: date | datetime | None = None
-    end_date: date | datetime | None = None
+    start_date: date | None = None
+    end_date: date | None = None
     condicion: str | None = None
     votes_in_election: int | None = None
     dist_electoral: str | None = None
