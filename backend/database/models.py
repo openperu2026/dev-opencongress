@@ -111,13 +111,13 @@ class VoteEvent(Base):
         UniqueConstraint(
             "org_id",
             "bill_id",
-            "date",
+            "event_date",
             name="uq_vote_event_bill",
         ),
         UniqueConstraint(
             "org_id",
             "motion_id",
-            "date",
+            "event_date",
             name="uq_vote_event_motion",
         ),
         Index("ix_vote_event_bill_id", "bill_id"),
