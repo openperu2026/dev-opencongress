@@ -166,9 +166,9 @@ def create_vote_ids(
         if step.vote_step:
             vote_step_counter += 1
             if isinstance(step, BillStep):
-                vote_id = f"{step.bill_id}_{vote_step_counter}"
+                vote_id = f"B_{step.bill_id}_{vote_step_counter}"
             elif isinstance(step, MotionStep):
-                vote_id = f"{step.motion_id}_{vote_step_counter}"
+                vote_id = f"M_{step.motion_id}_{vote_step_counter}"
             step.vote_event_id = vote_id
 
         final_list.append(step)

@@ -159,7 +159,7 @@ def test_process_bill_steps_vote_detection_assigns_vote_event_id():
             "detalle": "Se realiza VOTACIÓN en el pleno",
         },
     ]
-    rb = _raw_bill(id="PL_777", steps=steps)
+    rb = _raw_bill(id="2021_777", steps=steps)
 
     out = mod.process_bill_steps(rb)
 
@@ -173,7 +173,7 @@ def test_process_bill_steps_vote_detection_assigns_vote_event_id():
     assert out[1].step_id == 2
     assert out[1].step_type == TypeBillStep.VOTACION
     assert out[1].vote_step is True
-    assert out[1].vote_event_id == "PL_777_1"
+    assert out[1].vote_event_id == "B_2021_777_1"
 
 
 def test_process_bill_organizations_uses_step_committees_only_and_dates():

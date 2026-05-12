@@ -22,7 +22,6 @@ from backend import (
     TypeOrganization,
     RoleOrganization,
     VoteResult,
-    TypeMajority,
     TypeCommittee,
 )
 
@@ -30,9 +29,27 @@ from backend import (
 @pytest.fixture
 def sample_votes():
     return [
-        Vote(vote_event_id="ev1", voter_id=1, option=VoteOption.SI, bancada_id=10),
-        Vote(vote_event_id="ev1", voter_id=2, option=VoteOption.NO, bancada_id=10),
-        Vote(vote_event_id="ev1", voter_id=3, option=VoteOption.SI, bancada_id=20),
+        Vote(
+            vote_event_id="B_2021_3_1",
+            voter_full_name="Juan Perez",
+            voter_website="www.congreso.gob.pe/JuanPerez",
+            option=VoteOption.SI,
+            bancada_name="Fuerza Popular",
+        ),
+        Vote(
+            vote_event_id="B_2021_3_1",
+            voter_full_name="Paolo Guerrero",
+            voter_website="www.congreso.gob.pe/PaoloGuerrero",
+            option=VoteOption.NO,
+            bancada_name="Renovación Popular",
+        ),
+        Vote(
+            vote_event_id="B_2021_3_1",
+            voter_full_name="Patricia Chirinos",
+            voter_website="www.congreso.gob.pe/PatriciaChirinos",
+            option=VoteOption.SI,
+            bancada_name="Juntos por el Perú",
+        ),
     ]
 
 
@@ -40,13 +57,22 @@ def sample_votes():
 def sample_attendance():
     return [
         Attendance(
-            org_id=1, event_id="ev1", attendee_id=1, status=AttendanceStatus.PRESENTE
+            event_id="B_2021_3_1",
+            voter_full_name="Juan Perez",
+            voter_website="www.congreso.gob.pe/JuanPerez",
+            status=AttendanceStatus.PRESENTE,
         ),
         Attendance(
-            org_id=1, event_id="ev1", attendee_id=2, status=AttendanceStatus.AUSENTE
+            event_id="B_2021_3_1",
+            voter_full_name="Paolo Guerrero",
+            voter_website="www.congreso.gob.pe/PaoloGuerrero",
+            status=AttendanceStatus.AUSENTE,
         ),
         Attendance(
-            org_id=1, event_id="ev1", attendee_id=3, status=AttendanceStatus.PRESENTE
+            event_id="B_2021_3_1",
+            voter_full_name="Patricia Chirinos",
+            voter_website="www.congreso.gob.pe/PatriciaChirinos",
+            status=AttendanceStatus.PRESENTE,
         ),
     ]
 
@@ -54,12 +80,13 @@ def sample_attendance():
 @pytest.fixture
 def sample_vote_event(sample_votes, sample_attendance):
     return VoteEvent(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        bill_or_motion="Motion",
-        bill_motion_id="123",
-        date=datetime.now(),
+        vote_event_id="B_2021_3_1",
+        org_name="Cámara de Diputados",
+        org_type="Cámara",
+        bill_id="2021_3",
+        motion_id=None,
+        event_date=datetime.now().date(),
         result=VoteResult.APROBADO,
-        majority_type=TypeMajority.SIMPLE,
         votes=sample_votes,
         attendance=sample_attendance,
     )
@@ -92,9 +119,9 @@ def test_vote_event_counts(sample_vote_event):
 def test_vote_event_counts_by_bancada(sample_vote_event):
     vote_event = sample_vote_event
     counts_by_bancada = vote_event.get_counts_by_bancada()
-    assert counts_by_bancada[10][VoteOption.SI] == 1
-    assert counts_by_bancada[10][VoteOption.NO] == 1
-    assert counts_by_bancada[20][VoteOption.SI] == 1
+    assert counts_by_bancada[0].option == VoteOption.SI
+    assert counts_by_bancada[0].bancada_name == "Fuerza Popular"
+    assert counts_by_bancada[0].count == 1
 
 
 def test_attendance_summary(sample_vote_event):

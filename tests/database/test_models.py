@@ -26,7 +26,6 @@ from backend import (
     Proponents,
     LegPeriod,
     VoteResult,
-    TypeMajority,
     TypeCommittee,
     TypeOrganization,
 )
@@ -97,20 +96,61 @@ def test_create_bill(session):
     assert bill.title == "Ley de Transparencia"
 
 
-def test_create_vote_event_and_vote(session):
+def test_create_bill_vote_event_and_vote(session):
     vote_event = VoteEvent(
-        leg_period=LegPeriod.PERIODO_2021_2026,
-        bill_or_motion="Bill",
-        bill_motion_id="B001",
-        date=datetime.now(),
-        result=VoteResult.APROBADO,
-        majority_type=TypeMajority.SIMPLE,
+        vote_event_id="B_2021_4_1",
+        org_id=1,
+        bill_id="2021_4",
+        event_date=datetime.now().date(),
+        result=VoteResult.APROBADO.value,
+        votes_in_favor=100,
+        votes_against=10,
+        votes_abstention=20,
     )
     session.add(vote_event)
-    vote = Vote(vote_event_id="VOT123", voter_id=1, option=VoteOption.SI, bancada_id=10)
+    vote = Vote(
+        vote_event_id="B_2021_4_1", voter_id=1, option=VoteOption.SI, bancada_id=10
+    )
     session.add(vote)
     session.commit()
     assert vote.option == VoteOption.SI
+
+
+def test_create_motion_vote_event_and_vote(session):
+    vote_event = VoteEvent(
+        vote_event_id="M_2021_4_1",
+        org_id=1,
+        motion_id="2021_4",
+        event_date=datetime.now().date(),
+        result=VoteResult.APROBADO.value,
+        votes_in_favor=100,
+        votes_against=10,
+        votes_abstention=20,
+    )
+    session.add(vote_event)
+    vote = Vote(
+        vote_event_id="M_2021_4_1", voter_id=1, option=VoteOption.SI, bancada_id=10
+    )
+    session.add(vote)
+    session.commit()
+    assert vote.option == VoteOption.SI
+
+
+def test_error_bill_and_motion_vote_event(session):
+    with pytest.raises(IntegrityError):
+        vote_event = VoteEvent(
+            vote_event_id="M_2021_4_1",
+            org_id=1,
+            bill_id="2021_4",
+            motion_id="2021_4",
+            event_date=datetime.now().date(),
+            result=VoteResult.APROBADO.value,
+            votes_in_favor=100,
+            votes_against=10,
+            votes_abstention=20,
+        )
+        session.add(vote_event)
+        session.commit()
 
 
 def test_attendance(session):

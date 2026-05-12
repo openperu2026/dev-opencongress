@@ -3,7 +3,6 @@ from pydantic import BaseModel, field_validator, ConfigDict, model_validator
 from backend import (
     VoteOption,
     VoteResult,
-    TypeMajority,
     AttendanceStatus,
     TypeRoleBill,
     TypeBillStep,
@@ -20,7 +19,6 @@ from backend import (
     parse_proponent,
     parse_motion_type,
 )
-from typing import Optional
 from datetime import datetime, date
 
 
@@ -35,16 +33,18 @@ class Vote(PrintableModel):
 
     Attributes:
         vote_event_id (str):
-        voter_id (str):
+        voter_full_name (str):
+        voter_website (str):
         option (str):
-        bancada_id (str):
+        bancada_name (str):
     """
 
     # Attributes that fit in in Popolo structure
     vote_event_id: str
-    voter_id: int
+    voter_full_name: str
+    voter_website: str | None
     option: VoteOption
-    bancada_id: int
+    bancada_name: str
 
     model_config = ConfigDict(use_enum_values=False)
 
@@ -60,75 +60,11 @@ class Attendance(PrintableModel):
     """
 
     event_id: str
-    attendee_id: int
+    voter_full_name: str
+    voter_website: str | None
     status: AttendanceStatus
 
     model_config = ConfigDict(use_enum_values=False)
-
-
-class VoteEvent(PrintableModel):
-    """
-    Represents a vote event in a parliament session.
-    Attributes:
-        leg_period (str): The legislative period during which the vote occurred.
-        bill_id (str): Unique identifier for the bill associated with the vote.
-        date (str): The date of the vote event.
-    """
-
-    # Attributes that fit in in Popolo structure
-    leg_period: LegPeriod
-    bill_or_motion: str
-    bill_motion_id: str
-    date: datetime
-    result: VoteResult
-    majority_type: TypeMajority | None
-    votes: Optional[list[Vote]] = None
-    attendance: Optional[list[Attendance]] = None
-
-    @field_validator("leg_period", mode="before")
-    @classmethod
-    def validate_leg_period(cls, v):
-        if isinstance(v, LegPeriod):
-            return v
-        return parse_leg_period(v)
-
-    model_config = ConfigDict(use_enum_values=False)
-
-    def get_counts(self) -> dict[VoteOption, int]:
-        """
-        Counts the number of votes per option.
-        """
-        if not self.votes:
-            return {}
-        return {
-            option: sum(1 for vote in self.votes if vote.option == option)
-            for option in set(vote.option for vote in self.votes)
-        }
-
-    def get_counts_by_bancada(self) -> dict[int, dict[VoteOption, int]]:
-        """
-        Returns vote counts grouped by bancada and option.
-        """
-        if not self.votes:
-            return {}
-
-        counts: dict[int, dict[VoteOption, int]] = {}
-        for vote in self.votes:
-            counts.setdefault(vote.bancada_id, {}).setdefault(vote.option, 0)
-            counts[vote.bancada_id][vote.option] += 1
-        return counts
-
-    def get_attendance_summary(self) -> dict[str, int]:
-        """
-        Returns a summary count of attendance statuses.
-        """
-        if not self.attendance:
-            return {}
-
-        summary: dict[str, int] = {}
-        for att in self.attendance:
-            summary[att.status] = summary.get(att.status, 0) + 1
-        return summary
 
 
 class VoteCount(PrintableModel):
@@ -144,10 +80,88 @@ class VoteCount(PrintableModel):
 
     vote_event_id: str
     option: VoteOption
-    bancada_id: int
+    bancada_name: str
     count: int
 
     model_config = ConfigDict(use_enum_values=False)
+
+
+class VoteEvent(PrintableModel):
+    """
+    Represents a vote event in a parliament session.
+    Attributes:
+        vote_event_id (str): Unique identifier for the vote event
+        org_name (str): Name of the organization where the vote occur
+        org_type (str): Type of organization
+        bill_id (str): Unique identifier for the bill associated with the vote.
+        motion_id (str): Unique identifier for the motion associated with the vote.
+        event_date (date): The date of the vote event.
+        result (str): Final result of the vote event
+        votes (list[Vote]): List of Vote objects in this event
+        attendance (list[Attendance]): List of Attendance objects in this event
+    """
+
+    # Attributes that fit in in Popolo structure
+    vote_event_id: str
+    org_name: str
+    org_type: str
+    bill_id: str | None
+    motion_id: str | None
+    event_date: date
+    result: VoteResult
+    votes: list[Vote]
+    attendance: list[Attendance]
+
+    model_config = ConfigDict(use_enum_values=False)
+
+    def get_counts(self) -> dict[VoteOption, int]:
+        """
+        Counts the number of votes per option.
+        """
+        if not self.votes:
+            return {}
+        return {
+            option: sum(1 for vote in self.votes if vote.option == option)
+            for option in set(vote.option for vote in self.votes)
+        }
+
+    def get_counts_by_bancada(self) -> list[VoteCount]:
+        """
+        Returns vote counts grouped by bancada and option.
+        """
+        if not self.votes:
+            return []
+
+        counts: dict[tuple[str, VoteOption], int] = {}
+
+        for vote in self.votes:
+            key = (vote.bancada_name, vote.option)
+            counts[key] = counts.get(key, 0) + 1
+
+        return [
+            VoteCount(
+                vote_event_id=self.vote_event_id,
+                bancada_name=bancada_name,
+                option=option,
+                count=count,
+            )
+            for (bancada_name, option), count in sorted(
+                counts.items(),
+                key=lambda item: (item[0][0], item[0][1].value),
+            )
+        ]
+
+    def get_attendance_summary(self) -> dict[str, int]:
+        """
+        Returns a summary count of attendance statuses.
+        """
+        if not self.attendance:
+            return {}
+
+        summary: dict[str, int] = {}
+        for att in self.attendance:
+            summary[att.status] = summary.get(att.status, 0) + 1
+        return summary
 
 
 class Bill(PrintableModel):
