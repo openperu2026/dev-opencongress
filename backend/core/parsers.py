@@ -117,20 +117,24 @@ def parse_role_bill(value: int | str) -> TypeRoleBill:
     return role
 
 
-def parse_motion_type(value: str) -> TypeMotion:
+MOTION_TYPE_ALIASES = {
+    "Otorgar Facultades de Comisión Investigadora": TypeMotion.COMISION_INVESTIGADORA,
+    "Comisiones Investigadoras": TypeMotion.COMISION_INVESTIGADORA,
+}
+
+
+def parse_motion_type(value: str | None) -> TypeMotion:
     if value is None:
         raise ValueError("motion_type cannot be null")
 
     v = " ".join(value.strip().split())
 
-    # Direct match for scalar enum values.
-    for item in TypeMotion:
-        if isinstance(item.value, str) and item.value == v:
-            return item
+    if v in MOTION_TYPE_ALIASES:
+        return MOTION_TYPE_ALIASES[v]
 
-    # Handle the multi-value case for COMISION_INVESTIGADORA.
-    if v in TypeMotion.COMISION_INVESTIGADORA.value:
-        return TypeMotion.COMISION_INVESTIGADORA
+    for item in TypeMotion:
+        if item.value == v:
+            return item
 
     raise ValueError(f"Unknown motion_type: {value!r}")
 

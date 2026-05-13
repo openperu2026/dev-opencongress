@@ -3,6 +3,7 @@ from sqlalchemy import (
     UniqueConstraint,
     PrimaryKeyConstraint,
     CheckConstraint,
+    ForeignKeyConstraint,
     Index,
     Text,
     Enum,
@@ -402,10 +403,8 @@ class BillText(Base):
 
     __tablename__ = "bill_texts"
 
-    bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=False)
-    step_id: Mapped[int] = mapped_column(
-        ForeignKey("bill_steps.step_id"), nullable=False
-    )
+    bill_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
     file_id: Mapped[int] = mapped_column(nullable=False)
     version_id: Mapped[int] = mapped_column(nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -413,6 +412,11 @@ class BillText(Base):
     __table_args__ = (
         PrimaryKeyConstraint(
             "bill_id", "step_id", "file_id", "version_id", name="pk_bill_texts"
+        ),
+        ForeignKeyConstraint(
+            ["bill_id", "step_id"],
+            ["bill_steps.bill_id", "bill_steps.step_id"],
+            name="fk_bill_texts_bill_steps",
         ),
     )
 
@@ -850,10 +854,8 @@ class MotionText(Base):
 
     __tablename__ = "motion_texts"
 
-    motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=False)
-    step_id: Mapped[int] = mapped_column(
-        ForeignKey("motion_steps.step_id"), nullable=False
-    )
+    motion_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
     file_id: Mapped[int] = mapped_column(nullable=False)
     version_id: Mapped[int] = mapped_column(nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -861,6 +863,11 @@ class MotionText(Base):
     __table_args__ = (
         PrimaryKeyConstraint(
             "motion_id", "step_id", "file_id", "version_id", name="pk_motion_texts"
+        ),
+        ForeignKeyConstraint(
+            ["motion_id", "step_id"],
+            ["motion_steps.motion_id", "motion_steps.step_id"],
+            "fk_motion_steps_texts",
         ),
     )
 

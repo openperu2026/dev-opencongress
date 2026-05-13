@@ -105,7 +105,7 @@ def find_active_bancada_for_person(
         )
         .where(
             db_models.Membership.person_id == person_id,
-            db_models.Membership.membership_type == TypeOrganization.BANCADA.value,
+            db_models.Membership.org_type == TypeOrganization.BANCADA.value,
             db_models.Membership.start_date <= at_date,
             or_(
                 db_models.Membership.end_date.is_(None),

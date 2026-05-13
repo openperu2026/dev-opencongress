@@ -600,7 +600,7 @@ class OpenPeruOrchestrator:
             person_id=cong.id,
             org_id=org.org_id,
             leg_period=membership.leg_period,
-            membership_type=org.org_type,
+            org_type=org.org_type,
             role=membership.role,
             start_date=start_date,
             end_date=end_date,
