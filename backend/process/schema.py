@@ -46,7 +46,7 @@ class Vote(PrintableModel):
     option: VoteOption
     bancada_name: str
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class Attendance(PrintableModel):
@@ -64,7 +64,7 @@ class Attendance(PrintableModel):
     voter_website: str | None
     status: AttendanceStatus
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class VoteCount(PrintableModel):
@@ -83,7 +83,7 @@ class VoteCount(PrintableModel):
     bancada_name: str
     count: int
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class VoteEvent(PrintableModel):
@@ -112,7 +112,7 @@ class VoteEvent(PrintableModel):
     votes: list[Vote]
     attendance: list[Attendance]
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
     def get_counts(self) -> dict[VoteOption, int]:
         """
@@ -195,7 +195,7 @@ class Bill(PrintableModel):
     bill_approved: bool = False
     summary_oc: str
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
     @field_validator("proponent", mode="before")
     @classmethod
@@ -229,7 +229,7 @@ class BillCongresistas(PrintableModel):
             return v
         return parse_role_bill(v)
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class BillOrganization(PrintableModel):
@@ -275,7 +275,7 @@ class BillStep(PrintableModel):
     step_detail: str
     step_committees: list[str] | None
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class BillText(PrintableModel):
@@ -296,7 +296,7 @@ class BillText(PrintableModel):
     version_id: int
     text: str
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class Motion(PrintableModel):
@@ -326,7 +326,7 @@ class Motion(PrintableModel):
     motion_approved: bool
     summary_opencongress: str
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
     @field_validator("motion_type", mode="before")
     @classmethod
@@ -360,7 +360,7 @@ class MotionCongresistas(PrintableModel):
             return v
         return parse_role_bill(v)
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class MotionOrganization(PrintableModel):
@@ -404,7 +404,7 @@ class MotionStep(PrintableModel):
     step_date: date
     step_detail: str
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class MotionText(PrintableModel):
@@ -425,7 +425,7 @@ class MotionText(PrintableModel):
     version_id: int
     text: str
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class Congresista(PrintableModel):
@@ -522,7 +522,7 @@ class Organization(PrintableModel):
 
         return self
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
 
 class Membership(PrintableModel):
@@ -557,7 +557,7 @@ class Membership(PrintableModel):
     votes_in_election: int | None = None
     dist_electoral: str | None = None
 
-    model_config = ConfigDict(use_enum_values=False)
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
 
     @field_validator("leg_period", mode="before")
     @classmethod
