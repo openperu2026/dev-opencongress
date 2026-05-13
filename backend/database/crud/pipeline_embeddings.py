@@ -7,10 +7,10 @@ from sqlalchemy import select, desc, func, text, delete
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
+from backend import EmbeddingModel
 from backend.database import models as db_models
+from backend.database.models import SEMANTIC_BILLS_HNSW_INDEX, DEFAULT_EMBEDDING_DIM
 from sentence_transformers import SentenceTransformer
-
-SEMANTIC_BILLS_HNSW_INDEX = "ix_semantic_bills_embedding_hnsw"
 
 
 def drop_semantic_bills_hnsw_index(db: Session) -> None:
@@ -44,10 +44,62 @@ def create_semantic_bills_hnsw_index(db: Session) -> None:
     )
 
 
+def normalize_whitespace(text: str) -> str:
+    """Normalize the whitespace in a text"""
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def create_bill_full_text(
+    bill: dict,
+    authors: list[str],
+    committees: list[str],
+    bill_text: str | None,
+) -> str | None:
+    """
+    Create the full semantic-search text for a bill.
+
+    Returns None when the bill has no meaningful text to index.
+    """
+
+    title = bill.get("title") or ""
+    summary = bill.get("summary_congreso") or ""
+    authors_text = ", ".join(authors)
+    committees_text = ", ".join(committees)
+    body_text = bill_text or ""
+
+    has_content = any(
+        [
+            title.strip(),
+            summary.strip(),
+            authors_text.strip(),
+            committees_text.strip(),
+            body_text.strip(),
+        ]
+    )
+
+    if not has_content:
+        return None
+
+    full_text = f"""
+Título: {title}
+
+Sumilla: {summary}
+
+Autores: {authors_text}
+
+Comisiones: {committees_text}
+
+Texto:
+{body_text}
+"""
+
+    return normalize_whitespace(full_text)
+
+
 def rebuild_semantic_bills(
     db: Session,
     bill_ids: list[str] | None = None,
-    model_name: str = "intfloat/multilingual-e5-base",
+    embedding_model_name: str = "intfloat/multilingual-e5-base",
 ) -> int:
     """
     Fully rebuild semantic_bills rows for a set of bills.
@@ -61,7 +113,7 @@ def rebuild_semantic_bills(
     Args:
         db (Session): Active SQLAlchemy database session.
         bill_ids (list[str] | None): Bills to rebuild. If None, all bills are used.
-        model_name (str): SentenceTransformer model used to generate embeddings.
+        embedding_model_name (str): SentenceTransformer model used to generate embeddings.
 
     Returns:
         int: Number of semantic_bills rows inserted.
@@ -78,14 +130,14 @@ def rebuild_semantic_bills(
     db.execute(
         delete(db_models.SemanticBill).where(
             db_models.SemanticBill.bill_id.in_(bill_ids),
-            db_models.SemanticBill.model_name == model_name,
+            db_models.SemanticBill.embedding_model_name == embedding_model_name,
         )
     )
 
     inserted_count = bulk_upsert_semantic_bills(
         db=db,
         bill_ids=bill_ids,
-        model_name=model_name,
+        embedding_model_name=embedding_model_name,
     )
 
     create_semantic_bills_hnsw_index(db)
@@ -237,40 +289,21 @@ def create_bill_full_texts(
         if bill is None:
             continue
 
-        title = bill["title"]
-        summary_congreso = bill["summary_congreso"]
         authors = authors_by_bill.get(bill_id, [])
         committees = committees_by_bill.get(bill_id, [])
         bill_text = latest_text_by_bill.get(bill_id, "")
 
-        content_parts = [
-            title,
-            summary_congreso,
-            *authors,
-            *committees,
-            bill_text,
-        ]
-
-        has_content = any(
-            part is not None and str(part).strip() for part in content_parts
+        full_text = create_bill_full_text(
+            bill=bill,
+            authors=authors,
+            committees=committees,
+            bill_text=bill_text,
         )
 
-        # Bill exists but has no usable searchable content
-        if not has_content:
+        if full_text is None:
             continue
 
-        full_texts[bill_id] = f"""
-Título: {bill["title"]}
-
-Sumilla: {bill["summary_congreso"]}
-
-Autores: {", ".join(authors)}
-
-Comisiones: {", ".join(committees)}
-
-Texto:
-{bill_text or ""}
-""".strip()
+        full_texts[bill_id] = full_text
 
     return full_texts
 
@@ -300,9 +333,6 @@ def _get_text_chunks(
         list[str]: List of text chunks ready for embedding generation.
     """
 
-    if not text or not text.strip():
-        return []
-
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than 0")
 
@@ -312,13 +342,13 @@ def _get_text_chunks(
     if overlap >= chunk_size:
         raise ValueError("overlap must be smaller than chunk_size")
 
+    if not text or not text.strip():
+        return []
+
     tokenizer = getattr(embedding_model, "tokenizer", None)
 
     if tokenizer is None:
         raise ValueError("embedding_model must expose a tokenizer")
-
-    # Normalize whitespace
-    text = re.sub(r"\s+", " ", text).strip()
 
     token_ids = tokenizer.encode(
         text,
@@ -355,17 +385,17 @@ def _get_text_chunks(
 def validate_embedding_model_dimension(embedding_model: SentenceTransformer) -> None:
     dim = embedding_model.get_embedding_dimension()
 
-    if dim != db_models.EMBEDDING_DIM:
+    if dim != DEFAULT_EMBEDDING_DIM:
         raise ValueError(
             f"Embedding model dimension mismatch. "
-            f"Database expects {db_models.EMBEDDING_DIM}, but model returns {dim}."
+            f"Database expects {DEFAULT_EMBEDDING_DIM}, but model returns {dim}."
         )
 
 
 def build_semantic_bill_rows(
     db: Session,
     bill_ids: list[str],
-    model_name: str,
+    embedding_model_name: str,
     embedding_model: SentenceTransformer,
 ) -> list[dict]:
     """
@@ -377,7 +407,7 @@ def build_semantic_bill_rows(
     Args:
         db (Session): Active SQLAlchemy database session.
         bill_ids (list[str]): Bill IDs to process.
-        model_name (str): Name of the SentenceTransformer model used to generate
+        embedding_model_name (str): Name of the SentenceTransformer model used to generate
             embeddings.
         embedding_model (SentenceTransformer): Loaded embedding model.
 
@@ -405,7 +435,7 @@ def build_semantic_bill_rows(
                     "bill_id": bill_id,
                     "chunk_index": chunk_index,
                     "text": chunk,
-                    "embedding_model": model_name,
+                    "embedding_model": embedding_model_name,
                 }
             )
 
@@ -421,26 +451,26 @@ def build_semantic_bill_rows(
     return [
         {
             **meta,
-            "embedding": embedding.tolist(),
+            "embedding": embedding,
         }
         for meta, embedding in zip(metadata, embeddings)
     ]
 
 
 @lru_cache(maxsize=2)
-def _get_embedding_model(model_name: str) -> SentenceTransformer:
+def _get_embedding_model(embedding_model_name: str) -> SentenceTransformer:
     """
     Load and cache embedding models per Python process.
 
     This avoids reloading model weights every time semantic rows are generated.
     """
-    return SentenceTransformer(model_name)
+    return SentenceTransformer(embedding_model_name)
 
 
 def bulk_upsert_semantic_bills(
     db: Session,
     bill_ids: list[str],
-    model_name: str = "intfloat/multilingual-e5-base",
+    embedding_model_name: str = "intfloat/multilingual-e5-base",
     embedding_model: SentenceTransformer | None = None,
 ) -> int:
     """
@@ -449,24 +479,26 @@ def bulk_upsert_semantic_bills(
     Args:
         db (Session): Active SQLAlchemy database session.
         bill_ids (list[str]): Bill IDs to process.
-        model_name (str): SentenceTransformer model used to generate embeddings.
+        embedding_model_name (str): SentenceTransformer model used to generate embeddings.
 
     Returns:
         int: Number of semantic chunk rows inserted or updated.
     """
+    if embedding_model_name != EmbeddingModel.MULTILINGUAL_E5_BASE:
+        raise ValueError(f"Unsupported embedding model: {embedding_model_name}")
 
     if not bill_ids:
         return 0
 
     if embedding_model is None:
-        embedding_model = _get_embedding_model(model_name)
+        embedding_model = _get_embedding_model(embedding_model_name)
 
     validate_embedding_model_dimension(embedding_model)
 
     rows = build_semantic_bill_rows(
         db=db,
         bill_ids=bill_ids,
-        model_name=model_name,
+        embedding_model_name=embedding_model_name,
         embedding_model=embedding_model,
     )
 

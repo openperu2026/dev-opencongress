@@ -208,3 +208,7 @@ class TypeCommittee(str, Enum):
     SUBCOM_TLC = "Sub Comisión de Seguimiento del TLC"
     COM_ESP = "Comisiones Especiales"
     COM_ETICA = "Comisión de Ética Parlamentaria"
+
+
+class EmbeddingModel(str, Enum):
+    MULTILINGUAL_E5_BASE = "intfloat/multilingual-e5-base"
