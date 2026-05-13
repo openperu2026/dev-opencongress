@@ -384,7 +384,9 @@ Stores derived metrics for each congresista and legislative period. Rows are reb
 
 Processed table: `semantic_bills`.
 
-Stores bill text chunks and vector embeddings for semantic search. It is a derived index over `bills` and `bill_texts`, not the source of truth for bill metadata or document text.
+`semantic_bills` is a rebuildable derived table. Each row represents one chunk of assembled bill text and the embedding generated from that chunk. The table should be regenerated whenever the chunking strategy, text assembly logic, or embedding model changes. Because it is derived from processed bill data, rows can be safely deleted and recreated as long as the source tables remain available. This table is not the source of truth for bill metadata or document text.
+
+The HNSW vector index for `embedding` is managed outside the SQLAlchemy model. Regular constraints and lookup indexes are part of the model definition, but the vector index is created operationally after large loads or full rebuilds. This avoids the cost of maintaining the HNSW graph during bulk inserts while keeping semantic search fast for normal incremental updates.
 
 | Column | Type | Key | Description |
 |---|---|---|---|
