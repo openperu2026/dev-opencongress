@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 from datetime import datetime, timedelta
 from backend.process.schema import (
     Vote,
@@ -13,10 +14,14 @@ from backend.process.schema import (
     Congresista,
     Organization,
     Membership,
+    Motion,
+    MotionStep,
 )
 from backend import (
     TypeRoleBill,
     TypeBillStep,
+    TypeMotion,
+    TypeMotionStep,
     Proponents,
     LegPeriod,
     TypeOrganization,
@@ -204,3 +209,96 @@ def test_bill_step_creation():
         step_committees=[],
     )
     assert step.step_detail == "Se presentó el proyecto"
+
+
+@pytest.mark.parametrize(
+    ("schema_cls", "payload"),
+    [
+        (
+            Vote,
+            {
+                "vote_event_id": "B_2021_3_1",
+                "voter_full_name": "Juan Perez",
+                "voter_website": None,
+                "option": VoteOption.SI,
+                "bancada_name": "Fuerza Popular",
+                "unexpected": "stale scraper value",
+            },
+        ),
+        (
+            Bill,
+            {
+                "id": "b001",
+                "title": "Ley de Prueba",
+                "summary_congreso": "Resumen",
+                "observations": None,
+                "status": "En trámite",
+                "proponent": Proponents.CONGRESO,
+                "author_name": None,
+                "author_web": None,
+                "bancada_name": "Bancada Test",
+                "bill_approved": False,
+                "summary_oc": "Resumen OC",
+                "legacy_field": "stale processor value",
+            },
+        ),
+        (
+            Motion,
+            {
+                "id": "m001",
+                "motion_type": TypeMotion.SALUDO,
+                "summary_congreso": "Resumen",
+                "observations": None,
+                "status": "En trámite",
+                "author_name": None,
+                "author_web": None,
+                "motion_approved": False,
+                "summary_opencongress": "Resumen OC",
+                "legacy_field": "stale processor value",
+            },
+        ),
+    ],
+)
+def test_process_schemas_reject_extra_fields(schema_cls, payload):
+    """Process schemas should reject unknown fields so stale scraper or processor payloads fail loudly instead of being silently dropped."""
+    with pytest.raises(ValidationError):
+        schema_cls(**payload)
+
+
+@pytest.mark.parametrize(
+    ("schema_cls", "payload"),
+    [
+        (
+            Attendance,
+            {
+                "event_id": "B_2021_3_1",
+                "voter_full_name": "Juan Perez",
+                "status": AttendanceStatus.PRESENTE,
+            },
+        ),
+        (
+            BillStep,
+            {
+                "bill_id": "b001",
+                "step_id": 123,
+                "step_type": TypeBillStep.VOTACION,
+                "vote_step": True,
+                "step_date": datetime.now().date(),
+                "step_committees": [],
+            },
+        ),
+        (
+            MotionStep,
+            {
+                "motion_id": "m001",
+                "step_id": 123,
+                "step_type": TypeMotionStep.PRESENTADO,
+                "vote_step": False,
+                "step_date": datetime.now(),
+            },
+        ),
+    ],
+)
+def test_process_schemas_reject_removed_required_fields(schema_cls, payload):
+    with pytest.raises(ValidationError):
+        schema_cls(**payload)

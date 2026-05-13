@@ -1,6 +1,6 @@
 from backend.database.raw_models import RawCommittee, RawOrganization
 from backend.process.schema import Organization, Membership
-from backend.process.utils import split_and_sort_name, get_current_leg_year
+from backend.process.utils import split_and_sort_name
 from backend.core.parsers import parse_comm_type
 
 from backend import find_leg_period, normalize_membership_role
@@ -74,11 +74,7 @@ def process_admin_org(
 
     final_lst = []
     html = fromstring(raw_org.raw_html)
-    timestamp = getattr(
-        raw_org, "timestamp", f"{raw_org.legislative_year}-08-01T00:00:00"
-    )
-    current_leg_year = get_current_leg_year(timestamp)
-    current_leg_period = find_leg_period(current_leg_year)
+    current_leg_period = find_leg_period(raw_org.timestamp)
 
     raw_lst = html.xpath('//*[@class="congresistas"]/tbody/tr')
 

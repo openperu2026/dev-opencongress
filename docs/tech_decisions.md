@@ -156,13 +156,18 @@ Each decision includes the context that motivated it, the alternatives considere
 - **Context**: As documented in `CONTRIBUTING.md`, the project takes a deliberate position on AI-assisted development.
 - **Rationale**: A human must be fully responsible for either the implementation or the test suite for any feature. This provides a safeguard against subtle architectural decisions and bugs that AI tools may introduce without full project context. AI-generated code must include proper attribution.
 
+## Vector indexes
+- **Decision**: Use pgvector for semantic search embeddings stored directly in PostgreSQL.
+- **Context**: Bills, motions and legislative text need to support semantic search using vector embeddings. The project already relies on PostgreSQL as the main database, so keeping embeddings close to the processed data simplifies the architecture.
+- **Alternatives considered**: Qdrant, ChromaDB.
+- **Rationale**: pgvector allows embeddings to live inside the same PostgreSQL database as the rest of the data model. This avoids running and maintaining a separate vector database service, keeps joins with metadata straightforward, and makes local development easier. Since the current use case is structured semantic search over legislative records, pgvector provides enough flexibility while preserving a simpler deployment model. For large first-time backfills, embeddings can be loaded first and the HNSW index rebuilt afterward. For day-to-day incremental updates, the HNSW index can remain active.
+
 ## Future Decisions (Pending)
 
 The following decisions are expected to arise during the class development phase and will be recorded here when made:
 
 - **Frontend framework**: React vs. Next.js vs. other
 - **LLM provider and model**: OpenAI vs. Anthropic vs. open-source for bill summaries
-- **Vector store**: pgvector vs. Qdrant vs. ChromaDB for semantic search embeddings
 - **API framework**: FastAPI vs. Django REST Framework for the public API
 - **Deployment**: Cloud provider and containerization strategy
 - **Database migration**: When and how to move from SQLite to PostgreSQL if needed.

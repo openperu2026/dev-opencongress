@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from datetime import date, datetime
 import unicodedata
 from backend.core.constants import (
     BILL_ROLE_MAPS,
@@ -17,6 +18,17 @@ from backend.core.enums import (
     RoleOrganization,
     TypeRoleBill,
 )
+
+LEG_PERIOD_RANGES = [
+    (LegPeriod.PERIODO_2026_2031, date(2026, 7, 28), date(2031, 7, 27)),
+    (LegPeriod.PERIODO_2021_2026, date(2021, 7, 28), date(2026, 7, 27)),
+    (LegPeriod.PERIODO_2016_2021, date(2016, 7, 28), date(2021, 7, 27)),
+    (LegPeriod.PERIODO_2011_2016, date(2011, 7, 28), date(2016, 7, 27)),
+    (LegPeriod.PERIODO_2006_2011, date(2006, 7, 28), date(2011, 7, 27)),
+    (LegPeriod.PERIODO_2001_2006, date(2001, 7, 28), date(2006, 7, 27)),
+    (LegPeriod.PERIODO_2000_2001, date(2000, 7, 28), date(2001, 7, 27)),
+    (LegPeriod.PERIODO_1995_2000, date(1995, 7, 28), date(2000, 7, 27)),
+]
 
 
 def _normalize_leg_period(value: str) -> str:
@@ -595,24 +607,28 @@ _MOTION_STEP_PRIORITY: dict[TypeMotionStep, int] = {
 }
 
 
-def find_leg_period(leg_year: int):
-    if leg_year in range(2026, 2031):
-        return parse_leg_period("Parlamentario 2026 - 2031")
-    if leg_year in range(2021, 2026):
-        return parse_leg_period("Parlamentario 2021 - 2026")
-    if leg_year in range(2016, 2021):
-        return parse_leg_period("Parlamentario 2016 - 2021")
-    if leg_year in range(2011, 2016):
-        return parse_leg_period("Parlamentario 2011 - 2016")
-    if leg_year in range(2006, 2011):
-        return parse_leg_period("Parlamentario 2006 - 2011")
-    if leg_year in range(2001, 2006):
-        return parse_leg_period("Parlamentario 2001 - 2006")
-    if leg_year in range(2000, 2001):
-        return parse_leg_period("Parlamentario 2000 - 2001")
-    if leg_year in range(1995, 2000):
-        return parse_leg_period("Parlamentario 1995 - 2000")
-    return parse_leg_period("CCD 1992 -1995")
+def find_leg_period(value: str | date | datetime) -> LegPeriod:
+    """
+    Pure Python version.
+    Use this when value is already a Python date/datetime.
+    """
+    if value is None:
+        raise ValueError("date cannot be null")
+
+    if isinstance(value, str):
+        value = datetime.fromisoformat(value).date()
+    elif isinstance(value, datetime):
+        value = value.date()
+    elif isinstance(value, date):
+        pass
+    else:
+        raise TypeError(f"Expected str, date, or datetime. Got {type(value).__name__}")
+
+    for leg_period, start_date, end_date in LEG_PERIOD_RANGES:
+        if start_date <= value <= end_date:
+            return leg_period
+
+    return LegPeriod.PERIODO_1992_1995
 
 
 def normalize_membership_role(raw: str) -> RoleOrganization:

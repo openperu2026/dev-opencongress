@@ -1,6 +1,14 @@
 from enum import Enum
 
 
+def enum_values(enum_cls: type[Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
+def sql_value_list(enum_cls: type[Enum]) -> str:
+    return ", ".join(f"'{str(member.value)}'" for member in enum_cls)
+
+
 class TypeMajority(str, Enum):
     SIMPLE = "Simple"
     ABSOLUTA = "Absoluta"
@@ -200,3 +208,7 @@ class TypeCommittee(str, Enum):
     SUBCOM_TLC = "Sub Comisión de Seguimiento del TLC"
     COM_ESP = "Comisiones Especiales"
     COM_ETICA = "Comisión de Ética Parlamentaria"
+
+
+class EmbeddingModel(str, Enum):
+    MULTILINGUAL_E5_BASE = "intfloat/multilingual-e5-base"
