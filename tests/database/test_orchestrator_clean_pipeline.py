@@ -96,7 +96,6 @@ def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrat
         assert stats.errors == 0
         assert bill is not None
         assert bill.author_id is None
-        assert bill.bancada_id is None
         assert raw.processed is True
         assert db.query(db_models.BillCongresistas).count() == 0
 
@@ -231,7 +230,6 @@ def test_bill_step_upsert_retains_planned_vote_event_reference(orchestrator):
                 status="Presentado",
                 proponent="Ministerio Público",
                 author_id=None,
-                bancada_id=None,
                 bill_approved=False,
                 summary_oc="Resumen OC",
             )

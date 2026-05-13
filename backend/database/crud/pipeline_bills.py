@@ -7,7 +7,6 @@ from backend.database import models as db_models
 from backend.process import schema
 from backend.database.crud.pipeline_core import (
     find_congresista,
-    find_organization,
     _enum_value,
 )
 from backend.database.raw_models import RawBillDocument, RawBillPage
@@ -15,19 +14,11 @@ from backend.database.raw_models import RawBillDocument, RawBillPage
 
 def upsert_bill(db: Session, schema: schema.Bill) -> db_models.Bill:
     author = None
-    bancada = None
     if schema.author_name:
         author = find_congresista(
             db,
             name=schema.author_name,
             website=schema.author_web,
-        )
-
-    if schema.bancada_name:
-        bancada = find_organization(
-            db,
-            org_name=schema.bancada_name,
-            org_type="Bancada",
         )
 
     payload = {
@@ -40,7 +31,6 @@ def upsert_bill(db: Session, schema: schema.Bill) -> db_models.Bill:
         if hasattr(schema.proponent, "value")
         else schema.proponent,
         "author_id": author.id if author else None,
-        "bancada_id": bancada.org_id if bancada else None,
         "bill_approved": schema.bill_approved,
         "summary_oc": schema.summary_oc,
     }

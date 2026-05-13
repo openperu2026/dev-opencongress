@@ -973,18 +973,6 @@ class OpenPeruOrchestrator:
                             f"RawBill id={raw_bill.id}: author not found; loading bill with author_id=NULL"
                         )
 
-                    bancada = None
-                    if bill_schema.bancada_name:
-                        bancada = crud_core.find_organization(
-                            db,
-                            org_name=bill_schema.bancada_name,
-                            org_type="Bancada",
-                        )
-                    if bancada is None:
-                        logger.warning(
-                            f"RawBill id={raw_bill.id}: bancada not found; loading bill with bancada_id=NULL"
-                        )
-
                     bill_orgs = process_bill_organizations(raw_bill, bill_steps)
                     chamber_schema = find_organization_schema(
                         bill_orgs,
