@@ -11,8 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.config import (
     settings,
     directories,
-    stop_logging_to_console,
-    resume_logging_to_console,
+    log_manager,
 )
 from backend.database import models as db_models
 from backend.database.build_db import drop_step_vote_event_fks
@@ -174,9 +173,7 @@ class OpenPeruOrchestrator:
                 "Running reference scrapers (congresistas, bancadas, committees, organizations)"
             )
 
-            stop_logging_to_console(
-                filename=directories.LOGS_SCRAPERS / "congresistas.log"
-            )
+            log_manager.to_scraper_file("congresistas")
             if self._recent_raw_exists(RawCongresista, days=others_days):
                 logger.info(
                     f"Skipping congresistas scrape: latest raw scrape is within {others_days} days"
@@ -191,10 +188,10 @@ class OpenPeruOrchestrator:
                     start_time, end_time, len(scraped_congs)
                 )
 
-                resume_logging_to_console()
+                log_manager.to_console()
                 self._load_scraper_results("congresistas.py")
 
-            stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "bancadas.log")
+            log_manager.to_scraper_file("bancadas")
             if self._recent_raw_exists(RawBancada, days=others_days):
                 logger.info(
                     f"Skipping bancadas scrape: latest raw scrape is within {others_days} days"
@@ -209,12 +206,10 @@ class OpenPeruOrchestrator:
                     start_time, end_time, int(scraped_banc)
                 )
 
-                resume_logging_to_console()
+                log_manager.to_console()
                 self._load_scraper_results("bancadas.py")
 
-            stop_logging_to_console(
-                filename=directories.LOGS_SCRAPERS / "committees.log"
-            )
+            log_manager.to_scraper_file("committees")
             if self._recent_raw_exists(RawCommittee, days=others_days):
                 logger.info(
                     f"Skipping committees scrape: latest raw scrape is within {others_days} days"
@@ -230,12 +225,10 @@ class OpenPeruOrchestrator:
                     start_time, end_time, scraped_comm
                 )
 
-                resume_logging_to_console()
+                log_manager.to_console()
                 self._load_scraper_results("committees.py")
 
-            stop_logging_to_console(
-                filename=directories.LOGS_SCRAPERS / "organizations.log"
-            )
+            log_manager.to_scraper_file("organizations")
             if self._recent_raw_exists(RawOrganization, days=others_days):
                 logger.info(
                     f"Skipping organizations scrape: latest raw scrape is within {others_days} days"
@@ -251,10 +244,10 @@ class OpenPeruOrchestrator:
                     start_time, end_time, scraped_orgs
                 )
 
-                resume_logging_to_console()
+                log_manager.to_console()
                 self._load_scraper_results("organizations.py")
 
-        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "bills.log")
+        log_manager.to_scraper_file("bills")
         if scrape_bills:
             from backend.scrapers.bills import RawBillScraper
 
@@ -283,10 +276,10 @@ class OpenPeruOrchestrator:
                     flush_every=100,
                 )
 
-            resume_logging_to_console()
+            log_manager.to_console()
             self._load_scraper_results("bills.py")
 
-        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "motions.log")
+        log_manager.to_scraper_file("motions")
         if scrape_motions:
             from backend.scrapers.motions import RawMotionScraper
 
@@ -315,20 +308,20 @@ class OpenPeruOrchestrator:
                     flush_every=100,
                 )
 
-            resume_logging_to_console()
+            log_manager.to_console()
             self._load_scraper_results("motions.py")
 
-        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "documents.log")
+        log_manager.to_scraper_file("documents")
         if scrape_documents and (scrape_bills or scrape_motions):
             doc_bill_run, doc_motion_run = self._scrape_pending_documents()
             self.scraper_results["bills_documents.py"] = doc_bill_run
             self.scraper_results["motions_documents.py"] = doc_motion_run
 
-            resume_logging_to_console()
+            log_manager.to_console()
             self._load_scraper_results("bills_documents.py")
             self._load_scraper_results("motions_documents.py")
 
-        stop_logging_to_console(filename=directories.LOGS_SCRAPERS / "leyes.log")
+        log_manager.to_scraper_file("leyes")
         if scrape_leyes:
             from backend.scrapers.leyes import RawLeyesScraper
 
@@ -358,7 +351,7 @@ class OpenPeruOrchestrator:
                     entity_name="Ley",
                 )
 
-            resume_logging_to_console()
+            log_manager.to_console()
             self._load_scraper_results("leyes.py")
 
     def run_processing(
@@ -380,46 +373,40 @@ class OpenPeruOrchestrator:
         summary: dict[str, ProcessStats] = {}
 
         if process_others:
-            stop_logging_to_console(
-                filename=directories.LOGS_PROCESS / "organizations.log"
-            )
+            log_manager.to_process_file("organizations")
             summary["organizations"] = self._process_organization_definitions()
             summary["bancadas"] = self._process_bancada_definitions()
-            resume_logging_to_console()
+            log_manager.to_console()
 
-            stop_logging_to_console(
-                filename=directories.LOGS_PROCESS / "congresistas.log"
-            )
+            log_manager.to_process_file("congresistas")
             summary["congresistas"] = self._process_congresistas()
-            resume_logging_to_console()
+            log_manager.to_console()
 
-            stop_logging_to_console(
-                filename=directories.LOGS_PROCESS / "memberships.log"
-            )
+            log_manager.to_process_file("memberships")
             summary["admin_memberships"] = self._process_admin_memberships()
             summary["bancada_memberships"] = self._process_bancada_memberships()
-            resume_logging_to_console()
+            log_manager.to_console()
 
         if process_bills:
-            stop_logging_to_console(filename=directories.LOGS_PROCESS / "bills.log")
+            log_manager.to_process_file("bills")
             summary["bills"] = self._process_bills(
                 include_documents=include_documents,
                 limit=bills_limit,
             )
-            resume_logging_to_console()
+            log_manager.to_console()
 
         if process_motions:
-            stop_logging_to_console(filename=directories.LOGS_PROCESS / "motions.log")
+            log_manager.to_process_file("motions")
             summary["motions"] = self._process_motions(
                 include_documents=include_documents,
                 limit=motions_limit,
             )
-            resume_logging_to_console()
+            log_manager.to_console()
 
         if process_leyes:
-            stop_logging_to_console(filename=directories.LOGS_PROCESS / "leyes.log")
+            log_manager.to_process_file("leyes")
             summary["leyes"] = self._process_leyes(limit=leyes_limit)
-            resume_logging_to_console()
+            log_manager.to_console()
 
         return summary
 
