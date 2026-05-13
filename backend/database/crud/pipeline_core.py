@@ -207,22 +207,22 @@ def upsert_membership(
     person_id: int,
     org_id: int,
     leg_period: str,
-    membership_type: str | TypeOrganization,
+    org_type: str | TypeOrganization,
     role: str,
     start_date: date,
     end_date: date,
     extra_fields: dict | None = None,
 ) -> db_models.Membership:
-    membership_type_value = _enum_value(membership_type)
+    org_type_value = _enum_value(org_type)
     role_value = _enum_value(role)
     leg_period_value = _enum_value(leg_period)
-    model = MEMBERSHIP_MODELS[membership_type_value]
+    model = MEMBERSHIP_MODELS[org_type_value]
 
     payload = {
         "person_id": person_id,
         "org_id": org_id,
         "leg_period": leg_period_value,
-        "membership_type": membership_type_value,
+        "org_type": org_type_value,
         "role": role_value,
         "start_date": start_date,
         "end_date": end_date,
@@ -236,7 +236,7 @@ def upsert_membership(
             db_models.Membership.person_id == person_id,
             db_models.Membership.org_id == org_id,
             db_models.Membership.leg_period == leg_period_value,
-            db_models.Membership.membership_type == membership_type_value,
+            db_models.Membership.org_type == org_type_value,
             db_models.Membership.role == role_value,
             db_models.Membership.start_date == start_date,
             db_models.Membership.end_date == end_date,

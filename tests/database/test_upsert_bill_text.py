@@ -39,7 +39,6 @@ def _minimal_bill_and_step(db, bill_id: str, step_id: int):
             status="st",
             proponent=Proponents.CONGRESO.value,
             author_id=None,
-            bancada_id=bancada.org_id,
             bill_approved=False,
             summary_oc="",
         )

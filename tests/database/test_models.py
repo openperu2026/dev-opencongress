@@ -87,7 +87,6 @@ def test_create_bill(session):
         status="En trámite",
         proponent=Proponents.CONGRESO.value,
         author_id=1,
-        bancada_id=org.org_id,
         bill_approved=False,
         summary_oc="Resumen OC",
     )
@@ -181,7 +180,7 @@ def test_membership_validation(session):
         person_id=1,
         org_id=1,
         leg_period=LegPeriod.PERIODO_2021_2026.value,
-        membership_type=TypeOrganization.COMMITTEE.value,
+        org_type=TypeOrganization.COMMITTEE.value,
         role=RoleOrganization.MIEMBRO.value,
         start_date=datetime.now() - timedelta(days=30),
         end_date=datetime.now(),

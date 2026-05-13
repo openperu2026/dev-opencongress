@@ -34,9 +34,9 @@ SEMANTIC_BILLS_HNSW_INDEX = "ix_semantic_bills_embedding_hnsw"
 Base = declarative_base()
 
 
-organization_type_enum = Enum(
+org_type_enum = Enum(
     TypeOrganization,
-    name="organization_type",
+    name="org_type",
     values_callable=enum_values,
     native_enum=True,
     validate_strings=True,
@@ -61,7 +61,7 @@ type_role_bill_enum = Enum(
 embedding_model_name_enum = Enum(
     EmbeddingModel,
     name="embedding_model_name",
-    values_callable=lambda enum_cls: [item.value for item in enum_cls],
+    values_callable=enum_values,
     native_enum=True,
     validate_strings=True,
 )
@@ -282,10 +282,7 @@ class Bill(Base):
     bill_approved: Mapped[bool] = mapped_column(nullable=False)
     summary_oc: Mapped[str] = mapped_column(Text, nullable=False)
 
-    __table_args__ = (
-        Index("ix_bill_author_id", "author_id"),
-        Index("ix_bill_bancada_id", "bancada_id"),
-    )
+    __table_args__ = (Index("ix_bill_author_id", "author_id"),)
 
 
 class BillCongresistas(Base):
@@ -471,7 +468,7 @@ class Organization(Base):
     org_name: Mapped[str] = mapped_column(nullable=False)
 
     org_type: Mapped[TypeOrganization] = mapped_column(
-        organization_type_enum,
+        org_type_enum,
         nullable=False,
     )
     org_subtype: Mapped[str | None] = mapped_column(nullable=True)
@@ -519,7 +516,7 @@ class Membership(Base):
         person_id (int): Identifier for the person
         org_id (int): Identifier for the organization
         leg_period (str): Legislative period.
-        organization_type (str): Type of membership (e.g. bancada, partido, committee, etc)
+        org_type (str): Type of membership (e.g. bancada, partido, committee, etc)
         role (str): Role of the person in the organization (e.g. vocero, miembro, presidente, etc)
         start_date (date): Date of the beginning of the membership
         end_date (date): Date of the end of the membership
@@ -536,8 +533,8 @@ class Membership(Base):
     )
     leg_period: Mapped[str] = mapped_column(nullable=False)
 
-    organization_type: Mapped[TypeOrganization] = mapped_column(
-        organization_type_enum,
+    org_type: Mapped[TypeOrganization] = mapped_column(
+        org_type_enum,
         nullable=False,
     )
     role: Mapped[str] = mapped_column(nullable=False)
@@ -550,7 +547,7 @@ class Membership(Base):
             "person_id",
             "org_id",
             "leg_period",
-            "organization_type",
+            "org_type",
             "role",
             "start_date",
             "end_date",
@@ -559,7 +556,7 @@ class Membership(Base):
     )
 
     __mapper_args__ = {
-        "polymorphic_on": organization_type,
+        "polymorphic_on": "org_type",
         "polymorphic_identity": "membership",
     }
 
@@ -790,9 +787,7 @@ class MotionOrganization(Base):
     org_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=False
     )
-    org_type: Mapped[TypeOrganization] = mapped_column(
-        organization_type_enum, nullable=False
-    )
+    org_type: Mapped[TypeOrganization] = mapped_column(org_type_enum, nullable=False)
     presentation_date: Mapped[date] = mapped_column(nullable=False)
     decision_date: Mapped[date | None] = mapped_column(nullable=True)
 
@@ -941,7 +936,7 @@ class SemanticBill(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
 
     bill_id: Mapped[str] = mapped_column(
-        ForeignKey("bills.id"), ondelete="CASCADE", nullable=False, index=True
+        ForeignKey("bills.id", ondelete="CASCADE"), nullable=False, index=True
     )
     chunk_index: Mapped[int] = mapped_column(nullable=False)
 
@@ -956,7 +951,7 @@ class SemanticBill(Base):
     )
     __table_args__ = (
         CheckConstraint(
-            f"embedding_model_name = {EmbeddingModel.MULTILINGUAL_E5_BASE}",
+            f"embedding_model_name = '{EmbeddingModel.MULTILINGUAL_E5_BASE.value}'",
             name="ck_semantic_bills_embedding_model_name_supported",
         ),
         UniqueConstraint(
