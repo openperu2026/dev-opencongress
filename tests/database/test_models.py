@@ -13,6 +13,8 @@ from backend.database.models import (
     BillCongresistas,
     BillOrganization,
     BillStep,
+    CongresistaMetric,
+    SemanticBill,
     Congresista,
     Organization,
     CommitteeMembership,
@@ -28,6 +30,7 @@ from backend import (
     VoteResult,
     TypeCommittee,
     TypeOrganization,
+    EmbeddingModel,
 )
 
 
@@ -153,7 +156,9 @@ def test_error_bill_and_motion_vote_event(session):
 
 
 def test_attendance(session):
-    attendance = Attendance(event_id=1, attendee_id=1, status=AttendanceStatus.PRESENTE)
+    attendance = Attendance(
+        event_id="B_2021_4_1", attendee_id=1, status=AttendanceStatus.PRESENTE
+    )
     session.add(attendance)
     session.commit()
     assert attendance.status == AttendanceStatus.PRESENTE
@@ -239,8 +244,60 @@ def test_bill_organization(session):
 
 def test_vote_counts(session):
     vote_count = VoteCounts(
-        vote_event_id=1, option=VoteOption.SI, bancada_id=10, count=40
+        vote_event_id="B_2021_4_1", option=VoteOption.SI, bancada_id=10, count=40
     )
     session.add(vote_count)
     session.commit()
     assert vote_count.count == 40
+
+
+def test_create_congresista_metric(session):
+    metric = CongresistaMetric(
+        cong_id=1,
+        leg_period=LegPeriod.PERIODO_2021_2026.value,
+        avg_attendance=0.75,
+        bills_auth=2,
+        bills_success_rate=0.5,
+        motions_auth=1,
+        motions_success_rate=1.0,
+    )
+
+    session.add(metric)
+    session.commit()
+
+    saved = session.get(
+        CongresistaMetric,
+        (1, LegPeriod.PERIODO_2021_2026.value),
+    )
+    assert saved.avg_attendance == 0.75
+    assert saved.bills_auth == 2
+    assert saved.motions_success_rate == 1.0
+
+
+def test_create_semantic_bill(session):
+    bill = Bill(
+        id="B002",
+        title="Ley de Datos Abiertos",
+        summary_congreso="Resumen",
+        observations="",
+        status="En trámite",
+        proponent=Proponents.CONGRESO.value,
+        author_id=None,
+        bill_approved=False,
+        summary_oc="Resumen OC",
+    )
+    semantic_bill = SemanticBill(
+        bill_id="B002",
+        chunk_index=0,
+        text="Texto para búsqueda semántica",
+        embedding=[0.0] * 768,
+        embedding_model_name=EmbeddingModel.MULTILINGUAL_E5_BASE.value,
+    )
+
+    session.add(bill)
+    session.add(semantic_bill)
+    session.commit()
+
+    saved = session.query(SemanticBill).filter_by(bill_id="B002").one()
+    assert saved.chunk_index == 0
+    assert saved.embedding_model_name == EmbeddingModel.MULTILINGUAL_E5_BASE

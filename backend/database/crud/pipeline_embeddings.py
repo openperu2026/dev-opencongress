@@ -435,7 +435,7 @@ def build_semantic_bill_rows(
                     "bill_id": bill_id,
                     "chunk_index": chunk_index,
                     "text": chunk,
-                    "embedding_model": embedding_model_name,
+                    "embedding_model_name": embedding_model_name,
                 }
             )
 
