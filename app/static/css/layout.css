@@ -1,17 +1,27 @@
 :root {
-    --color-frame: #1D5D6D;
+    --color-frame: #000000;
     --color-background: #F1F7ED;
     --color-highlight: #B33951;
     --color-black: #2A0800;
 }
 
+html,
+
 body {
 /*Format of the body*/
     margin: 0;
-    background-color: var(--color-background);
+    background-color: var(--color-background);s
     color: #344452;
     font-family: Arial, Helvetica, sans-serif;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
 }
+
+main {
+    flex: 1;
+}
+
 
 .navbar {
     display: flex;
@@ -136,6 +146,25 @@ body {
     transform: translateY(-2px);
 }
 
+/* View details button in timeline */
+.timeline-content a {
+    margin-top: -8px;
+    display: inline-block;
+    padding: 8px 12px;
+    background-color: #0066cc;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.timeline-content a:hover {
+    background-color: #0052a3;
+    transform: translateY(-1px);
+}
+
 /* Bills */
 /* detail page */
 .timeline-container {
@@ -168,7 +197,7 @@ padding-left: 70px;
 .timeline-dot {
 position: absolute;
 left: 8px;
-top: 5px;
+top: 10px;
 width: 16px;
 height: 16px;
 background-color: #666;
@@ -188,6 +217,184 @@ align-items: flex-start;
 flex: 1;
 font-weight: bold;
 font-size: 16px;
+}
+
+/* votes page */
+.vote-results {
+    margin-top: 2rem;
+  }
+  
+.vote-summary {
+  border: 2px solid #999;
+  border-radius: 4px;
+  background-color: #f5f5f5;
+  padding: 1rem;
+}
+
+.vote-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.vote-table th {
+  background-color: transparent;
+  padding: 1rem;
+  text-align: center;
+  font-weight: bold;
+  border: none;
+}
+
+.vote-table td {
+  padding: 1.5rem;
+  text-align: center;
+  border: none;
+  background-color: transparent;
+}
+
+.vote-count {
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.vote-count.in-favor {
+  color: #91c7b1;
+}
+
+.vote-count.against {
+  color: #cf294a;
+}
+
+.vote-count.abst {
+  color: #e3d081;
+}
+
+.seats-wrapper {
+  margin-top: 13px;
+  background-color: white;
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding-bottom: 50px;
+  align-items: flex-start;
+}
+
+.seats-container {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.seats-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 12px;
+  color: #546170;
+  flex-shrink: 0;
+  padding-top: 100px;
+  width: 100px;
+}
+
+.seat-tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px 8px;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.12);
+  font-size: 0.9rem;
+  display: none;
+  z-index: 10;
+  white-space: nowrap;
+}
+
+svg#seatsSvg circle { cursor: default; }
+
+.bancada-chart {
+    background-color: white;
+  }
+
+#bancadaSvg {
+  width: 66%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.bancada-label {
+  font-size: 18px;
+  fill: #2f3a45;
+}
+
+.bancada-total {
+  font-size: 13px;
+  fill: #73808f;
+}
+
+.bancada-bar-segment text {
+  font-size: 12px;
+  font-weight: 600;
+  fill: #24303b;
+}
+
+.bancada-legend {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #546170;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.seats-legend .legend-swatch {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.seats-legend .legend-swatch--yes {
+  background-color: #91c7b1;
+}
+
+.seats-legend .legend-swatch--no {
+  background-color: #cf294a;
+}
+
+.seats-legend .legend-swatch--abstain {
+  background-color: #e3d081;
+}
+
+.bancada-legend .legend-swatch {
+  width: 24px;
+  height: 24px;
+  border-radius: 2px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.bancada-legend .legend-swatch--yes {
+  background-color: #d8f0ee;
+  border: 1.5px solid #2fa9a1;
+}
+
+.bancada-legend .legend-swatch--no {
+  background-color: #f3d7dc;
+  border: 1.5px solid #d53f57;
+}
+
+.bancada-legend .legend-swatch--abstain {
+  background-color: #fff0c7;
+  border: 1.5px solid #f1c53a;
 }
 
 /*footer and menu hamurger*/
@@ -330,8 +537,151 @@ font-size: 16px;
 }
 
 
+/*Hero image*/
 
 
+/* Hero image */
+.hero {
+    min-height: calc(100vh);
+    box-sizing: border-box;
+    padding: 80px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-image: url("../images/hero1.jpg");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+}
+
+
+.hero-content {
+  max-width: 900px;
+  padding: 0 18px;
+}
+
+.hero h1 {
+  font-size: 100px;
+  margin: 0 0 16px 0;
+}
+
+.hero p {
+  font-size: 18px;
+  line-height: 1.6;
+  margin: 0 0 28px 0;
+}
+
+.about-section {
+    background-color: var(--color-background);
+    min-height: 100vh;
+    box-sizing: border-box;
+    padding: 72px 24px;
+    display: flex;
+    align-items: center;
+}
+
+.about-content {
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.about-content h2 {
+    margin: 0 0 16px;
+    color: #111827;
+    font-size: 32px;
+}
+
+.about-content p {
+    margin: 0;
+    color: #344452;
+    font-size: 18px;
+    line-height: 1.7;
+}
+
+
+/*Congressmember*/
+
+
+
+.congress-photo-wrap {
+    width: 180px;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background: #ffffff;
+}
+
+.congress-photo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+
+.congress-profile-summary {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: flex;
+    gap: 24px;
+}
+
+.congress-stats{
+
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+
+.congress-stats article {
+    flex: 1;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+}
+
+.congress-action a {
+    color: #2563eb;
+    font-weight: 700;
+}
+
+.congress-bills-page {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 56px 24px;
+}
+
+.congress-bills-eyebrow {
+    margin: 0 0 16px;
+    color: #344452;
+    font-size: 18px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.congress-bills-page h1 {
+    margin: 0 0 28px;
+    color: #344452;
+    font-size: 22px;
+    text-transform: uppercase;
+}
+
+.congress-bills-list {
+    display: grid;
+    gap: 28px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.congress-bills-list a {
+    color: #2563eb;
+    font-weight: 700;
+    text-transform: uppercase;
+}
 
 /*Formats of:*/
 /*Text of title of the sections

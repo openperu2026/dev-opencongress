@@ -30,6 +30,14 @@ def _default_for_non_nullable(col: Column):
     return "''"
 
 
+def _enable_vector(engine):
+    """
+    Enables vectorized index using pgvector for sqlalchemy
+    """
+    with engine.begin() as conn:
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+
+
 def _ensure_columns(base, engine, cols: list[str] | None = None):
     """
     For each table in `base`, if a model column does not exist in the actual DB
@@ -91,6 +99,7 @@ def create_database(base, db_url: str):
     db_path = db_url.replace("sqlite:///", "")
 
     engine = create_engine(db_url)
+    _enable_vector(engine)
 
     # If DB exists, just ensure all tables are present
     if os.path.exists(db_path):
