@@ -20,12 +20,8 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.config import (
-    settings,
-    directories,
-    stop_logging_to_console,
-    resume_logging_to_console,
-)
+from backend.config import settings
+
 from backend.database.raw_models import RawOrganization
 from backend.scrapers.utils import parse_url
 
@@ -251,11 +247,3 @@ class RawOrganizationScraper:
         finally:
             # Close Session
             session.close()
-
-
-if __name__ == "__main__":
-    stop_logging_to_console(filename=directories.LOGS / "scrape_organizations.log")
-    scraper = RawOrganizationScraper()
-    scraper.get_raw_organizations(only_current=True)
-    scraper.add_organizations_to_db()
-    resume_logging_to_console()
