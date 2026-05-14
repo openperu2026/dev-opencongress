@@ -568,6 +568,7 @@ class BillDifference(Base):
     new_archivo_id = Column(Integer, ForeignKey("billtext.archivo_id"), nullable=True)
     old_archivo_id = Column(Integer, ForeignKey("billtext.archivo_id"), nullable=True)
     difference_type = Column(String, nullable=False)
-    difference_content = Column(Text, nullable=True)  # JSON list of ndiff lines
+    # JSON-encoded hybrid diff payload (parser_version, summary, nodes).
+    difference_content = Column(Text, nullable=True)
 
     __table_args__ = (Index("ix_billdifference_bill_id", "bill_id"),)

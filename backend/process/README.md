@@ -10,6 +10,10 @@ This module transforms raw SQLAlchemy rows into validated, normalized Pydantic s
 - `congresistas.py`, `organizations.py`, `bancadas.py`: process reference entities and memberships.
 - `votes.py`: vote-related parsing helpers.
 - `utils.py`: shared processing utilities.
+- `diff.py`: outer API `compute_bill_difference`; normalizes the two `BillText` bodies and composes the three diff layers into the JSON payload persisted in `BillDifference.difference_content`.
+- `diff_structural.py`: Layer 1 — parses normalized text into section nodes (`TÍTULO`, `CAPÍTULO`, `Artículo N`, `DISPOSICIONES …`) and aligns the two versions (id → fingerprint → Jaccard ≥ 0.6 → leftover insert/delete).
+- `diff_line.py`: Layer 2 — line-level `difflib.SequenceMatcher` diff inside each aligned node, emitting non-equal hunks only.
+- `diff_word.py`: Layer 3 — token-level diff over `\w+|[^\w\s]` tokens, used to highlight intra-line word changes.
 
 ## Role in pipeline
 

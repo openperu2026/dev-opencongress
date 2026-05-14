@@ -139,6 +139,15 @@ Each decision includes the context that motivated it, the alternatives considere
 - **Rationale**: Loguru provides colored console output, file rotation, and structured logging with zero configuration. It's a single import (`from loguru import logger`) versus the multi-line boilerplate required by stdlib logging.
 
 
+## Frontend
+
+#### Request-time rendering for bill-difference HTML, cached via ETag
+
+- **Decision**: Render the bill-difference page at request time from the stored JSON payload in `bill_differences.difference_content`, and cache the response via `ETag` + `Cache-Control: public, max-age=300, stale-while-revalidate=86400`. The ETag embeds `RENDERER_VERSION` so bumping the renderer invalidates client caches without a backfill.
+- **Context**: Each `BillDifference` row stores a structured diff (sections, hunks, word-level runs). A page needs to turn that into HTML.
+- **Alternatives considered**: Write-time pre-rendering of the HTML into an extra column (`text_html`) — explored briefly during this feature, then reverted before merge.
+- **Rationale**: Rendering is in the millisecond range on real bills, the payload is the canonical source of truth, and a separate stored HTML column means two things to keep in sync on every renderer change. ETag caching gives the same network behavior as pre-rendering for repeat visits (`304 Not Modified`) without the migration cost. See `app/diff_render.py` and `app/routes/bills.py::bill_difference`.
+
 ## Cloud and Storage
 
 #### boto3 for object storage

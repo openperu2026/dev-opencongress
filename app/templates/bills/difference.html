@@ -31,26 +31,26 @@
 
 <div class="diff-differences">
   <h2>Differences</h2>
+
   {% if difference_type == 'no_change' %}
-    <p>No changes between versions.</p>
+    <p class="diff-status diff-status-equal">No changes between versions.</p>
+
   {% elif difference_type == 'first_version' %}
-    <p>This is the first version — no previous text to compare.</p>
+    <p class="diff-status diff-status-info">This is the first version — no previous text to compare.</p>
+
+  {% elif difference_type == 'incomparable' %}
+    <p class="diff-status diff-status-warning">
+      Versions differ in length by more than 10× — probably mismatched document types.
+    </p>
+
   {% elif difference_type == 'unavailable' %}
-    <p>Text could not be extracted for comparison.</p>
-  {% elif difference_content %}
-    <div class="diff-lines">
-      {% for line in difference_content %}
-        {% if line.startswith('+ ') %}
-          <div class="diff-added">{{ line }}</div>
-        {% elif line.startswith('- ') %}
-          <div class="diff-removed">{{ line }}</div>
-        {% elif line.startswith('  ') %}
-          <div class="diff-equal">{{ line }}</div>
-        {% endif %}
-      {% endfor %}
-    </div>
+    <p class="diff-status diff-status-warning">Text could not be extracted for comparison.</p>
+
+  {% elif text_html %}
+    {{ text_html | safe }}
+
   {% else %}
-    <p>No difference data available.</p>
+    <p class="diff-status diff-status-warning">No difference data available.</p>
   {% endif %}
 </div>
 {% endblock %}

@@ -54,25 +54,120 @@ def section(title):
     hr()
 
 
-def render_diff_lines(lines: list[str], max_lines: int) -> None:
-    shown = 0
-    for line in lines:
-        if line.startswith("+ "):
-            print(f"{GREEN}{line}{RESET}", end="")
-        elif line.startswith("- "):
-            print(f"{RED}{line}{RESET}", end="")
-        elif line.startswith("? "):
+# Kept in sync with ``app/diff_render._join_tokens``.
+_OPEN_BRACKETS = frozenset("([{¿¡")
+_AMBIGUOUS_QUOTES = frozenset("\"'")
+
+
+def _join_tokens(tokens: list[str]) -> str:
+    out: list[str] = []
+    pending_open = False
+    inside_quote: dict[str, bool] = {}
+    for t in tokens:
+        if not t:
             continue
-        else:
-            print(f"{GREY}{line}{RESET}", end="")
-        shown += 1
-        if shown >= max_lines:
-            remaining = sum(1 for ln in lines[shown:] if not ln.startswith("? "))
-            if remaining:
-                print(
-                    f"\n{YELLOW}  … {remaining} more lines hidden (use --max-lines N){RESET}"
-                )
-            return
+        if t in _OPEN_BRACKETS:
+            if out and not pending_open:
+                out.append(" ")
+            out.append(t)
+            pending_open = True
+            continue
+        if t in _AMBIGUOUS_QUOTES:
+            if not inside_quote.get(t, False):
+                if out and not pending_open:
+                    out.append(" ")
+                out.append(t)
+                pending_open = True
+                inside_quote[t] = True
+            else:
+                out.append(t)
+                pending_open = False
+                inside_quote[t] = False
+            continue
+        if not t[0].isalnum():
+            out.append(t)
+            pending_open = False
+            continue
+        if out and not pending_open:
+            out.append(" ")
+        out.append(t)
+        pending_open = False
+    return "".join(out).lstrip()
+
+
+def _render_word_diff(runs: list[dict]) -> str:
+    parts: list[str] = []
+    for run in runs:
+        op = run["op"]
+        if op == "equal":
+            parts.append(_join_tokens(run["a_tokens"]))
+        elif op == "delete":
+            parts.append(f"{RED}[-{_join_tokens(run['a_tokens'])}-]{RESET}")
+        elif op == "insert":
+            parts.append(f"{GREEN}{{+{_join_tokens(run['b_tokens'])}+}}{RESET}")
+        elif op == "replace":
+            parts.append(f"{RED}[-{_join_tokens(run['a_tokens'])}-]{RESET}")
+            parts.append(f"{GREEN}{{+{_join_tokens(run['b_tokens'])}+}}{RESET}")
+    return " ".join(p for p in parts if p)
+
+
+def render_structured_diff(payload: dict, max_lines: int) -> None:
+    summary = payload.get("summary", {})
+    print(
+        f"  {GREY}parser_version={payload.get('parser_version', '?')}  "
+        f"nodes_total={summary.get('nodes_total', 0)}  "
+        f"changed={summary.get('nodes_changed', 0)}  "
+        f"inserted={summary.get('nodes_inserted', 0)}  "
+        f"deleted={summary.get('nodes_deleted', 0)}  "
+        f"renamed={summary.get('nodes_renamed', 0)}{RESET}"
+    )
+    shown = 0
+    for node in payload.get("nodes", []):
+        status = node["status"]
+        if not node["hunks"] and status == "matched":
+            continue
+        status_colour = {
+            "matched": CYAN,
+            "inserted": GREEN,
+            "deleted": RED,
+        }.get(status, GREY)
+        label = node.get("b_label") or node.get("a_label") or node["node_id"]
+        print(
+            f"\n  {BOLD}{status_colour}[{status}/{node['match_strategy']}]{RESET} "
+            f"{BOLD}{node['node_id']}{RESET}  {GREY}{label}{RESET}"
+        )
+        for hunk in node["hunks"]:
+            op = hunk["op"]
+            tag_colour = {"insert": GREEN, "delete": RED, "replace": YELLOW}.get(
+                op, GREY
+            )
+            print(
+                f"    {tag_colour}{op}{RESET}  "
+                f"a[{hunk['a_start']}:{hunk['a_end']}] → b[{hunk['b_start']}:{hunk['b_end']}]"
+            )
+            for run_text in _hunk_lines(hunk):
+                print(f"      {run_text}")
+                shown += 1
+                if shown >= max_lines:
+                    print(
+                        f"\n{YELLOW}  … output truncated at {max_lines} lines "
+                        f"(use --max-lines N){RESET}"
+                    )
+                    return
+
+
+def _hunk_lines(hunk: dict) -> list[str]:
+    word_runs = hunk.get("word_diff") or []
+    if word_runs:
+        return [_render_word_diff(word_runs)]
+    if hunk["op"] == "insert":
+        return [f"{GREEN}+ {hunk['b_text']}{RESET}"]
+    if hunk["op"] == "delete":
+        return [f"{RED}- {hunk['a_text']}{RESET}"]
+    return [
+        f"{RED}- {hunk['a_text']}{RESET}",
+        f"{GREEN}+ {hunk['b_text']}{RESET}",
+    ]
 
 
 def _text_snippet(t: str | None, n: int) -> str:
@@ -169,6 +264,7 @@ def processed_step(db, bill, step_id: int, max_lines: int, snippet: int):
         "first_version": f"{YELLOW}FIRST VERSION{RESET}",
         "no_change": f"{GREY}NO CHANGE{RESET}",
         "unavailable": f"{RED}UNAVAILABLE{RESET}",
+        "incomparable": f"{YELLOW}INCOMPARABLE (size ratio too large){RESET}",
         "modified": f"{GREEN}MODIFIED{RESET}",
     }.get(dtype, dtype)
     print(
@@ -194,10 +290,10 @@ def processed_step(db, bill, step_id: int, max_lines: int, snippet: int):
     print(_text_snippet(new_text, snippet))
 
     if diff.difference_content:
-        lines = json.loads(diff.difference_content)
-        print(f"\n  {BOLD}DIFF ({len(lines)} lines):{RESET}")
+        payload = json.loads(diff.difference_content)
+        print(f"\n  {BOLD}DIFF (structured):{RESET}")
         hr("·")
-        render_diff_lines(lines, max_lines)
+        render_structured_diff(payload, max_lines)
         hr("·")
     else:
         print(f"\n  {GREY}(no diff content — type is {dtype}){RESET}")
@@ -306,10 +402,9 @@ def raw_step(raw_c, bill_id: str, step_id: int, max_lines: int, snippet: int):
     print(_text_snippet(new_doc["text"], snippet))
 
     if result["content"]:
-        lines = result["content"]
-        print(f"\n  {BOLD}DIFF ({len(lines)} lines):{RESET}")
+        print(f"\n  {BOLD}DIFF (structured):{RESET}")
         hr("·")
-        render_diff_lines(lines, max_lines)
+        render_structured_diff(result["content"], max_lines)
         hr("·")
     else:
         print(f"\n  {GREY}(no diff content — type is {dtype}){RESET}")

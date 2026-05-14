@@ -108,6 +108,21 @@ Stores extracted text from PDF documents linked to specific bill steps. Unique o
 | vote_doc | Boolean | | Whether this document is a vote record |
 
 
+### BillDifference
+
+Precomputed text diff between a bill step and the most recent text-bearing predecessor. One row per `BillStep`; `step_id` identifies the "new" version. `difference_content` holds the JSON-serialized hybrid diff payload (`parser_version`, `summary`, `nodes`) produced by `backend/process/diff.py`; the renderer schema is documented in `compute_bill_difference` / `_build_payload` and consumed by the frontend per [`bill_difference_contract.md`](./bill_difference_contract.md).
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| step_id | Integer | PK, FK → bill_steps.id | The "new" version step |
+| bill_id | String | FK → bills.id | |
+| prev_step_id | Integer | FK → bill_steps.id, nullable | The previous text-bearing step, or null for the first version |
+| new_archivo_id | Integer | FK → billtext.archivo_id, nullable | Document backing the new version |
+| old_archivo_id | Integer | FK → billtext.archivo_id, nullable | Document backing the previous version |
+| difference_type | String | | One of `modified`, `no_change`, `first_version`, `incomparable`, `unavailable` |
+| difference_content | Text | nullable | JSON payload (structured diff) when `difference_type = "modified"`; null otherwise |
+
+
 ### BillStep
 
 Tracks the procedural history of a bill.

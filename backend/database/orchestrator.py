@@ -104,10 +104,12 @@ class OpenPeruOrchestrator:
             last_ts = raw_db.query(func.max(raw_model.timestamp)).scalar()
             return bool(last_ts and last_ts >= cutoff)
 
-    def _get_approved_ids(self, model: Bill | Motion) -> list[str]:
+    def _get_approved_ids(self, model: Bill | Motion) -> set[str]:
         with self.DBSession() as db:
-            ids = db.query(model.id).filter(model.approved).all()
-        return ids
+            rows = db.query(model.id).filter(model.approved).all()
+        # Result rows are 1-tuples (the ``id`` column); flatten + set-ify
+        # so callers get O(1) membership lookups.
+        return {r[0] for r in rows}
 
     def _get_ids_to_update(
         self,
@@ -121,6 +123,10 @@ class OpenPeruOrchestrator:
           - latest snapshot is not approved
         """
         cutoff = datetime.now() - timedelta(days=days)
+        # Fetched once: was previously re-queried per row inside the loop
+        # below, which was an N+1 over the pending list plus a fresh
+        # DBSession acquisition per call.
+        approved_ids = self._get_approved_ids(model)
 
         with self.RawSession() as raw_db:
             latest_rows = raw_db.query(raw_model).filter(raw_model.last_update).all()
@@ -129,7 +135,7 @@ class OpenPeruOrchestrator:
             for row in latest_rows:
                 if row.timestamp > cutoff:
                     continue
-                if row.id in self._get_approved_ids(model):
+                if row.id in approved_ids:
                     continue
                 pending_ids.append(row.id)
 
@@ -830,7 +836,17 @@ class OpenPeruOrchestrator:
                             )
                             raw_doc.processed = True
 
-                    self._compute_bill_differences(db, bill.id)
+                    # Diffs are best-effort precomputed data — a pathological
+                    # SequenceMatcher run or a JSON encode failure must not
+                    # roll back the upstream bill/steps/docs/BillText that
+                    # just succeeded.  Log and continue; the next pipeline
+                    # run will retry.
+                    try:
+                        self._compute_bill_differences(db, bill.id)
+                    except Exception as diff_exc:
+                        logger.exception(
+                            f"Diff computation failed for bill {bill.id}: {diff_exc}"
+                        )
 
                     raw_bill.processed = True
                     stats.processed += 1
@@ -849,24 +865,55 @@ class OpenPeruOrchestrator:
         return stats
 
     def _compute_bill_differences(self, db, bill_id: str) -> None:
-        """Compute and store text diffs for every step of a bill against the preceding step."""
+        """Compute and store text diffs for every step of a bill against the
+        most recent text-bearing predecessor.
+
+        Two correctness invariants worth being explicit about:
+
+        * Step ordering is ``(step_date ASC, id ASC)``.  Without the id
+          tiebreaker, same-date steps pair non-deterministically and the
+          stored diffs (and their ETags) churn between pipeline runs.
+
+        * A step with no associated ``BillText`` (vote-only step, OCR
+          miss, etc.) is not a valid predecessor.  We walk backwards
+          through prior steps until we find one that actually has text,
+          so the next text-bearing step doesn't compare against ``None``
+          and get stored as ``first_version`` when there is in fact an
+          earlier version.
+        """
         from sqlalchemy import select as sa_select
 
         steps = (
             db.execute(
                 sa_select(db_models.BillStep)
                 .where(db_models.BillStep.bill_id == bill_id)
-                .order_by(db_models.BillStep.step_date.asc())
+                .order_by(
+                    db_models.BillStep.step_date.asc(),
+                    db_models.BillStep.id.asc(),
+                )
             )
             .scalars()
             .all()
         )
 
+        # Pre-load each step's BillText once.  Avoids re-querying the same
+        # predecessor on every iteration and lets the walk-back loop be a
+        # cheap list scan.
+        billtexts: list[db_models.BillText | None] = [
+            crud_bills.get_billtext_for_step(db, s.id) for s in steps
+        ]
+
+        def _prior_with_text(
+            idx: int,
+        ) -> tuple[db_models.BillStep | None, db_models.BillText | None]:
+            for j in range(idx - 1, -1, -1):
+                if billtexts[j] is not None:
+                    return steps[j], billtexts[j]
+            return None, None
+
         for i, step in enumerate(steps):
-            new_bt = crud_bills.get_billtext_for_step(db, step.id)
-            old_bt = (
-                crud_bills.get_billtext_for_step(db, steps[i - 1].id) if i > 0 else None
-            )
+            new_bt = billtexts[i]
+            prev_step, old_bt = _prior_with_text(i)
 
             result = compute_bill_difference(
                 old_bt.text if old_bt else None,
@@ -877,7 +924,7 @@ class OpenPeruOrchestrator:
                 db,
                 step_id=step.id,
                 bill_id=bill_id,
-                prev_step_id=steps[i - 1].id if i > 0 else None,
+                prev_step_id=prev_step.id if prev_step else None,
                 new_archivo_id=new_bt.archivo_id if new_bt else None,
                 old_archivo_id=old_bt.archivo_id if old_bt else None,
                 difference_type=result["type"],
