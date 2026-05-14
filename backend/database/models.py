@@ -305,7 +305,7 @@ class BillCongresistas(Base):
         ForeignKey("congresistas.id"), nullable=False
     )
     bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+        ForeignKey("organizations.org_id"), nullable=True
     )
     role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
     __table_args__ = (
@@ -762,7 +762,7 @@ class MotionCongresistas(Base):
     )
     role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
     bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+        ForeignKey("organizations.org_id"), nullable=True
     )
 
     __table_args__ = (

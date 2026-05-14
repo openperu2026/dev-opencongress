@@ -219,3 +219,14 @@ def as_date(value: date | datetime | None) -> date | None:
     if isinstance(value, datetime):
         return value.date()
     return value
+
+
+def replace_www(url: str | None) -> str:
+    if not url:
+        return ""
+
+    return re.sub(
+        r"^(https?://)?www\.",
+        lambda m: (m.group(1) or "") + "www3.",
+        url,
+    )

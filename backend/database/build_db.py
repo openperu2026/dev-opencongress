@@ -18,6 +18,7 @@ def _enable_extensions(engine) -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_similarity;"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent;"))
 
 
 def drop_step_vote_event_fks(engine) -> None:

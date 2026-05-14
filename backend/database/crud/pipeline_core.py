@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, or_
+from sqlalchemy import select, or_, func
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from dataclasses import dataclass
@@ -44,9 +44,10 @@ def find_congresista(
     db: Session,
     name: str,
     website: str | None = None,
+    threshold: float = 0.9,
 ) -> db_models.Congresista | None:
     """
-    Find a congressperson by website or full name.
+    Find a congressperson by website or fuzzy full-name match.
 
     The function first searches by website when a website is provided, since it is
     expected to be a more stable identifier than the person's name. If no match is
@@ -57,38 +58,77 @@ def find_congresista(
         db (Session): Active SQLAlchemy database session.
         name (str): Full name of the congressperson to search for.
         website (str | None, optional): Congressperson website URL. Defaults to None.
+        threshold (float, optional): Minimum Jaro-Winkler similarity score.
+            Defaults to 0.9.
 
     Returns:
         db_models.Congresista | None: The matching congressperson if found;
         otherwise, None.
     """
+
     if website:
         by_web = db.scalar(
             select(db_models.Congresista).where(
-                db_models.Congresista.website == website
+                db_models.Congresista.website == website.strip()
             )
         )
         if by_web is not None:
             return by_web
 
-    # TODO: implement a Fuzzy Match. .filter(func.jarowinkler(User.name, 'Jerry') > 0.85) --> with PostgreSQL and pg_similarity extension
-    return db.scalar(
-        select(db_models.Congresista).where(
-            db_models.Congresista.full_name == name,
-        )
+    normalized_name = name.strip().lower()
+
+    score = func.jarowinkler(
+        func.unaccent(func.lower(db_models.Congresista.full_name)),
+        func.unaccent(normalized_name),
     )
+
+    stmt = (
+        select(db_models.Congresista)
+        .where(score >= threshold)
+        .order_by(
+            score.desc(),
+            db_models.Congresista.id.asc(),
+        )
+        .limit(1)
+    )
+
+    return db.scalar(stmt)
 
 
 def find_organization(
-    db: Session, org_name: str, org_type: TypeOrganization | str
+    db: Session,
+    org_name: str,
+    org_type: TypeOrganization | str,
+    threshold: float = 0.9,
 ) -> db_models.Organization | None:
-    org_type_value = _enum_value(org_type)
-    return db.scalar(
-        select(db_models.Organization).where(
-            db_models.Organization.org_name == org_name,
-            db_models.Organization.org_type == org_type_value,
-        )
+    """
+    Find the closest organization by fuzzy name match and organization type.
+    """
+
+    if isinstance(org_type, str):
+        org_type = TypeOrganization(org_type)
+
+    normalized_name = org_name.strip().lower()
+
+    score = func.jarowinkler(
+        func.unaccent(func.lower(db_models.Organization.org_name)),
+        func.unaccent(normalized_name),
     )
+
+    stmt = (
+        select(db_models.Organization)
+        .where(
+            db_models.Organization.org_type == org_type,
+            score >= threshold,
+        )
+        .order_by(
+            score.desc(),
+            db_models.Organization.org_id.asc(),
+        )
+        .limit(1)
+    )
+
+    return db.scalar(stmt)
 
 
 def find_active_bancada_for_person(

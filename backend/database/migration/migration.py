@@ -108,6 +108,7 @@ def enable_extensions(engine: Engine) -> None:
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_similarity;"))
+        conn.execute(text("CREATE EXTENSION IF NOT EXISTS unaccent;"))
 
 
 def assert_raw_tables_empty(pg_conn) -> None:

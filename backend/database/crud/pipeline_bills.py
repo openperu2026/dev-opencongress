@@ -52,7 +52,6 @@ def upsert_bill_congresista(
     db: Session,
     bill_id: str,
     person_id: int,
-    bancada_id: int,
     role_type: Enum | str,
 ) -> db_models.BillCongresistas:
     existing = db.get(db_models.BillCongresistas, (bill_id, person_id))
@@ -62,14 +61,12 @@ def upsert_bill_congresista(
         obj = db_models.BillCongresistas(
             bill_id=bill_id,
             person_id=person_id,
-            bancada_id=bancada_id,
             role_type=role_type,
         )
         db.add(obj)
         db.flush()
         return obj
 
-    existing.bancada_id = bancada_id
     existing.role_type = role_type
     db.flush()
     return existing

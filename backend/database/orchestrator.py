@@ -59,7 +59,12 @@ from backend.process.organizations import (
 )
 from backend.process.leyes import process_leyes
 from backend.process.schema import Membership, Organization
-from backend.process.utils import get_current_leg_year, find_organization_schema
+from backend.process.utils import (
+    get_current_leg_year,
+    find_organization_schema,
+    split_and_sort_name,
+    replace_www,
+)
 
 
 class OpenPeruOrchestrator:
@@ -664,6 +669,9 @@ class OpenPeruOrchestrator:
                             org_type=ms.org_type,
                         )
                         if org is None:
+                            logger.warning(
+                                f"Skipping Membership org_name={ms.org_name} for org_type={ms.org_type} and Congresista={cong.full_name}"
+                            )
                             stats.skipped += 1
                             continue
                         self._upsert_membership_schema(
@@ -902,7 +910,7 @@ class OpenPeruOrchestrator:
                         )
                         if cong is None or org is None:
                             logger.warning(
-                                f"Skipping BancadaMembership raw_id={raw_bancada.id}, cong={ms.cong_name}, org={ms.org_name}: reference not found"
+                                f"Skipping BancadaMembership raw_id={raw_bancada.id}, cong={ms.cong_name}, website={ms.website}, org={ms.org_name}, org_type={ms.org_type}: reference not found"
                             )
                             missing = True
                             stats.skipped += 1
@@ -948,18 +956,6 @@ class OpenPeruOrchestrator:
                 try:
                     bill_schema, bill_congs, bill_steps = process_bill(raw_bill)
 
-                    author = None
-                    if bill_schema.author_name:
-                        author = crud_core.find_congresista(
-                            db,
-                            name=bill_schema.author_name,
-                            website=bill_schema.author_web,
-                        )
-                    if author is None:
-                        logger.warning(
-                            f"RawBill id={raw_bill.id}: author not found; loading bill with author_id=NULL"
-                        )
-
                     bill_orgs = process_bill_organizations(raw_bill, bill_steps)
                     chamber_schema = find_organization_schema(
                         bill_orgs,
@@ -1003,7 +999,7 @@ class OpenPeruOrchestrator:
                         )
                         if org is None:
                             logger.warning(
-                                f"Skipping BillOrganization bill_id={bill.id}, org={org_schema.org_name}: organization not found"
+                                f"Skipping BillOrganization bill_id={bill.id}, org={org_schema.org_name}, org_type={org_schema.org_type}: organization not found"
                             )
                             stats.skipped += 1
                             continue
@@ -1011,30 +1007,23 @@ class OpenPeruOrchestrator:
                             db, bill.id, org.org_id, org_schema
                         )
 
-                    presentation_date = chamber_schema.presentation_date
                     for cong_rel in bill_congs:
                         cong = crud_core.find_congresista(
                             db,
-                            name=cong_rel.nombre,
-                            website=cong_rel.web_page,
+                            name=split_and_sort_name(cong_rel.nombre)[0],
+                            website=replace_www(cong_rel.web_page),
                         )
                         if cong is None:
-                            stats.skipped += 1
-                            continue
-                        signer_bancada = crud_core.find_active_bancada_for_person(
-                            db, cong.id, presentation_date
-                        )
-                        if signer_bancada is None:
                             logger.warning(
-                                f"Skipping BillCongresistas bill_id={bill.id}, person_id={cong.id}: active bancada not found"
+                                f"Skipping BillCongresista bill_id={bill.id}, name={cong_rel.nombre}, website={cong_rel.web_page}: congresista not found"
                             )
                             stats.skipped += 1
                             continue
+
                         crud_bills.upsert_bill_congresista(
                             db,
                             bill.id,
                             cong.id,
-                            signer_bancada.org_id,
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
                             else cong_rel.role_type,
@@ -1104,18 +1093,6 @@ class OpenPeruOrchestrator:
                         raw_motion
                     )
 
-                    author = None
-                    if motion_schema.author_name:
-                        author = crud_core.find_congresista(
-                            db,
-                            name=motion_schema.author_name,
-                            website=motion_schema.author_web,
-                        )
-                    if author is None:
-                        logger.warning(
-                            f"RawMotion id={raw_motion.id}: author not found; loading motion with author_id=NULL"
-                        )
-
                     motion_orgs = process_motion_organizations(raw_motion, motion_steps)
                     chamber_schema = find_organization_schema(
                         motion_orgs,
@@ -1167,22 +1144,15 @@ class OpenPeruOrchestrator:
                             db, motion.id, org.org_id, org_schema
                         )
 
-                    presentation_date = chamber_schema.presentation_date
                     for cong_rel in motion_congs:
                         cong = crud_core.find_congresista(
                             db,
-                            name=cong_rel.nombre,
-                            website=cong_rel.web_page,
+                            name=split_and_sort_name(cong_rel.nombre)[0],
+                            website=replace_www(cong_rel.web_page),
                         )
                         if cong is None:
-                            stats.skipped += 1
-                            continue
-                        signer_bancada = crud_core.find_active_bancada_for_person(
-                            db, cong.id, presentation_date
-                        )
-                        if signer_bancada is None:
                             logger.warning(
-                                f"Skipping MotionCongresistas motion_id={motion.id}, person_id={cong.id}: active bancada not found"
+                                f"Skipping MotionCongresista motion_id={motion.id}, name={cong_rel.nombre}, website={cong_rel.web_page}: congresista not found"
                             )
                             stats.skipped += 1
                             continue
@@ -1190,7 +1160,6 @@ class OpenPeruOrchestrator:
                             db,
                             motion.id,
                             cong.id,
-                            signer_bancada.org_id,
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
                             else cong_rel.role_type,
