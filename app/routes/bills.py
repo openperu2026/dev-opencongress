@@ -1,5 +1,6 @@
+from types import SimpleNamespace
 from flask import Blueprint, render_template, request
-from sqlalchemy import select
+from sqlalchemy import select, text
 from backend.database.models import Bill, BillStep
 from .processed_session import SessionProcessed
 import json
@@ -26,15 +27,55 @@ def load_voter_bancada_dict():
 
 @bills_bp.route("/bills")
 def index():
-    q = request.args.get("q", "").strip()
+    title_q = request.args.get("title_q", "").strip()
+    author_q = request.args.get("author_q", "").strip()
+    params = {}
+    filters = []
+    author_display = None
+    author_id_query = author_q.isdigit()
+
+    if title_q:
+        filters.append("lower(bills.title) LIKE lower(:title_q)")
+        params["title_q"] = f"%{title_q}%"
+
+    if author_q:
+        if author_id_query:
+            filters.append("CAST(bills.author_id AS TEXT) = :author_id")
+            params["author_id"] = author_q
+            with SessionProcessed() as db:
+                author_display = db.execute(
+                    text("SELECT nombre FROM congresistas WHERE id = :author_id"),
+                    {"author_id": author_q},
+                ).scalar_one_or_none()
+        else:
+            filters.append("lower(congresistas.nombre) LIKE lower(:author_q)")
+            params["author_q"] = f"%{author_q}%"
+
     bills = []
+    if filters:
+        where_clause = " AND ".join(filters)
+        query = f"""
+            SELECT bills.*, congresistas.nombre as author_name
+            FROM bills
+            LEFT OUTER JOIN congresistas ON bills.author_id = congresistas.id
+            WHERE {where_clause}
+            ORDER BY bills.presentation_date DESC
+            LIMIT 50
+        """
 
-    if q:
         with SessionProcessed() as db:
-            stmt = select(Bill).where(Bill.title.ilike(f"%{q}%")).limit(50)
-            bills = db.execute(stmt).scalars().all()
+            rows = db.execute(text(query), params).mappings().all()
+            if rows and author_q and not author_id_query:
+                author_display = author_q
+            bills = [SimpleNamespace(**row) for row in rows]
 
-    return render_template("bills/search.html", q=q, bills=bills)
+    return render_template(
+        "bills/search.html",
+        title_q=title_q,
+        author_q=author_q,
+        author_display=author_display,
+        bills=bills,
+    )
 
 
 @bills_bp.route("/bills/<bill_id>")
