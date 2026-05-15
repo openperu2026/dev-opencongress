@@ -2,11 +2,7 @@ import argparse
 from loguru import logger
 
 from backend.database.orchestrator import OpenPeruOrchestrator, ProcessStats
-from backend.config import (
-    directories,
-    stop_logging_to_console,
-    resume_logging_to_console,
-)
+from backend.config import log_manager
 
 
 def _print_summary(summary: dict[str, ProcessStats]) -> None:
@@ -159,7 +155,11 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     if not args.skip_processing:
-        stop_logging_to_console(filename=directories.LOGS / "run_processing.log")
+        filename = log_manager.daily_log_file(
+            base_log_dir=log_manager.directories.LOGS,
+            name="run_processing",
+        )
+        log_manager.to_file(filename)
         summary = orchestrator.run_processing(
             process_bills=run_bills,
             process_motions=run_motions,
@@ -170,5 +170,5 @@ def main(argv: list[str] | None = None) -> None:
             motions_limit=args.process_motions_limit,
             leyes_limit=args.process_leyes_limit,
         )
-        resume_logging_to_console()
+        log_manager.to_console()
         _print_summary(summary)
