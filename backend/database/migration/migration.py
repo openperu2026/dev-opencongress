@@ -6,13 +6,13 @@ import os
 import sqlite3
 from collections.abc import Iterator, Sequence
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from sqlalchemy import Table, func, select, text
 from sqlalchemy.engine import Engine
 
 from backend.database.models import Base
+from backend.config import directories
 
 DEFAULT_DB_URL = "postgresql+psycopg://opencongress:opencongress@db:5432/opencongress"
 DEFAULT_SQLITE_PATH = "/app/data/raw/OpenPeruRaw.db"
@@ -85,9 +85,9 @@ DOCUMENT_TABLES = ("raw_bill_documents", "raw_motion_documents")
 PAGE_TABLES = ("raw_bill_pages", "raw_motion_pages")
 RAW_TARGET_TABLES = tuple(DIRECT_TABLES) + DOCUMENT_TABLES + PAGE_TABLES
 LATEST_ONLY_TABLES = tuple(table for table in DIRECT_TABLES if table != "scraper_runs")
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BILL_DOCUMENTS = PROJECT_ROOT / "data" / "raw" / "documents" / "bills"
-MOTION_DOCUMENTS = PROJECT_ROOT / "data" / "raw" / "documents" / "motions"
+
+BILL_DOCUMENTS = directories.BILL_DOCUMENTS
+MOTION_DOCUMENTS = directories.MOTION_DOCUMENTS
 
 DATETIME_COLUMNS = {"timestamp", "step_date", "start_time", "end_time"}
 BOOLEAN_COLUMNS = {"last_update", "changed", "processed"}
