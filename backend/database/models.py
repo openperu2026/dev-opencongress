@@ -3,6 +3,7 @@ from sqlalchemy import (
     UniqueConstraint,
     PrimaryKeyConstraint,
     CheckConstraint,
+    ForeignKeyConstraint,
     Index,
     Text,
     Enum,
@@ -304,7 +305,7 @@ class BillCongresistas(Base):
         ForeignKey("congresistas.id"), nullable=False
     )
     bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+        ForeignKey("organizations.org_id"), nullable=True
     )
     role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
     __table_args__ = (
@@ -382,8 +383,8 @@ class BillStep(Base):
     )
     vote_step: Mapped[bool] = mapped_column(nullable=False)
     vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.vote_event_id"), nullable=True
-    )
+        nullable=True
+    )  # ForeignKey("vote_events.vote_event_id")
     step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 
@@ -402,10 +403,8 @@ class BillText(Base):
 
     __tablename__ = "bill_texts"
 
-    bill_id: Mapped[str] = mapped_column(ForeignKey("bills.id"), nullable=False)
-    step_id: Mapped[int] = mapped_column(
-        ForeignKey("bill_steps.step_id"), nullable=False
-    )
+    bill_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
     file_id: Mapped[int] = mapped_column(nullable=False)
     version_id: Mapped[int] = mapped_column(nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -413,6 +412,11 @@ class BillText(Base):
     __table_args__ = (
         PrimaryKeyConstraint(
             "bill_id", "step_id", "file_id", "version_id", name="pk_bill_texts"
+        ),
+        ForeignKeyConstraint(
+            ["bill_id", "step_id"],
+            ["bill_steps.bill_id", "bill_steps.step_id"],
+            name="fk_bill_texts_bill_steps",
         ),
     )
 
@@ -758,7 +762,7 @@ class MotionCongresistas(Base):
     )
     role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
     bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+        ForeignKey("organizations.org_id"), nullable=True
     )
 
     __table_args__ = (
@@ -827,9 +831,7 @@ class MotionStep(Base):
         nullable=False,
     )
     vote_step: Mapped[bool] = mapped_column(nullable=False)
-    vote_event_id: Mapped[str] = mapped_column(
-        ForeignKey("vote_events.vote_event_id"), nullable=True
-    )
+    vote_event_id: Mapped[str] = mapped_column(nullable=True)
     step_date: Mapped[date] = mapped_column(nullable=False)
     step_detail: Mapped[str] = mapped_column(nullable=False)
 
@@ -852,10 +854,8 @@ class MotionText(Base):
 
     __tablename__ = "motion_texts"
 
-    motion_id: Mapped[str] = mapped_column(ForeignKey("motions.id"), nullable=False)
-    step_id: Mapped[int] = mapped_column(
-        ForeignKey("motion_steps.step_id"), nullable=False
-    )
+    motion_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
     file_id: Mapped[int] = mapped_column(nullable=False)
     version_id: Mapped[int] = mapped_column(nullable=False)
     text: Mapped[str] = mapped_column(Text, nullable=False)
@@ -863,6 +863,11 @@ class MotionText(Base):
     __table_args__ = (
         PrimaryKeyConstraint(
             "motion_id", "step_id", "file_id", "version_id", name="pk_motion_texts"
+        ),
+        ForeignKeyConstraint(
+            ["motion_id", "step_id"],
+            ["motion_steps.motion_id", "motion_steps.step_id"],
+            "fk_motion_steps_texts",
         ),
     )
 

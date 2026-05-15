@@ -4,7 +4,6 @@ from backend.core.constants import (
     LEGISLATURE_ALIASES,
     PARTIES,
     PARTY_ALIASES,
-    URL,
 )
 from backend.core.enums import (
     AttendanceStatus,
@@ -39,7 +38,6 @@ from backend.core.parsers import (
 )
 
 __all__ = [
-    "URL",
     "PARTIES",
     "PARTY_ALIASES",
     "LEG_PERIOD_ALIASES",

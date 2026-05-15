@@ -1,7 +1,7 @@
 import re
 import json
 import polars as pl
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from sqlalchemy.orm import Session
 from operator import attrgetter
 
@@ -114,28 +114,40 @@ def gen_congresistas_df(session: Session, save: bool = False) -> None:
     return df
 
 
-def get_current_leg_year(value: str | datetime) -> int:
+def get_current_leg_year(value: str | date | datetime | None = None) -> int:
     """
-    Convert a timestamp into the legislative year.
+    Return the congressional legislative year for a given date.
 
-    In Peru, the legislative year starts on July 28.
-    Dates before July 28 belong to the previous legislative year.
+    The legislative year starts on July 27.
+    For example:
+        2025-07-26 -> 2024
+        2025-07-27 -> 2025
+        2026-05-06 -> 2025
     """
-    if isinstance(value, datetime):
+
+    if value is None:
+        dt = date.today()
+
+    elif isinstance(value, datetime):
+        dt = value.date()
+
+    elif isinstance(value, date):
         dt = value
-    else:
-        dt = datetime.fromisoformat(value)
 
-    # This cutoff relates to the Peruvian parliament dynamic: a legislative year
-    # starts and ends on 28th of July of each year.
-    cutoff = datetime(dt.year, 7, 28, tzinfo=dt.tzinfo)
+    elif isinstance(value, str):
+        dt = datetime.fromisoformat(value).date()
 
-    if dt < cutoff:
-        # Before 28th July
-        return dt.year - 1
     else:
-        # After 28th July
+        raise TypeError(
+            f"value must be str, date, datetime, or None. Got {type(value).__name__}"
+        )
+
+    cutoff = date(dt.year, 7, 27)
+
+    if dt >= cutoff:
         return dt.year
+
+    return dt.year - 1
 
 
 def create_vote_ids(
@@ -200,4 +212,21 @@ def find_organization_schema(
             == org_type
         ),
         None,
+    )
+
+
+def as_date(value: date | datetime | None) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    return value
+
+
+def replace_www(url: str | None) -> str:
+    if not url:
+        return ""
+
+    return re.sub(
+        r"^(https?://)?www\.",
+        lambda m: (m.group(1) or "") + "www3.",
+        url,
     )

@@ -1,0 +1,42 @@
+services:
+  db:
+    build:
+      context: .
+      dockerfile: backend/database/Dockerfile
+    container_name: opencongress-db
+    environment:
+      POSTGRES_USER: opencongress
+      POSTGRES_PASSWORD: opencongress
+      POSTGRES_DB: opencongress
+    ports:
+      - "5432:5432"
+    volumes:
+      - opencongress_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U opencongress -d opencongress"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate-raw:
+    image: ${OPENPERU_RAW_MIGRATION_IMAGE:-opencongress/raw-migration:latest}
+    build:
+      context: .
+      dockerfile: backend/database/migration/migration.Dockerfile
+      platforms:
+        - linux/amd64
+        - linux/arm64      
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: postgresql+psycopg://opencongress:opencongress@db:5432/opencongress
+      SQLITE_PATH: /app/data/raw/OpenPeruRaw.db
+    volumes:
+      - opencongress_logs:/app/logs
+    profiles:
+      - migration
+
+volumes:
+  opencongress_pgdata:
+  opencongress_logs:

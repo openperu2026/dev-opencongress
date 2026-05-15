@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date
+from datetime import date, datetime
 
 from backend.core.enums import TypeMotionStep
 from backend.core.parsers import classify_motion_des_estado
@@ -11,7 +11,7 @@ from backend.process.schema import (
     MotionStep,
     MotionText,
 )
-from backend.process.utils import create_vote_ids
+from backend.process.utils import create_vote_ids, as_date
 
 
 def _parse_datetime(value: str | None) -> date | None:
@@ -182,7 +182,7 @@ def process_motion_organizations(
             motion_id=raw_motion.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=presentation_date,
-            decision_date=decision_date,
+            presentation_date=as_date(presentation_date),
+            decision_date=as_date(decision_date),
         )
     ]

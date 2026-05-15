@@ -48,7 +48,6 @@ def upsert_motion_congresista(
     db: Session,
     motion_id: str,
     person_id: int,
-    bancada_id: int,
     role_type: Enum | str,
 ) -> db_models.MotionCongresistas:
     existing = db.get(db_models.MotionCongresistas, (motion_id, person_id))
@@ -57,14 +56,12 @@ def upsert_motion_congresista(
         obj = db_models.MotionCongresistas(
             motion_id=motion_id,
             person_id=person_id,
-            bancada_id=bancada_id,
             role_type=role_type,
         )
         db.add(obj)
         db.flush()
         return obj
 
-    existing.bancada_id = bancada_id
     existing.role_type = role_type
     db.flush()
     return existing
@@ -100,7 +97,7 @@ def upsert_motion_step(
     db: Session,
     schema: schema.MotionStep,
 ) -> db_models.MotionStep:
-    existing = db.get(db_models.MotionStep, schema.step_id)
+    existing = db.get(db_models.MotionStep, (schema.motion_id, schema.step_id))
     payload = {
         "motion_id": schema.motion_id,
         "step_id": schema.step_id,

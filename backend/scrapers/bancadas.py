@@ -23,7 +23,7 @@ from backend.scrapers.utils import parse_url
 
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/grupos-parlamentarios"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawBancadaScraper:
@@ -33,7 +33,7 @@ class RawBancadaScraper:
 
     def __init__(self):
         # Engine and session maker for DB
-        self.engine = create_engine(RAW_DB_PATH)
+        self.engine = create_engine(DB_PATH)
         self.url = BASE_URL
         self.Session = sessionmaker(bind=self.engine)
 

@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, date
+from datetime import date, datetime
 
 from backend import TypeBillStep
 from backend.core.parsers import classify_des_estado
@@ -12,7 +12,7 @@ from backend.process.schema import (
     BillText,
 )
 from backend.process.billtext import extract_bill_body
-from backend.process.utils import create_vote_ids
+from backend.process.utils import create_vote_ids, as_date
 
 
 def summarize_bill(bill_id: str, presentation_date: date, steps: list[BillStep]) -> str:
@@ -137,13 +137,7 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
             details = step.get("detalle") or ""
             step_type = classify_des_estado(step.get("desEstado"), details)
             vote_step = step_type == TypeBillStep.VOTACION
-            raw_committees = step.get("desComisiones")
-            if isinstance(raw_committees, str):
-                step_committees = json.loads(raw_committees or "[]")
-            elif raw_committees is None:
-                step_committees = []
-            else:
-                step_committees = raw_committees
+            step_committees = _parse_step_committees(step.get("desComisiones"))
 
             bill_step = BillStep(
                 bill_id=raw_bill.id,
@@ -162,6 +156,28 @@ def process_bill_steps(raw_bill: RawBill) -> list[BillStep] | None:
 
     else:
         return []
+
+
+def _parse_step_committees(raw_committees) -> list[str]:
+    if raw_committees is None:
+        return []
+
+    if isinstance(raw_committees, list):
+        return [str(item).strip() for item in raw_committees if str(item).strip()]
+
+    if isinstance(raw_committees, str):
+        value = raw_committees.strip()
+        if not value:
+            return []
+
+        try:
+            decoded = json.loads(value)
+        except json.JSONDecodeError:
+            return [item.strip() for item in value.split(";") if item.strip()]
+
+        return _parse_step_committees(decoded)
+
+    return []
 
 
 def _get_committee_dates(
@@ -321,8 +337,8 @@ def process_bill_organizations(
                 bill_id=raw_bill.id,
                 org_name=committee_name,
                 org_type="Comisión",
-                presentation_date=presentation_date,
-                decision_date=date_info.get("last_decision_date"),
+                presentation_date=as_date(presentation_date),
+                decision_date=as_date(date_info.get("last_decision_date")),
             )
         )
 
@@ -331,8 +347,8 @@ def process_bill_organizations(
             bill_id=raw_bill.id,
             org_name="Cámara de Diputados",
             org_type="Cámara",
-            presentation_date=dates.get("presentation_date"),
-            decision_date=dates.get("final_plenary_decision_date"),
+            presentation_date=as_date(dates.get("presentation_date")),
+            decision_date=as_date(dates.get("final_plenary_decision_date")),
         )
     )
 

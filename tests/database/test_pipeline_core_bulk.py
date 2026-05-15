@@ -1,22 +1,11 @@
 from datetime import date
 
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
 from backend import LegPeriod, RoleOrganization, TypeOrganization
 from backend.database import models as db_models
 from backend.database.crud import pipeline_core as crud_core
 from backend.process import schema
-
-
-@pytest.fixture()
-def session():
-    engine = create_engine("sqlite:///:memory:")
-    db_models.Base.metadata.create_all(engine)
-    Session = sessionmaker(bind=engine)
-    with Session() as db:
-        yield db
 
 
 @pytest.fixture()

@@ -11,7 +11,7 @@ from backend.database.raw_models import RawMotion
 from backend.scrapers.utils import get_url_text
 
 BASE_URL = "https://api.congreso.gob.pe/smociones-portal-service"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawMotionScraper:
@@ -26,7 +26,7 @@ class RawMotionScraper:
             self.engine = session.get_bind()
             self.Session = sessionmaker(bind=self.engine)
         else:
-            self.engine = engine or create_engine(RAW_DB_PATH)
+            self.engine = engine or create_engine(DB_PATH)
             self.session = None
             self.Session = sessionmaker(bind=self.engine)
 

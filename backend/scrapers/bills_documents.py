@@ -14,7 +14,7 @@ from backend.scrapers.utils import render_pdf, get_url
 from backend.database.raw_models import RawBillDocument, RawBill, RawBillPage
 
 BASE_URL = "https://wb2server.congreso.gob.pe/spley-portal-service/"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawBillDocumentScraper:
@@ -24,7 +24,7 @@ class RawBillDocumentScraper:
 
     def __init__(self):
         # Engine and session maker for DB
-        self.engine = create_engine(RAW_DB_PATH)
+        self.engine = create_engine(DB_PATH)
         self.Session = sessionmaker(bind=self.engine)
 
         self.documents: list[RawBillDocument] = []
@@ -138,7 +138,7 @@ class RawBillDocumentScraper:
                             file_id=file_id,
                             page_num=page_num,
                             text=text,
-                            model="Tesseract",
+                            ocr_model="Tesseract",  # TODO: Add models to the pipeline
                         )
                     )
 

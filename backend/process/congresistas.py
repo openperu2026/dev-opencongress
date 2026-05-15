@@ -7,6 +7,7 @@ from backend.database.session import get_db
 import json
 from pathlib import Path
 from datetime import datetime
+from urllib.parse import urljoin
 from lxml.html import fromstring, HtmlElement
 
 
@@ -27,7 +28,7 @@ def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
         website URL and each value is the processed congressperson data.
     """
     if not json_path.exists():
-        gen_congresistas_df(next(get_db), True)
+        gen_congresistas_df(next(get_db()), True)
 
     with open(json_path, "r", encoding="utf-8") as file:
         data = json.load(file)
@@ -118,10 +119,9 @@ def process_profile_content(
         information.
     """
     html = fromstring(raw_cong.profile_content)
-    photo_url = (
-        f"https://www.congreso.gob.pe{html.xpath('//*[@class="foto"]/img/@src')[0]}"
-    )
     website = raw_cong.website
+    photo_src = html.xpath('//*[@class="foto"]/img/@src')[0]
+    photo_url = urljoin(website, photo_src)
     data_cong = dict_cong_data.get(website)
 
     party = Organization(

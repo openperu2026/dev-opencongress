@@ -14,7 +14,7 @@ from backend.scrapers.utils import render_pdf, get_url
 from backend.database.raw_models import RawMotionDocument, RawMotion, RawMotionPage
 
 BASE_URL = "https://api.congreso.gob.pe/smociones-portal-service"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 class RawMotionDocumentScraper:
@@ -24,7 +24,7 @@ class RawMotionDocumentScraper:
 
     def __init__(self):
         # Engine and session maker for DB
-        self.engine = create_engine(RAW_DB_PATH, pool_pre_ping=True)
+        self.engine = create_engine(DB_PATH, pool_pre_ping=True)
         self.Session = sessionmaker(bind=self.engine)
 
         self.documents: list[RawMotionDocument] = []
@@ -111,7 +111,7 @@ class RawMotionDocumentScraper:
                 logger.success(f"Successfully extracted text from {url}")
 
                 file_name = self._build_filename(motion_id, step_id, file_id)
-                dest_path = directories.BILL_DOCUMENTS / file_name
+                dest_path = directories.MOTION_DOCUMENTS / file_name
 
                 if download_local:
                     self._download_to_path(url, dest_path)
@@ -141,7 +141,7 @@ class RawMotionDocumentScraper:
                             file_id=file_id,
                             page_num=page_num,
                             text=text,
-                            model="Tesseract",
+                            ocr_model="Tesseract",  # TODO: Add ocr_model to the pipeline
                         )
                     )
                 self.documents.append(new_doc)
@@ -186,7 +186,7 @@ class RawMotionDocumentScraper:
                 session.add_all(self.pages)
                 session.commit()
                 logger.success(
-                    f"Added {len(self.pages)} documents to Raw Bill Documents table"
+                    f"Added {len(self.pages)} documents to Raw Motion Documents table"
                 )
                 return True
 

@@ -7,7 +7,6 @@ from backend.database import models as db_models
 from backend.process import schema
 from backend.database.crud.pipeline_core import (
     find_congresista,
-    find_organization,
     _enum_value,
 )
 from backend.database.raw_models import RawBillDocument, RawBillPage
@@ -15,19 +14,11 @@ from backend.database.raw_models import RawBillDocument, RawBillPage
 
 def upsert_bill(db: Session, schema: schema.Bill) -> db_models.Bill:
     author = None
-    bancada = None
     if schema.author_name:
         author = find_congresista(
             db,
             name=schema.author_name,
             website=schema.author_web,
-        )
-
-    if schema.bancada_name:
-        bancada = find_organization(
-            db,
-            org_name=schema.bancada_name,
-            org_type="Bancada",
         )
 
     payload = {
@@ -40,7 +31,6 @@ def upsert_bill(db: Session, schema: schema.Bill) -> db_models.Bill:
         if hasattr(schema.proponent, "value")
         else schema.proponent,
         "author_id": author.id if author else None,
-        "bancada_id": bancada.org_id if bancada else None,
         "bill_approved": schema.bill_approved,
         "summary_oc": schema.summary_oc,
     }
@@ -62,7 +52,6 @@ def upsert_bill_congresista(
     db: Session,
     bill_id: str,
     person_id: int,
-    bancada_id: int,
     role_type: Enum | str,
 ) -> db_models.BillCongresistas:
     existing = db.get(db_models.BillCongresistas, (bill_id, person_id))
@@ -72,14 +61,12 @@ def upsert_bill_congresista(
         obj = db_models.BillCongresistas(
             bill_id=bill_id,
             person_id=person_id,
-            bancada_id=bancada_id,
             role_type=role_type,
         )
         db.add(obj)
         db.flush()
         return obj
 
-    existing.bancada_id = bancada_id
     existing.role_type = role_type
     db.flush()
     return existing
@@ -122,7 +109,7 @@ def upsert_bill_step(
     db: Session,
     schema: schema.BillStep,
 ) -> db_models.BillStep:
-    existing = db.get(db_models.BillStep, schema.step_id)
+    existing = db.get(db_models.BillStep, (schema.bill_id, schema.step_id))
     step_type = (
         schema.step_type.value
         if hasattr(schema.step_type, "value")

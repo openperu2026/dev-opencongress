@@ -127,9 +127,9 @@ def test_add_bills_to_db_handles_sqlalchemy_error(monkeypatch):
 # ---------- scrape_bill ----------
 
 
-def test_scrape_bill_appends_raw_bill(monkeypatch, raw_session):
+def test_scrape_bill_appends_raw_bill(monkeypatch, session):
     scraper = RawBillScraper()
-    scraper.session = raw_session
+    scraper.session = session
 
     monkeypatch.setattr(
         scraper,
