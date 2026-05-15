@@ -1,24 +1,6 @@
 import argparse
-from loguru import logger
 
-from backend.database.orchestrator import OpenPeruOrchestrator, ProcessStats
-from backend.config import log_manager
-
-
-def _print_summary(summary: dict[str, ProcessStats]) -> None:
-    total_processed = 0
-    total_skipped = 0
-    total_errors = 0
-    for stage, stats in summary.items():
-        logger.info(
-            f"{stage}: processed={stats.processed}, skipped={stats.skipped}, errors={stats.errors}"
-        )
-        total_processed += stats.processed
-        total_skipped += stats.skipped
-        total_errors += stats.errors
-    logger.info(
-        f"total: processed={total_processed}, skipped={total_skipped}, errors={total_errors}"
-    )
+from backend.database.orchestrator import OpenPeruOrchestrator
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -39,15 +21,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scrape only current period where supported",
     )
     parser.add_argument(
-        "--weekly-days",
+        "--daily",
         type=int,
-        default=7,
+        default=1,
         help="Refresh stale non-approved bills/motions older than this many days",
     )
     parser.add_argument(
-        "--others-days",
+        "--others-daily",
         type=int,
-        default=7,
+        default=1,
         help="Skip congresistas/bancadas/committees/organizations scrape when latest raw scrape is within this many days",
     )
     target_group = parser.add_mutually_exclusive_group()
@@ -141,8 +123,8 @@ def main(argv: list[str] | None = None) -> None:
             scrape_leyes=run_leyes,
             scrape_others=run_others,
             only_current=args.only_current,
-            weekly_days=args.weekly_days,
-            others_days=args.others_days,
+            daily=args.daily,
+            others_daily=args.others_daily,
             bill_year=args.bill_year,
             bill_start=args.bill_start,
             bill_end=args.bill_end,
@@ -155,12 +137,7 @@ def main(argv: list[str] | None = None) -> None:
         )
 
     if not args.skip_processing:
-        filename = log_manager.daily_log_file(
-            base_log_dir=log_manager.directories.LOGS,
-            name="run_processing",
-        )
-        log_manager.to_file(filename)
-        summary = orchestrator.run_processing(
+        orchestrator.run_processing(
             process_bills=run_bills,
             process_motions=run_motions,
             process_leyes=run_leyes,
@@ -170,5 +147,3 @@ def main(argv: list[str] | None = None) -> None:
             motions_limit=args.process_motions_limit,
             leyes_limit=args.process_leyes_limit,
         )
-        log_manager.to_console()
-        _print_summary(summary)

@@ -1,8 +1,11 @@
 import os
-from datetime import date
+from contextlib import contextmanager
+from datetime import date, datetime
 from loguru import logger
 from pathlib import Path
+from collections.abc import Iterator
 from tqdm import tqdm
+from zoneinfo import ZoneInfo
 
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
@@ -118,8 +121,10 @@ class LogManager:
 
     LOG_FORMAT = "{time} | {level} | {file}:{function}:{line} | {message}"
 
-    def __init__(self, directories):
+    def __init__(self, directories: Directories):
         self.directories = directories
+        self.time_zone = ZoneInfo("America/Lima")
+        self._console_sink_id: int | None = None
 
     def daily_log_file(
         self,
@@ -136,25 +141,43 @@ class LogManager:
         logs/process/2026-05-13/bills.log
         """
 
-        log_date = log_date or date.today()
+        log_date = log_date or datetime.now(self.time_zone).date()
 
         return base_log_dir / log_date.isoformat() / f"{name}.log"
 
-    def to_file(
+    def setup_console(self) -> None:
+        if self._console_sink_id is not None:
+            return
+
+        logger.remove()
+        self._console_sink_id = logger.add(
+            lambda msg: tqdm.write(msg, end=""),
+            format=self.LOG_FORMAT,
+            level="INFO",
+            colorize=True,
+            catch=True,
+            filter=lambda record: record["extra"].get("console", False),
+        )
+
+    def add_file_sink(
         self,
         filename: str | Path,
         mode: str = "a",
-    ) -> None:
-        """
-        Redirect logs to a file and remove existing handlers.
-        """
-
+        log_kind: str | None = None,
+        log_stage: str | None = None,
+    ) -> int:
         filename = Path(filename)
         filename.parent.mkdir(parents=True, exist_ok=True)
 
-        logger.remove()
+        def stage_filter(record) -> bool:
+            extra = record["extra"]
+            if log_kind is not None and extra.get("log_kind") != log_kind:
+                return False
+            if log_stage is not None and extra.get("log_stage") != log_stage:
+                return False
+            return True
 
-        logger.add(
+        return logger.add(
             filename,
             format=self.LOG_FORMAT,
             level="INFO",
@@ -162,66 +185,55 @@ class LogManager:
             catch=True,
             mode=mode,
             encoding="utf-8",
+            filter=stage_filter,
         )
 
-    def to_console(self) -> None:
-        """
-        Redirect logs to the console using tqdm.write.
-        """
-
-        logger.remove()
-
-        logger.add(
-            lambda msg: tqdm.write(msg, end=""),
-            format=self.LOG_FORMAT,
-            level="INFO",
-            colorize=True,
-            catch=True,
-        )
-
-    def to_scraper_file(
+    def add_stage_logger(
         self,
-        scraper_name: str,
+        log_kind: str,
+        stage_name: str,
         log_date: date | None = None,
         mode: str = "a",
-    ) -> None:
-        """
-        Redirect logs to a daily file for one scraper.
-
-        Example
-        -------
-        logs/scrapers/2026-05-13/bills.log
-        """
+    ) -> int:
+        if log_kind == "scraper":
+            base_log_dir = self.directories.LOGS_SCRAPERS
+        elif log_kind == "process":
+            base_log_dir = self.directories.LOGS_PROCESS
+        else:
+            base_log_dir = self.directories.LOGS
 
         filename = self.daily_log_file(
-            base_log_dir=self.directories.LOGS_SCRAPERS,
-            name=scraper_name,
-            log_date=log_date,
+            base_log_dir,
+            stage_name,
+            log_date,
         )
 
-        self.to_file(filename=filename, mode=mode)
+        return self.add_file_sink(
+            filename,
+            mode=mode,
+            log_kind=log_kind,
+            log_stage=stage_name,
+        )
 
-    def to_process_file(
+    @contextmanager
+    def stage(
         self,
-        process_name: str,
+        log_kind: str,
+        stage_name: str,
         log_date: date | None = None,
         mode: str = "a",
-    ) -> None:
-        """
-        Redirect logs to a daily file for one process.
+    ) -> Iterator:
+        self.setup_console()
+        sink_id = self.add_stage_logger(log_kind, stage_name, log_date, mode)
+        try:
+            with logger.contextualize(log_kind=log_kind, log_stage=stage_name):
+                yield logger.bind(log_kind=log_kind, log_stage=stage_name)
+        finally:
+            logger.remove(sink_id)
 
-        Example
-        -------
-        logs/process/2026-05-13/bills.log
-        """
-
-        filename = self.daily_log_file(
-            base_log_dir=self.directories.LOGS_PROCESS,
-            name=process_name,
-            log_date=log_date,
-        )
-
-        self.to_file(filename=filename, mode=mode)
+    def console_logger(self):
+        self.setup_console()
+        return logger.bind(console=True)
 
 
 log_manager = LogManager(directories)

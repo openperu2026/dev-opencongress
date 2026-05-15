@@ -4,6 +4,7 @@ import time
 from datetime import date, datetime, timedelta
 from typing import Type, Callable
 
+from tqdm import tqdm
 from loguru import logger
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker
@@ -88,9 +89,9 @@ class OpenPeruOrchestrator:
     # -----------------------------
     # Public API
     # -----------------------------
-    def _recent_raw_exists(self, raw_model: RawBase, days: int = 7) -> bool:
+    def _recent_raw_exists(self, raw_model: RawBase, days: int = 1) -> bool:
         """
-        Query to check recent changes in a period of time in any RawDB table (default 7 days / 1 week)
+        Query to check recent changes in a period of time in any RawDB table (default 1 day)
         """
         cutoff = datetime.now() - timedelta(days=days)
         with self.DBSession() as raw_db:
@@ -112,10 +113,10 @@ class OpenPeruOrchestrator:
         self,
         raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
         model: Type[Bill] | Type[Motion] | Type[Ley],
-        days: int = 7,
+        days: int = 1,
     ) -> list[str] | None:
         """
-        Return ids that should be refreshed this week:
+        Return ids that should be refreshed this day:
           - latest snapshot is older than `max_age_days`
           - latest snapshot is not approved
         """
@@ -138,8 +139,13 @@ class OpenPeruOrchestrator:
         stats = self.scraper_results[scraper_name]
         with self.DBSession() as db:
             upsert_scraper_run(db, scraper_name, stats)
-        logger.info(
+        log_manager.console_logger().info(
             f"Results for scraper/{scraper_name}: Time: {(stats.end_time - stats.start_time).seconds}s | Rows scraped: {stats.scrapped}"
+        )
+
+    def _log_stage_summary(self, stage: str, stats: ProcessStats) -> None:
+        log_manager.console_logger().info(
+            f"{stage}: processed={stats.processed}, skipped={stats.skipped}, errors={stats.errors}"
         )
 
     def run_scrapers(
@@ -150,8 +156,8 @@ class OpenPeruOrchestrator:
         scrape_leyes: bool = True,
         scrape_others: bool = True,
         only_current: bool = True,
-        weekly_days: int = 7,
-        others_days: int = 7,
+        daily: int = 1,
+        others_daily: int = 1,
         bill_year: int | None = None,
         bill_start: int | None = None,
         bill_end: int | None = None,
@@ -165,7 +171,8 @@ class OpenPeruOrchestrator:
         """
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
         """
-        logger.info("Starting processing pipeline")
+        console = log_manager.console_logger()
+        console.info("Starting scraper pipeline")
         self.scraper_results: dict[str, ScraperStats] = dict()
 
         if scrape_others:
@@ -174,190 +181,196 @@ class OpenPeruOrchestrator:
             from backend.scrapers.congresistas import RawCongresistasScraper
             from backend.scrapers.organizations import RawOrganizationScraper
 
-            logger.info(
+            console.info(
                 "Running reference scrapers (congresistas, bancadas, committees, organizations)"
             )
 
-            log_manager.to_scraper_file("congresistas")
-            if self._recent_raw_exists(RawCongresista, days=others_days):
-                logger.info(
-                    f"Skipping congresistas scrape: latest raw scrape is within {others_days} days"
-                )
-            else:
-                cong = RawCongresistasScraper()
-                start_time = datetime.now()
-                cong.get_dict_periodos()
-                scraped_congs = cong.extract_and_load_all(only_current=only_current)
-                end_time = datetime.now()
-                self.scraper_results["congresistas.py"] = ScraperStats(
-                    start_time, end_time, len(scraped_congs)
-                )
+            with log_manager.stage("scraper", "congresistas") as stage_logger:
+                if self._recent_raw_exists(RawCongresista, days=others_daily):
+                    console.info(
+                        f"Skipping congresistas scrape: latest raw scrape is within {others_daily} days"
+                    )
+                    stage_logger.info("Skipped congresistas scraper")
+                else:
+                    console.info("Starting congresistas scraper")
+                    stage_logger.info("Starting congresistas scraper")
+                    cong = RawCongresistasScraper()
+                    start_time = datetime.now()
+                    cong.get_dict_periodos()
+                    scraped_congs = cong.extract_and_load_all(only_current=only_current)
+                    end_time = datetime.now()
+                    self.scraper_results["congresistas.py"] = ScraperStats(
+                        start_time, end_time, len(scraped_congs)
+                    )
+                    self._load_scraper_results("congresistas.py")
 
-                log_manager.to_console()
-                self._load_scraper_results("congresistas.py")
+            with log_manager.stage("scraper", "bancadas") as stage_logger:
+                if self._recent_raw_exists(RawBancada, days=others_daily):
+                    console.info(
+                        f"Skipping bancadas scrape: latest raw scrape is within {others_daily} days"
+                    )
+                    stage_logger.info("Skipped bancadas scraper")
+                else:
+                    console.info("Starting bancadas scraper")
+                    stage_logger.info("Starting bancadas scraper")
+                    banc = RawBancadaScraper()
+                    start_time = datetime.now()
+                    banc.get_raw_bancadas(only_current=only_current)
+                    scraped_banc = banc.add_bancadas_to_db()
+                    end_time = datetime.now()
+                    self.scraper_results["bancadas.py"] = ScraperStats(
+                        start_time, end_time, int(scraped_banc)
+                    )
+                    self._load_scraper_results("bancadas.py")
 
-            log_manager.to_scraper_file("bancadas")
-            if self._recent_raw_exists(RawBancada, days=others_days):
-                logger.info(
-                    f"Skipping bancadas scrape: latest raw scrape is within {others_days} days"
-                )
-            else:
-                banc = RawBancadaScraper()
-                start_time = datetime.now()
-                banc.get_raw_bancadas(only_current=only_current)
-                scraped_banc = banc.add_bancadas_to_db()
-                end_time = datetime.now()
-                self.scraper_results["bancadas.py"] = ScraperStats(
-                    start_time, end_time, int(scraped_banc)
-                )
+            with log_manager.stage("scraper", "committees") as stage_logger:
+                if self._recent_raw_exists(RawCommittee, days=others_daily):
+                    console.info(
+                        f"Skipping committees scrape: latest raw scrape is within {others_daily} days"
+                    )
+                    stage_logger.info("Skipped committees scraper")
+                else:
+                    console.info("Starting committees scraper")
+                    stage_logger.info("Starting committees scraper")
+                    comm = RawCommitteeScraper()
+                    start_time = datetime.now()
+                    comm.get_raw_committees(only_current=only_current)
+                    comm.add_committees_to_db()
+                    scraped_comm = len(comm.committee_list)
+                    end_time = datetime.now()
+                    self.scraper_results["committees.py"] = ScraperStats(
+                        start_time, end_time, scraped_comm
+                    )
+                    self._load_scraper_results("committees.py")
 
-                log_manager.to_console()
-                self._load_scraper_results("bancadas.py")
+            with log_manager.stage("scraper", "organizations") as stage_logger:
+                if self._recent_raw_exists(RawOrganization, days=others_daily):
+                    console.info(
+                        f"Skipping organizations scrape: latest raw scrape is within {others_daily} days"
+                    )
+                    stage_logger.info("Skipped organizations scraper")
+                else:
+                    console.info("Starting organizations scraper")
+                    stage_logger.info("Starting organizations scraper")
+                    org = RawOrganizationScraper()
+                    start_time = datetime.now()
+                    org.get_raw_organizations(only_current=only_current)
+                    scraped_orgs = len(org.organizations_list)
+                    org.add_organizations_to_db()
+                    end_time = datetime.now()
+                    self.scraper_results["organizations.py"] = ScraperStats(
+                        start_time, end_time, scraped_orgs
+                    )
+                    self._load_scraper_results("organizations.py")
 
-            log_manager.to_scraper_file("committees")
-            if self._recent_raw_exists(RawCommittee, days=others_days):
-                logger.info(
-                    f"Skipping committees scrape: latest raw scrape is within {others_days} days"
-                )
-            else:
-                comm = RawCommitteeScraper()
-                start_time = datetime.now()
-                comm.get_raw_committees(only_current=only_current)
-                scraped_comm = len(comm.committee_list)
-                end_time = datetime.now()
-                comm.add_committees_to_db()
-                self.scraper_results["committees.py"] = ScraperStats(
-                    start_time, end_time, scraped_comm
-                )
-
-                log_manager.to_console()
-                self._load_scraper_results("committees.py")
-
-            log_manager.to_scraper_file("organizations")
-            if self._recent_raw_exists(RawOrganization, days=others_days):
-                logger.info(
-                    f"Skipping organizations scrape: latest raw scrape is within {others_days} days"
-                )
-            else:
-                org = RawOrganizationScraper()
-                start_time = datetime.now()
-                org.get_raw_organizations(only_current=only_current)
-                scraped_orgs = len(org.organizations_list)
-                end_time = datetime.now()
-                org.add_organizations_to_db()
-                self.scraper_results["organizations.py"] = ScraperStats(
-                    start_time, end_time, scraped_orgs
-                )
-
-                log_manager.to_console()
-                self._load_scraper_results("organizations.py")
-
-        log_manager.to_scraper_file("bills")
         if scrape_bills:
             from backend.scrapers.bills import RawBillScraper
 
-            scraper = RawBillScraper()
-            if all(v is not None for v in [bill_year, bill_start, bill_end]):
-                self.scraper_results["bills.py"] = self._scrape_range(
-                    scraper=scraper,
-                    scrape_fn=scraper.scrape_bill,
-                    buffer_attr="raw_bills",
-                    load_fn=scraper.load_raw_bills,
-                    year=int(bill_year),
-                    start=int(bill_start),
-                    end=int(bill_end),
-                    flush_every=100,
-                    entity_name="Bills",
-                )
-            else:
-                self.scraper_results["bills.py"] = self._scrape_pending_weekly(
-                    raw_model=RawBill,
-                    model=Bill,
-                    scraper=scraper,
-                    scrape_fn=scraper.scrape_bill,
-                    buffer_attr="raw_bills",
-                    load_fn=scraper.load_raw_bills,
-                    max_age_days=weekly_days,
-                    flush_every=100,
-                )
+            with log_manager.stage("scraper", "bills") as stage_logger:
+                console.info("Starting bills scraper")
+                stage_logger.info("Starting bills scraper")
+                scraper = RawBillScraper()
+                if all(v is not None for v in [bill_year, bill_start, bill_end]):
+                    self.scraper_results["bills.py"] = self._scrape_range(
+                        scraper=scraper,
+                        scrape_fn=scraper.scrape_bill,
+                        buffer_attr="raw_bills",
+                        load_fn=scraper.load_raw_bills,
+                        year=int(bill_year),
+                        start=int(bill_start),
+                        end=int(bill_end),
+                        flush_every=100,
+                        entity_name="Bills",
+                    )
+                else:
+                    self.scraper_results["bills.py"] = self._scrape_pending_daily(
+                        raw_model=RawBill,
+                        model=Bill,
+                        scraper=scraper,
+                        scrape_fn=scraper.scrape_bill,
+                        buffer_attr="raw_bills",
+                        load_fn=scraper.load_raw_bills,
+                        max_age_days=daily,
+                        flush_every=100,
+                        entity_name="Bills",
+                    )
+                self._load_scraper_results("bills.py")
 
-            log_manager.to_console()
-            self._load_scraper_results("bills.py")
-
-        log_manager.to_scraper_file("motions")
         if scrape_motions:
             from backend.scrapers.motions import RawMotionScraper
 
-            scraper = RawMotionScraper()
-            if all(v is not None for v in [motion_year, motion_start, motion_end]):
-                self.scraper_results["motions.py"] = self._scrape_range(
-                    scraper=scraper,
-                    scrape_fn=scraper.scrape_motion,
-                    buffer_attr="raw_motions",
-                    load_fn=scraper.load_raw_motions,
-                    year=int(motion_year),
-                    start=int(motion_start),
-                    end=int(motion_end),
-                    flush_every=100,
-                    entity_name="Motions",
-                )
-            else:
-                self.scraper_results["motions.py"] = self._scrape_pending_weekly(
-                    raw_model=RawMotion,
-                    model=Motion,
-                    scraper=scraper,
-                    scrape_fn=scraper.scrape_motion,
-                    buffer_attr="raw_motions",
-                    load_fn=scraper.load_raw_motions,
-                    max_age_days=weekly_days,
-                    flush_every=100,
-                )
+            with log_manager.stage("scraper", "motions") as stage_logger:
+                console.info("Starting motions scraper")
+                stage_logger.info("Starting motions scraper")
+                scraper = RawMotionScraper()
+                if all(v is not None for v in [motion_year, motion_start, motion_end]):
+                    self.scraper_results["motions.py"] = self._scrape_range(
+                        scraper=scraper,
+                        scrape_fn=scraper.scrape_motion,
+                        buffer_attr="raw_motions",
+                        load_fn=scraper.load_raw_motions,
+                        year=int(motion_year),
+                        start=int(motion_start),
+                        end=int(motion_end),
+                        flush_every=100,
+                        entity_name="Motions",
+                    )
+                else:
+                    self.scraper_results["motions.py"] = self._scrape_pending_daily(
+                        raw_model=RawMotion,
+                        model=Motion,
+                        scraper=scraper,
+                        scrape_fn=scraper.scrape_motion,
+                        buffer_attr="raw_motions",
+                        load_fn=scraper.load_raw_motions,
+                        max_age_days=daily,
+                        flush_every=100,
+                        entity_name="Motions",
+                    )
+                self._load_scraper_results("motions.py")
 
-            log_manager.to_console()
-            self._load_scraper_results("motions.py")
-
-        log_manager.to_scraper_file("documents")
         if scrape_documents and (scrape_bills or scrape_motions):
-            doc_bill_run, doc_motion_run = self._scrape_pending_documents()
-            self.scraper_results["bills_documents.py"] = doc_bill_run
-            self.scraper_results["motions_documents.py"] = doc_motion_run
+            with log_manager.stage("scraper", "documents") as stage_logger:
+                console.info("Starting document scraper")
+                stage_logger.info("Starting document scraper")
+                doc_bill_run, doc_motion_run = self._scrape_pending_documents()
+                self.scraper_results["bills_documents.py"] = doc_bill_run
+                self.scraper_results["motions_documents.py"] = doc_motion_run
+                self._load_scraper_results("bills_documents.py")
+                self._load_scraper_results("motions_documents.py")
 
-            log_manager.to_console()
-            self._load_scraper_results("bills_documents.py")
-            self._load_scraper_results("motions_documents.py")
-
-        log_manager.to_scraper_file("leyes")
         if scrape_leyes:
             from backend.scrapers.leyes import RawLeyesScraper
 
-            scraper = RawLeyesScraper()
-            if all(v is not None for v in [ley_start, ley_end]):
-                self.scraper_results["leyes.py"] = self._scrape_range(
-                    scraper=scraper,
-                    scrape_fn=scraper.scrape_ley,
-                    buffer_attr="raw_leyes",
-                    load_fn=scraper.load_raw_leyes,
-                    year=None,
-                    start=int(ley_start),
-                    end=int(ley_end),
-                    flush_every=100,
-                    entity_name="Ley",
-                )
-            else:
-                self.scraper_results["leyes.py"] = self._scrape_pending_weekly(
-                    raw_model=RawLey,
-                    model=Ley,
-                    scraper=scraper,
-                    scrape_fn=scraper.scrape_ley,
-                    buffer_attr="raw_leyes",
-                    load_fn=scraper.load_raw_leyes,
-                    max_age_days=weekly_days,
-                    flush_every=100,
-                    entity_name="Ley",
-                )
-
-            log_manager.to_console()
-            self._load_scraper_results("leyes.py")
+            with log_manager.stage("scraper", "leyes") as stage_logger:
+                console.info("Starting leyes scraper")
+                stage_logger.info("Starting leyes scraper")
+                scraper = RawLeyesScraper()
+                if all(v is not None for v in [ley_start, ley_end]):
+                    self.scraper_results["leyes.py"] = self._scrape_range(
+                        scraper=scraper,
+                        scrape_fn=scraper.scrape_ley,
+                        buffer_attr="raw_leyes",
+                        load_fn=scraper.load_raw_leyes,
+                        year=None,
+                        start=int(ley_start),
+                        end=int(ley_end),
+                        flush_every=100,
+                        entity_name="Ley",
+                    )
+                else:
+                    self.scraper_results["leyes.py"] = self._scrape_pending_daily(
+                        raw_model=RawLey,
+                        model=Ley,
+                        scraper=scraper,
+                        scrape_fn=scraper.scrape_ley,
+                        buffer_attr="raw_leyes",
+                        load_fn=scraper.load_raw_leyes,
+                        max_age_days=daily,
+                        flush_every=100,
+                        entity_name="Ley",
+                    )
+                self._load_scraper_results("leyes.py")
 
     def run_processing(
         self,
@@ -374,44 +387,57 @@ class OpenPeruOrchestrator:
         """
         Process raw -> clean tables.
         """
-        logger.info("Starting processing pipeline")
+        console = log_manager.console_logger()
+        console.info("Starting processing pipeline")
         summary: dict[str, ProcessStats] = {}
 
         if process_others:
-            log_manager.to_process_file("organizations")
-            summary["organizations"] = self._process_organization_definitions()
-            summary["bancadas"] = self._process_bancada_definitions()
-            log_manager.to_console()
+            with log_manager.stage("process", "organizations"):
+                console.info("Starting organizations processing")
+                summary["organizations"] = self._process_organization_definitions()
+                summary["bancadas"] = self._process_bancada_definitions()
+                self._log_stage_summary("organizations", summary["organizations"])
+                self._log_stage_summary("bancadas", summary["bancadas"])
 
-            log_manager.to_process_file("congresistas")
-            summary["congresistas"] = self._process_congresistas()
-            log_manager.to_console()
+            with log_manager.stage("process", "congresistas"):
+                console.info("Starting congresistas processing")
+                summary["congresistas"] = self._process_congresistas()
+                self._log_stage_summary("congresistas", summary["congresistas"])
 
-            log_manager.to_process_file("memberships")
-            summary["admin_memberships"] = self._process_admin_memberships()
-            summary["bancada_memberships"] = self._process_bancada_memberships()
-            log_manager.to_console()
+            with log_manager.stage("process", "memberships"):
+                console.info("Starting memberships processing")
+                summary["admin_memberships"] = self._process_admin_memberships()
+                summary["bancada_memberships"] = self._process_bancada_memberships()
+                self._log_stage_summary(
+                    "admin_memberships", summary["admin_memberships"]
+                )
+                self._log_stage_summary(
+                    "bancada_memberships", summary["bancada_memberships"]
+                )
 
         if process_bills:
-            log_manager.to_process_file("bills")
-            summary["bills"] = self._process_bills(
-                include_documents=include_documents,
-                limit=bills_limit,
-            )
-            log_manager.to_console()
+            with log_manager.stage("process", "bills"):
+                console.info("Starting bills processing")
+                summary["bills"] = self._process_bills(
+                    include_documents=include_documents,
+                    limit=bills_limit,
+                )
+                self._log_stage_summary("bills", summary["bills"])
 
         if process_motions:
-            log_manager.to_process_file("motions")
-            summary["motions"] = self._process_motions(
-                include_documents=include_documents,
-                limit=motions_limit,
-            )
-            log_manager.to_console()
+            with log_manager.stage("process", "motions"):
+                console.info("Starting motions processing")
+                summary["motions"] = self._process_motions(
+                    include_documents=include_documents,
+                    limit=motions_limit,
+                )
+                self._log_stage_summary("motions", summary["motions"])
 
         if process_leyes:
-            log_manager.to_process_file("leyes")
-            summary["leyes"] = self._process_leyes(limit=leyes_limit)
-            log_manager.to_console()
+            with log_manager.stage("process", "leyes"):
+                console.info("Starting leyes processing")
+                summary["leyes"] = self._process_leyes(limit=leyes_limit)
+                self._log_stage_summary("leyes", summary["leyes"])
 
         return summary
 
@@ -435,7 +461,7 @@ class OpenPeruOrchestrator:
         start_time = datetime.now()
         count = 0
 
-        for number in range(start, end + 1):
+        for number in tqdm(range(start, end + 1), desc=entity_name):
             if entity_name == "Ley":
                 scrape_fn(str(number))
             else:
@@ -456,7 +482,7 @@ class OpenPeruOrchestrator:
         end_time = datetime.now()
         return ScraperStats(start_time, end_time, count)
 
-    def _scrape_pending_weekly(
+    def _scrape_pending_daily(
         self,
         raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
         model: Type[Bill] | Type[Motion] | Type[Ley],
@@ -464,7 +490,7 @@ class OpenPeruOrchestrator:
         scrape_fn: Callable[[str, str], None],
         buffer_attr: str,
         load_fn: Callable[[], None],
-        max_age_days: int = 7,
+        max_age_days: int = 1,
         flush_every: int = 100,
         entity_name: str = "items",
     ) -> ScraperStats:
@@ -472,7 +498,9 @@ class OpenPeruOrchestrator:
         start_time = datetime.now()
         count = 0
 
-        for idx, item_id in enumerate(pending_ids, start=1):
+        for idx, item_id in enumerate(
+            tqdm(pending_ids, desc=f"Pending {entity_name}"), start=1
+        ):
             year, number = item_id.split("_", 1)
 
             if entity_name == "Ley":
@@ -507,7 +535,8 @@ class OpenPeruOrchestrator:
         bill_docs = RawBillDocumentScraper()
         start_time = datetime.now()
         count = 0
-        for bill_id in bill_docs.get_bills_pending_documents():
+        bill_ids = bill_docs.get_bills_pending_documents()
+        for bill_id in tqdm(bill_ids, desc="Bill documents"):
             bill_docs.get_bill_documents(
                 bill_id=bill_id, update=False, download_local=True, upload_s3=False
             )
@@ -519,7 +548,8 @@ class OpenPeruOrchestrator:
         motion_docs = RawMotionDocumentScraper()
         start_time = datetime.now()
         count = 0
-        for motion_id in motion_docs.get_motions_pending_documents():
+        motion_ids = motion_docs.get_motions_pending_documents()
+        for motion_id in tqdm(motion_ids, desc="Motion documents"):
             motion_docs.get_motion_documents(
                 motion_id=motion_id, update=False, download_local=True, upload_s3=False
             )
@@ -539,7 +569,7 @@ class OpenPeruOrchestrator:
         scraper = RawLeyesScraper()
         start_time = datetime.now()
         count = 0
-        for ley_number in range(ley_start, ley_end + 1):
+        for ley_number in tqdm(range(ley_start, ley_end + 1), desc="Leyes"):
             scraper.scrape_ley(ley_number)
             count_leyes = len(scraper.raw_leyes)
             if count_leyes >= flush_every:
@@ -629,7 +659,7 @@ class OpenPeruOrchestrator:
                 )
                 .all()
             )
-            for raw_cong in rows:
+            for raw_cong in tqdm(rows, desc="Process congresistas"):
                 try:
                     # TODO: Remove this range to process all years
                     if raw_cong.leg_period not in [
@@ -718,7 +748,7 @@ class OpenPeruOrchestrator:
                 .all()
             )
 
-            for raw_comm in committees:
+            for raw_comm in tqdm(committees, desc="Process committees"):
                 try:
                     # TODO: Remove this range to process all years
                     if int(raw_comm.legislative_year) not in range(2016, 2027):
@@ -752,7 +782,7 @@ class OpenPeruOrchestrator:
                 )
                 .all()
             )
-            for raw_org in organizations:
+            for raw_org in tqdm(organizations, desc="Process organizations"):
                 try:
                     # TODO: Remove this range to process all years
                     if int(raw_org.legislative_year) not in range(2016, 2027):
@@ -791,7 +821,7 @@ class OpenPeruOrchestrator:
                 )
                 .all()
             )
-            for raw_org in organizations:
+            for raw_org in tqdm(organizations, desc="Process admin memberships"):
                 try:
                     if int(raw_org.legislative_year) not in range(2016, 2027):
                         raw_org.processed = False
@@ -844,7 +874,7 @@ class OpenPeruOrchestrator:
                 )
                 .all()
             )
-            for raw_bancada in rows:
+            for raw_bancada in tqdm(rows, desc="Process bancada definitions"):
                 try:
                     if raw_bancada.legislative_period not in [
                         "Parlamentario 2021 - 2026"
@@ -853,6 +883,7 @@ class OpenPeruOrchestrator:
                         stats.skipped += 1
                         continue
                     bancadas, _ = process_bancada(raw_bancada)
+                    missing = False
                     for bancada in bancadas:
                         org, inserted = self._upsert_organization_with_count(
                             db, bancada
@@ -862,6 +893,7 @@ class OpenPeruOrchestrator:
                         else:
                             clean_updated += 1
                     stats.processed += 1
+                    raw_bancada.processed = not missing
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada definitions id={raw_bancada.id}: {exc}"
@@ -886,7 +918,7 @@ class OpenPeruOrchestrator:
                 )
                 .all()
             )
-            for raw_bancada in rows:
+            for raw_bancada in tqdm(rows, desc="Process bancada memberships"):
                 try:
                     if raw_bancada.legislative_period not in [
                         "Parlamentario 2021 - 2026"
@@ -952,7 +984,7 @@ class OpenPeruOrchestrator:
                 query = query.limit(limit)
             rows = query.all()
 
-            for raw_bill in rows:
+            for raw_bill in tqdm(rows, desc="Process bills"):
                 try:
                     bill_schema, bill_congs, bill_steps = process_bill(raw_bill)
 
@@ -1087,7 +1119,7 @@ class OpenPeruOrchestrator:
                 query = query.limit(limit)
             rows = query.all()
 
-            for raw_motion in rows:
+            for raw_motion in tqdm(rows, desc="Process motions"):
                 try:
                     motion_schema, motion_congs, motion_steps = process_motion(
                         raw_motion
@@ -1218,7 +1250,7 @@ class OpenPeruOrchestrator:
                 query = query.limit(limit)
             rows = query.all()
 
-            for raw_ley in rows:
+            for raw_ley in tqdm(rows, desc="Process leyes"):
                 try:
                     ley_schema = process_leyes(raw_ley)
                     if ley_schema is None:

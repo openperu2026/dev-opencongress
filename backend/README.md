@@ -117,13 +117,13 @@ uv run python -m backend --scrape --only-current
 Refresh stale non approved bills and motions older than N days
 
 ```bash
-uv run python -m backend --scrape --weekly-days 7
+uv run python -m backend --scrape --daily 7
 ```
 
 Skip scraping others (congresistas, bancadas, committees and organizations) if their latest raw scrape is within N days
 
 ```bash
-uv run python -m backend --scrape --others-days 14
+uv run python -m backend --scrape --others-daily 14
 ```
 
 ### Scrape numeric ranges
@@ -199,9 +199,9 @@ The orchestrator exposes these flags.
 
 • `--only-current` scrape only the current period where supported
 
-• `--weekly-days N` refresh stale non approved bills and motions older than N days
+• `--daily N` refresh stale non approved bills and motions older than N days
 
-• `--others-days N` skip congresistas, bancadas, committees, organizations scrape when the latest raw scrape is within N days
+• `--others-daily N` skip congresistas, bancadas, committees, organizations scrape when the latest raw scrape is within N days
 
 Mutually exclusive target groups
 
