@@ -75,8 +75,8 @@ class OpenPeruOrchestrator:
       3) load SQLAlchemy models into the clean DB
     """
 
-    def __init__(self, db_url: str = settings.DB_URL):
-        self.db_engine = create_engine(db_url, pool_pre_ping=True)
+    def __init__(self, db_url: str = settings.DB_URL, engine=None):
+        self.db_engine = engine or create_engine(db_url, pool_pre_ping=True)
         self.DBSession = sessionmaker(
             bind=self.db_engine, autocommit=False, autoflush=False
         )

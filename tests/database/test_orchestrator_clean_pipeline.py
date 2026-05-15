@@ -1,6 +1,5 @@
 import json
 from datetime import datetime
-
 import pytest
 
 from backend.database import models as db_models
@@ -13,9 +12,9 @@ from backend.process import schema
 from backend import TypeBillStep, TypeMotionStep
 
 
-@pytest.fixture()
-def orchestrator(tmp_path):
-    return OpenPeruOrchestrator(db_url=f"sqlite:///{tmp_path / 'pipeline.db'}")
+@pytest.fixture
+def orchestrator(engine):
+    return OpenPeruOrchestrator(engine=engine)
 
 
 def test_run_processing_loads_reference_definitions_before_memberships(monkeypatch):

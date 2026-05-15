@@ -205,9 +205,9 @@ def test_get_html_with_selections_handles_no_such_element(monkeypatch):
 # ---------- get_raw_committees ----------
 
 
-def test_get_raw_committees_builds_committee_list(monkeypatch, raw_session):
+def test_get_raw_committees_builds_committee_list(monkeypatch, session):
     scraper = RawCommitteeScraper()
-    scraper.session = raw_session
+    scraper.session = session
 
     monkeypatch.setattr(scraper, "_select_year", lambda driver, wait, year_value: None)
     monkeypatch.setattr(scraper, "update_tracking", lambda committee: committee)
