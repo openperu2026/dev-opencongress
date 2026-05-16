@@ -3,6 +3,8 @@
 This directory contains the Docker setup for the shared OpenCongress PostgreSQL
 database and the raw data migration image.
 
+This container should be run only once.
+
 ## Installing requirements
 
 - Install Docker. Follow the instructions to install Docker Desktop [here](https://docs.docker.com/desktop/). If using WSL, follow [these instructions](https://docs.docker.com/desktop/features/wsl/). Then verify with:
@@ -10,50 +12,51 @@ database and the raw data migration image.
   docker --version 
   ```
 
-- Clone this repository and checkout `dev` or `feature/data_migration` branch.
+- Clone this repository and checkout `dev` branch.
   ```bash
   git clone git@github.com:openperu2026/dev-opencongress.git
-  git switch feature/data_migration
+  git switch dev
   ```
 
 ## Run PostgreSQL
 
-Start the database:
+We already have PostgreSQL server running with `pgvector`, `pg_similarity` and `unnaccent` extensions.
 
-```bash
-docker compose up -d db
-```
+Be sure to establish the following connection settings in your .env variable:
 
-The `db` service runs PostgreSQL 16 with `pgvector` and `pg_similarity`extensions.
-
-Connection settings:
-
-```text
-POSTGRES_USER=opencongress
-POSTGRES_PASSWORD=opencongress
+```env
+# DB configs
+POSTGRES_USER=some_user_name
+POSTGRES_PASSWORD=some_password
 POSTGRES_DB=opencongress
-```
 
-Use this URL from the host machine:
+# Server configs
+POSTGRES_INTERNAL_HOST=server_host
+POSTGRES_PORT=123456
 
-```bash
-export DB_URL=postgresql+psycopg://opencongress:opencongress@localhost:5432/opencongress
+DB_URL=postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_INTERNAL_HOST}:${POSTGRES_PORT}/${POSTGRES_DB}
+
+# Migration SQLite -> PostgreSQL 
+SQLITE_PATH=/app/data/raw/OpenPeruRaw.db
+RAW_MIGRATION_IMAGE=cesarnunezh/opencongress-raw-migration:latest
 ```
 
 ## Run Migration
 
 The migration image contains the old SQLite `OpenPeruRaw.db` seed data. The SQLite file is not committed to Git, so any contributor should use the published DockerHub image instead of building it locally.
 
-Set the image tag:
+Set the image tag in your .env file
 
-```bash
-export OPENPERU_RAW_MIGRATION_IMAGE=cesarnunezh/opencongress-raw-migration:latest
+```text
+# Migration SQLite -> PostgreSQL 
+SQLITE_PATH=/app/data/raw/OpenPeruRaw.db
+RAW_MIGRATION_IMAGE=cesarnunezh/opencongress-raw-migration:latest
 ```
 
 Run the migration:
 
 ```bash
-docker compose run --rm migrate-raw
+make migration
 ```
 
 ## Maintainer Notes
