@@ -16,18 +16,18 @@
 
             <dl class="congress-info">
                 <div>
-                    <dt>Region: {{ congresista.dist_electoral or "Not available" }} </dt>
+                    <dt>{{_('Region')}}: {{ congresista.dist_electoral or "{{_('Not available')}}" }} </dt>
                 </div>
                 <div>
-                    <dt>Party: {{ congresista.party_name }}</dt>
+                    <dt>{{_('Party')}}: {{ congresista.party_name }}</dt>
                     <dd></dd>
                 </div>
                 <div>
-                    <dt>Status: {{ congresista.condicion }}</dt>
+                    <dt>{{_('Status')}}: {{ congresista.condicion }}</dt>
                     <dd></dd>
                 </div>
                 <div>
-                    <dt>Election Votes: {{ "{:,}".format(congresista.votes_in_election) }}</dt>
+                    <dt>{{_('Election Votes')}}: {{ "{:,}".format(congresista.votes_in_election) }}</dt>
                     <dd></dd>
                 </div>
             </dl>
@@ -35,27 +35,27 @@
 
         <div class="congress-stats">
             <article>
-                <h2>Assistance Rate</h2>
+                <h2>{{_('Assistance Rate')}}</h2>
                 <strong>{{ profile_stats.assistance_rate }}</strong>
             </article>
             <article>
-                <h2>Bills Authored</h2>
+                <h2>{{_('Bills Authored')}}</h2>
                 <strong>{{ profile_stats.bills_authored }}</strong>
             </article>
             <article>
-                <h2>Rate of Successful</h2>
+                <h2>{{_('Rate of Successful')}}</h2>
                 <strong>{{ profile_stats.success_rate }}</strong>
             </article>
         </div>
 
         <p class="congress-action">
             <a href="{{ url_for('bills.index', author_q=congresista.id) }}">
-                View all bills authored
+                {{_('View all bills authored')}}
             </a>
         </p>
 
         <section class="congress-section">
-            <h2>Committee Membership</h2>
+            <h2>{{_('Committee Membership')}}</h2>
             {% if memberships %}
                 <ul>
                     {% for membership in memberships %}
@@ -66,12 +66,12 @@
                     {% endfor %}
                 </ul>
             {% else %}
-                <p>No committee membership records found.</p>
+                <p>{{_('No committee membership records found.')}}</p>
             {% endif %}
         </section>
 
         <section class="congress-section">
-            <h2>Recent Bills Authored</h2>
+            <h2>{{_('Recent Bills Authored')}}</h2>
             {% if bills_authored %}
                 <ul>
                     {% for bill in bills_authored %}
@@ -83,12 +83,12 @@
                     {% endfor %}
                 </ul>
             {% else %}
-                <p>No authored bills found.</p>
+                <p>{{_('No authored bills found.')}}</p>
             {% endif %}
         </section>
 
         <section class="congress-section">
-            <h2>Last Votings</h2>
+            <h2>{{_('Last Votings')}}</h2>
             {% for vote in recent_votes %}
                 <article class="congress-vote">
                     <strong>{{ vote.position }}</strong>
@@ -99,7 +99,7 @@
 
         <p class="congress-source">
             <a href="{{ congresista.website }}" target="_blank" rel="noopener noreferrer">
-                Official congress profile
+                {{_('Official congress profile')}}
             </a>
         </p>
     </section>

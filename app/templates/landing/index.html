@@ -8,7 +8,7 @@
         
     <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="Open Congress logo">
         <p class="page-subtitle">
-            Select the information about the peruvian congress that you want to explore
+            {{_('Select the information about the peruvian congress that you want to explore')}}
 
         </p>
         
@@ -25,55 +25,10 @@
 
 <section id="about" class="about-section">
     <div class="about-content">
-        <h2>About</h2>
+        <h2>{{_('About')}}</h2>
         <p>
-            Open Congress brings together public information from the Peruvian Congress, making 
-            it easier to explore bills, congress members, political groups, and legislative 
-            activity in one place.
-            <br>
-            This project began as a side project and was later formalized by a team of six students
-            from Computer Science and the Harris School of Public Policy at the 
-            University of Chicago.
-            <br>
-            Its goal is to improve transparency and support the development of civic technology 
-            in service of democracy, accountability, and public participation.
-        
-        </p>
-    </div>
-</section>
-
-
-<section id="the_congress" class="about-section">
-    <div class="about-content">
-        <h2>The Congress</h2>
-        <p>
-            The Peruvian Congress is one of the three branches of the Peruvian state, 
-            alongside the executive and judicial branches. 
-            Established as an independent branch under the Constitution, 
-            it is responsible for drafting, debating, and approving laws in Peru.
-            <br>
-            During the 2021-2026 legislative period, Congress operates as a unicameral 
-            body with 130 members.
-            <br>
-            Every law in Peru begins as a bill and must pass through a legislative 
-            process before becoming law.
-            
-            <img
-            class="congress-graphic"
-            src="{{ url_for('static', filename='images/graphic.jpg') }}"
-            alt="Peruvian Congress legislative process graphic"
-            >
-    </div>
-</section>
-
-
-<section id="contact" class="about-section">
-    <div class="about-content">
-        <h2>Contact</h2>
-        <p>
-            If you want to collaborate or are interested in the project, write us at:
-            openperu@uchicago.edu
-        
+            {{_('Open Congress brings together public information from the Peruvian Congress so bills,
+            congress members, political groups, and legislative activity can be explored in one place.')}}
         </p>
     </div>
 </section>
