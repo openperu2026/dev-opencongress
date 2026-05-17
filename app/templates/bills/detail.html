@@ -3,12 +3,12 @@
 {% block content %}
 
 <div class="bill-header">
-  <h1>Title: {{ bill.title }}</h1>
+  <h1>{{_('Title')}}: {{ bill.title }}</h1>
   <div class="bill-meta">
     {% if latest_step %}
-        <p><strong>Step:</strong> {{ latest_step.step_type.value }}</p>
+        <p><strong>{{_('Step')}}:</strong> {{ latest_step.step_type.value }}</p>
     {% endif %}
-    <p><strong>Summary:</strong> {{ bill.summary }}</p>
+    <p><strong>{{_('Summary')}}:</strong> {{ bill.summary }}</p>
 
   </div>
 </div>
@@ -22,7 +22,7 @@
           <div class="timeline-content">
               <div class="timeline-type">{{ step.step_date.strftime('%Y-%m-%d') }} - {{ step.step_type.value }}</div>
             {% if step.vote_step and step.vote_event_id %}
-              <a href = "/bills/{{bill.id}}/mock_votes">View details</a>
+              <a href = "/bills/{{bill.id}}/mock_votes">{{_('View details')}}</a>
               <!-- real data -->
               <!-- <a href="/bills/{{ bill.id }}/vote/{{ step.vote_event_id }}">View details</a> -->
             {% endif %}

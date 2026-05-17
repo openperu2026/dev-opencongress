@@ -2,25 +2,24 @@
 
 {% block content %}
 <div class="bill-header">
-  <h1>Title: {{ bill.title }}</h1>
+  <h1>{{_('Title')}}: {{ bill.title }}</h1>
   <div class="bill-meta">
     {% if latest_step %}
-        <p><strong>Step:</strong> {{ latest_step.step_type }}</p>
+        <p><strong>{{_('Step')}}:</strong> {{ latest_step.step_type.value }}</p>
     {% endif %}
-    <p><strong>Status:</strong> {{ bill.status }}</p>
   </div>
 </div>
 
 <div class="vote-results">
-  <h2>Voting Results</h2>
+  <h2>{{_('Voting Results')}}</h2>
   
   <div class="vote-summary">
     <table class="vote-table">
       <thead>
         <tr>
-          <th>IN FAVOR</th>
-          <th>AGAINST</th>
-          <th>ABST</th>
+          <th>{{_('IN FAVOR')}}</th>
+          <th>{{_('AGAINST')}}</th>
+          <th>{{_('ABST')}}</th>
         </tr>
       </thead>
       <tbody>
@@ -40,9 +39,9 @@
     <div id="seatTooltip" class="seat-tooltip" role="tooltip" ></div>
   </div>
   <div class="seats-legend">
-    <div class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>In favor</div>
-    <div class="legend-item"><span class="legend-swatch legend-swatch--no"></span>Against</div>
-    <div class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>Abst</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>{{_('In favor')}}</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--no"></span>{{_('Against')}}</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>{{_('Abst')}}</div>
   </div>
 </div>
 
@@ -63,9 +62,9 @@
   </svg>
   {% endif %}
   <div class="bancada-legend">
-    <span class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>In favor</span>
-    <span class="legend-item"><span class="legend-swatch legend-swatch--no"></span>Against</span>
-    <span class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>Abst</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>{{_('In favor')}}</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--no"></span>{{_('Against')}}</span>
+    <span class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>{{_('Abst')}}</span>
   </div>
 </div>
 
