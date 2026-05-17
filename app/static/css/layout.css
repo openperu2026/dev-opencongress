@@ -181,7 +181,7 @@ padding: 20px 0;
 .timeline::before {
 content: '';
 position: absolute;
-left: 20px;
+left: 17.5px;
 top: 0;
 bottom: 0;
 width: 2px;

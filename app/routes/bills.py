@@ -59,7 +59,6 @@ def index():
             FROM bills
             LEFT OUTER JOIN congresistas ON bills.author_id = congresistas.id
             WHERE {where_clause}
-            ORDER BY bills.presentation_date DESC
             LIMIT 50
         """
 
