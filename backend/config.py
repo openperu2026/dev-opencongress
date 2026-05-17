@@ -101,7 +101,7 @@ class Settings(BaseSettings):
 
     # This is only in case we need some API_KEYS. Allow us to handle safely.
     model_config = ConfigDict(
-        env_file=directories.ROOT_DIR / ".env",
+        env_file=directories.ROOT_DIR / ".env", extra="allow"
     )
 
 
