@@ -217,8 +217,8 @@ msgid "No matching congresspeople found."
 msgstr "No se encontraron proyectos de ley."
 
 #: templates/landing/index.html:10
-msgid "Select what information about the peruvian congress you want to explore"
-msgstr "Selecciona qué información sobre el Congreso peruano quieres explorar"
+msgid "Select the information about the peruvian congress that you want to explore"
+msgstr "Selecciona la información del Congreso peruano quieres explorar"
 
 #: templates/landing/index.html:29
 msgid ""
