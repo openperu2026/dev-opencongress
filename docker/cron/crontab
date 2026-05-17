@@ -1,0 +1,5 @@
+0 0 * * * make scrape-others >> /var/log/cron.log 2>&1
+0 1 * * * make scrape-bills >> /var/log/cron.log 2>&1
+0 2 * * * make scrape-motions >> /var/log/cron.log 2>&1
+0 3 * * * make scrape-leyes >> /var/log/cron.log 2>&1
+0 7 * * * make process >> /var/log/cron.log 2>&1

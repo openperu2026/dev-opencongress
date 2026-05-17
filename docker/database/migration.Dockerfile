@@ -12,7 +12,11 @@ RUN pip install --no-cache-dir \
     "pydantic-settings>=2.10.1,<3" \
     "sqlalchemy>=2.0.41,<3" \
     "tqdm>=4.67.3,<5" \
-    "typing-extensions>=4.14.0,<5"
+    "typing-extensions>=4.14.0,<5" \
+    "pytesseract>=0.3.13" \
+    "numpy>=2.4.4"\
+    "pymupdf>=1.27.2.2" \
+    "pillow>=12.2.0"
 
 COPY backend /app/backend
 COPY data/raw/OpenPeruRaw.db /app/data/raw/OpenPeruRaw.db

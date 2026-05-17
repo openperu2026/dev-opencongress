@@ -3,7 +3,7 @@ services:
     image: ${RAW_MIGRATION_IMAGE}
     build:
       context: .
-      dockerfile: backend/database/migration/migration.Dockerfile
+      dockerfile: docker/database/migration.Dockerfile
       platforms:
         - linux/amd64
         - linux/arm64
@@ -16,6 +16,13 @@ services:
       - migration_logs:/app/logs
     profiles:
       - migration
+
+  cron:
+    build:
+      context: .
+      dockerfile: docker/cron/cron.Dockerfile
+    env_file: .env
+    restart: unless-stopped
 
 volumes:
   migration_logs:

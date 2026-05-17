@@ -8,7 +8,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--scrape",
         action="store_true",
-        help="Run scrapers before processing",
+        help="Run scrapers before processing for rows with last scrape older than 1 day",
     )
     parser.add_argument(
         "--skip-processing",
@@ -19,18 +19,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--only-current",
         action="store_true",
         help="Scrape only current period where supported",
-    )
-    parser.add_argument(
-        "--daily",
-        type=int,
-        default=1,
-        help="Refresh stale non-approved bills/motions older than this many days",
-    )
-    parser.add_argument(
-        "--others-daily",
-        type=int,
-        default=1,
-        help="Skip congresistas/bancadas/committees/organizations scrape when latest raw scrape is within this many days",
     )
     target_group = parser.add_mutually_exclusive_group()
     target_group.add_argument(
@@ -53,14 +41,6 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run only non-bill/non-motion entities (congresistas, bancadas, organizations)",
     )
-    parser.add_argument("--bill-year", type=int)
-    parser.add_argument("--bill-start", type=int)
-    parser.add_argument("--bill-end", type=int)
-    parser.add_argument("--motion-year", type=int)
-    parser.add_argument("--motion-start", type=int)
-    parser.add_argument("--motion-end", type=int)
-    parser.add_argument("--ley-start", type=int)
-    parser.add_argument("--ley-end", type=int)
     parser.add_argument(
         "--scrape-documents",
         action="store_true",
@@ -70,21 +50,6 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-documents",
         action="store_true",
         help="Skip loading documents in processing stage",
-    )
-    parser.add_argument(
-        "--process-bills-limit",
-        type=int,
-        help="Limit the number of bill raw rows processed",
-    )
-    parser.add_argument(
-        "--process-motions-limit",
-        type=int,
-        help="Limit the number of motion raw rows processed",
-    )
-    parser.add_argument(
-        "--process-leyes-limit",
-        type=int,
-        help="Limit the number of leyes raw rows processed",
     )
     return parser
 
@@ -123,16 +88,6 @@ def main(argv: list[str] | None = None) -> None:
             scrape_leyes=run_leyes,
             scrape_others=run_others,
             only_current=args.only_current,
-            daily=args.daily,
-            others_daily=args.others_daily,
-            bill_year=args.bill_year,
-            bill_start=args.bill_start,
-            bill_end=args.bill_end,
-            motion_year=args.motion_year,
-            motion_start=args.motion_start,
-            motion_end=args.motion_end,
-            ley_start=args.ley_start,
-            ley_end=args.ley_end,
             scrape_documents=args.scrape_documents,
         )
 
@@ -143,7 +98,4 @@ def main(argv: list[str] | None = None) -> None:
             process_leyes=run_leyes,
             process_others=run_others,
             include_documents=not args.no_documents,
-            bills_limit=args.process_bills_limit,
-            motions_limit=args.process_motions_limit,
-            leyes_limit=args.process_leyes_limit,
         )
