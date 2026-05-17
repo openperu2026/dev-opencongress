@@ -8,21 +8,6 @@ import os
 import sys
 import concurrent.futures
 
-
-from backend.config import settings
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, select
-
-db_engine = create_engine(settings.DB_URL, pool_pre_ping=True)
-db_session = sessionmaker(bind=db_engine, autocommit=False, autoflush=False)
-
-
-# QUERIES
-def get_approved_ids(model: type) -> list[str]:
-    with db_session() as db:
-        return list(db.scalars(select(model.id).where(model.bill_approved.is_(True))))
-
-
 warnings.filterwarnings("ignore", category=UserWarning)
 
 # Parallelize processing using ThreadPoolExecutor
@@ -117,9 +102,6 @@ def process_pdf(pdf_file):
 
 
 if __name__ == "__main__":
-    # ids = get_approved_ids(models.Bill)
-    # print(ids)
-
     if len(sys.argv) < 2:
         print("Usage: uv run chandra_2_vllm.py <folder_path>")
         sys.exit(1)
