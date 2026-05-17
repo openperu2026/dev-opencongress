@@ -11,7 +11,7 @@ from backend.config import settings
 from backend.database.raw_models import RawBill
 
 BASE_URL = "https://wb2server.congreso.gob.pe/spley-portal/#"
-RAW_DB_PATH = settings.RAW_DB_URL
+DB_PATH = settings.DB_URL
 
 
 def get_url_text(url: str, data: str | None = None) -> str | None:
@@ -32,7 +32,7 @@ class RawBillScraper:
             self.engine = session.get_bind()
             self.Session = sessionmaker(bind=self.engine)  # safe default
         else:
-            self.engine = engine or create_engine(RAW_DB_PATH)
+            self.engine = engine or create_engine(DB_PATH)
             self.Session = sessionmaker(bind=self.engine)
             self.session = None
 

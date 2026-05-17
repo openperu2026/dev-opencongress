@@ -205,9 +205,9 @@ def test_get_html_with_selections_handles_no_such_element(monkeypatch):
 # ---------- get_raw_committees ----------
 
 
-def test_get_raw_committees_builds_committee_list(monkeypatch, raw_session):
+def test_get_raw_committees_builds_committee_list(monkeypatch, session):
     scraper = RawCommitteeScraper()
-    scraper.session = raw_session
+    scraper.session = session
 
     monkeypatch.setattr(scraper, "_select_year", lambda driver, wait, year_value: None)
     monkeypatch.setattr(scraper, "update_tracking", lambda committee: committee)
@@ -280,7 +280,7 @@ def test_add_committees_to_db_persists(monkeypatch):
 
     committee = RawCommittee(
         timestamp=datetime(2021, 1, 1),
-        legislative_year=2021,
+        legislative_year="2021",
         committee_type="Permanente",
         raw_html="<html>data</html>",
     )
@@ -292,7 +292,7 @@ def test_add_committees_to_db_persists(monkeypatch):
         count = session.query(RawCommittee).count()
         assert count == 1
         db_obj = session.query(RawCommittee).first()
-        assert db_obj.legislative_year == 2021
+        assert db_obj.legislative_year == "2021"
         assert db_obj.committee_type == "Permanente"
         assert db_obj.raw_html == "<html>data</html>"
 
