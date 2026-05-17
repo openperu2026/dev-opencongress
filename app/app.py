@@ -11,7 +11,6 @@ def create_app():
     app.register_blueprint(landing_bp)
     app.register_blueprint(bills_bp)
     app.register_blueprint(congress_bp)
-    # app.register_blueprint(info_bp)
 
     return app
 
