@@ -52,6 +52,12 @@
             </article>
         </div>
 
+        <p class="congress-action">
+            <a href="{{ url_for('bills.index', author_q=congresista.id) }}">
+                View all bills authored
+            </a>
+        </p>
+
         <section class="congress-section">
             <h2>Committee Membership</h2>
             {% if memberships %}

@@ -29,11 +29,10 @@ uv run python -m backend --scrape
 
 Useful options (from orchestrator):
 
-- `--weekly-days N`: refresh stale non-approved bills/motions older than `N` days.
+- `--daily N`: refresh stale non-approved bills/motions older than `N` days.
 - `--only-bills`, `--only-motions`, `--only-others`.
 - `--scrape-documents`.
 
 ## Logging
 
-Some scripts route logs to files via `stop_logging_to_console(...)` from `backend/config.py`.
-By default, logs are stored under `logs/`.
+The orchestrator writes tqdm-safe console summaries and per-stage files under `logs/`.

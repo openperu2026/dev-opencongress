@@ -1,14 +1,39 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="searching-container">
-    <h1 class="search-title">Search the congressmen</h1>
 
-    <form method="get" action="{{ url_for('congress.index') }}">
-        <input type="text" name="q" value="{{ q or '' }}" placeholder="Write a congressperson name">
-        <button type="submit">Search</button>
-    </form>
-    {% if congresistas %}
+
+<form method="get" action="{{ url_for('congress.index') }}">
+
+
+    <div class="searching-container">
+        <h1 class="search-title">Search the congressmen</h1>
+
+        <h3>By name</h3>
+        <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="Write a congressperson name">
+        
+    </div>
+
+    <div class="searching-container">
+        <h3>By party</h3>
+        <input type="text" name="party_q" value="{{party_q or '' }}"  placeholder="Write a congressperson party">
+
+    </div>    
+
+
+     <div class="searching-container">
+        <h3>By region</h3>
+        <input type="text" name="region_q" value="{{region_q or '' }}"  placeholder="Write a congressperson region">
+
+    </div>
+
+
+    <button type="submit">Search</button>
+</form>
+
+
+
+ {% if congresistas %}
         <ul>
             {% for congresista in congresistas %}
                 <li>
@@ -18,9 +43,11 @@
                 </li>
             {% endfor %}
         </ul>
-    {% elif q %}
+    {% elif name_q or party_q or region_q %}
         <p>No matching congresspeople found.</p>
     {% endif %}
+
+
 
 {% endblock %}
 

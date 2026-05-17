@@ -9,6 +9,7 @@
         <p><strong>Step:</strong> {{ latest_step.step_type }}</p>
     {% endif %}
     <p><strong>Status:</strong> {{ bill.status }}</p>
+    <p><strong>Summary:</strong> {{ bill.summary }}</p>
 
   </div>
 </div>
@@ -20,19 +21,18 @@
         <div class="timeline-item">
           <div class="timeline-dot"></div>
           <div class="timeline-content">
-              <div class="timeline-type">{{ step.step_type }}</div>
+              <div class="timeline-type">{{ step.step_date.strftime('%Y-%m-%d') }} - {{ step.step_type }}</div>
             {% if step.vote_step and step.vote_event_id %}
               <a href="/bills/{{ bill.id }}/vote/{{ step.vote_event_id }}">View details</a>
+            {% endif %}
+            {% if step.step_type.lower() == 'vote' %}
+                <a href = "/bills/{{bill.id}}/mock_votes">View details</a>
             {% endif %}
           </div>
         </div>
       {% endfor %}
     {% endif %}
   </div>
-</div>
-
-<div class = mock_votes>
-  <a href="/bills/{{ bill.id }}/mock_votes">View details</a>
 </div>
 
 {% endblock %}

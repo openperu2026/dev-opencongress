@@ -41,8 +41,8 @@ uv run python -m backend
 # Scrape + process only bills
 uv run python -m backend --scrape --only-bills
 
-# Weekly refresh window = 10 days
-uv run python -m backend --scrape --weekly-days 10
+# Daily refresh window = 10 days
+uv run python -m backend --scrape --daily 10
 ```
 
 ## Raw tracking semantics

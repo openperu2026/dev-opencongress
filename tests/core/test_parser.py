@@ -3,8 +3,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from backend.core.enums import BillStepType, MotionStepType
-from backend.core.parsers import classify_des_estado, classify_motion_des_estado
+from backend.core.enums import RoleOrganization, TypeBillStep, TypeMotionStep
+from backend.core.parsers import (
+    classify_des_estado,
+    classify_motion_des_estado,
+    normalize_membership_role,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -21,13 +25,13 @@ def _load_json(path: Path) -> list[dict]:
 def test_classify_bill_status_exact():
     label = classify_des_estado("APROBADO", "ASISTENCIA Y VOTACIÓN")
 
-    assert label is BillStepType.VOTACION
+    assert label is TypeBillStep.VOTACION
 
 
 def test_classify_bill_status_normalizes_variant():
     label = classify_des_estado(" Aprobado Com.Permanente ", "VOTACION")
 
-    assert label is BillStepType.VOTACION
+    assert label is TypeBillStep.VOTACION
 
 
 def test_classify_bill_status_uses_detail_when_placeholder():
@@ -36,7 +40,7 @@ def test_classify_bill_status_uses_detail_when_placeholder():
         "TEXTO SUSTITUTORIO DE LA COMISIÓN DE SALUD",
     )
 
-    assert label is BillStepType.TEXTO_SUSTITUTORIO_O_REVISION
+    assert label is TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION
 
 
 def test_classify_bill_status_uses_detail_to_refine_dictamen():
@@ -45,7 +49,7 @@ def test_classify_bill_status_uses_detail_to_refine_dictamen():
         "POR UNANIMIDAD - FÓRMULA SUSTITUTORIA - LEY QUE CREA EL COLEGIO PROFESIONAL",
     )
 
-    assert label is BillStepType.TEXTO_SUSTITUTORIO_O_REVISION
+    assert label is TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION
 
 
 def test_classify_bill_detail_vote_overrides_debate_status():
@@ -54,7 +58,7 @@ def test_classify_bill_detail_vote_overrides_debate_status():
         "ASISTENCIA Y VOTACIÓN - RECONSIDERACIÓN (APROBADA)",
     )
 
-    assert label is BillStepType.VOTACION
+    assert label is TypeBillStep.VOTACION
 
 
 def test_classify_bill_title_reconsideracion_does_not_force_step_type():
@@ -63,7 +67,7 @@ def test_classify_bill_title_reconsideracion_does_not_force_step_type():
         "LEY QUE REDUCE LOS PLAZOS PARA LA PRESENTACIÓN DE RECURSOS IMPUGNATIVOS DE RECONSIDERACIÓN",
     )
 
-    assert label is BillStepType.PRESENTADO
+    assert label is TypeBillStep.PRESENTADO
 
 
 def test_classify_motion_status_maps_foundation():
@@ -72,7 +76,7 @@ def test_classify_motion_status_maps_foundation():
         "LA CONGRESISTA FUNDAMENTA LA MOCIÓN DE ORDEN DEL DÍA.",
     )
 
-    assert label is MotionStepType.FUNDAMENTACION
+    assert label is TypeMotionStep.FUNDAMENTACION
 
 
 def test_classify_motion_status_uses_detail_for_blank_status():
@@ -81,7 +85,7 @@ def test_classify_motion_status_uses_detail_for_blank_status():
         "La Presidenta anunció que se había presentado la moción de censura.",
     )
 
-    assert label is MotionStepType.ANUNCIO_O_DACION_DE_CUENTA
+    assert label is TypeMotionStep.ANUNCIO_O_DACION_DE_CUENTA
 
 
 def test_classify_motion_status_maps_withdrawn_case():
@@ -90,7 +94,7 @@ def test_classify_motion_status_maps_withdrawn_case():
         "Solicita que ya no sea debatida en la sesión del pleno.",
     )
 
-    assert label is MotionStepType.RETIRADO
+    assert label is TypeMotionStep.RETIRADO
 
 
 def test_classify_motion_blank_title_as_presented():
@@ -99,7 +103,7 @@ def test_classify_motion_blank_title_as_presented():
         "Censurar a la señora María del Carmen Alva Prieto por su conducta antidemocrática.",
     )
 
-    assert label is MotionStepType.PRESENTADO
+    assert label is TypeMotionStep.PRESENTADO
 
 
 def test_classify_motion_blank_document_as_official_communication():
@@ -108,7 +112,7 @@ def test_classify_motion_blank_document_as_official_communication():
         "ACTA DE ACUERDO DE LA COMISIÓN DE SALUD",
     )
 
-    assert label is MotionStepType.COMUNICACION_OFICIAL
+    assert label is TypeMotionStep.COMUNICACION_OFICIAL
 
 
 def test_classify_motion_detail_title_overrides_routing_status():
@@ -117,7 +121,7 @@ def test_classify_motion_detail_title_overrides_routing_status():
         "Expresar su más cálido saludo y felicitación a los ciudadanos del distrito",
     )
 
-    assert label is MotionStepType.PRESENTADO
+    assert label is TypeMotionStep.PRESENTADO
 
 
 def test_classify_motion_detail_document_overrides_routing_status():
@@ -126,7 +130,7 @@ def test_classify_motion_detail_document_overrides_routing_status():
         "OFICIO 0021-2021-2022-ADP-M-CR. LA PRIMERA VICEPRESIDENTA COMUNICA A LA DIRECTORA",
     )
 
-    assert label is MotionStepType.COMUNICACION_OFICIAL
+    assert label is TypeMotionStep.COMUNICACION_OFICIAL
 
 
 def test_classify_motion_vote_detail_keeps_vote_family():
@@ -135,4 +139,12 @@ def test_classify_motion_vote_detail_keeps_vote_family():
         "APROBADO UN TEXTO SUSTITUTORIO",
     )
 
-    assert label is MotionStepType.VOTACION_O_DECISION
+    assert label is TypeMotionStep.VOTACION_O_DECISION
+
+
+def test_normalize_membership_role_maps_presidency_encargado_variant():
+    role = normalize_membership_role(
+        "primer vicepresidente encargado de la presidencia del congreso de la república"
+    )
+
+    assert role is RoleOrganization.VICEPRESIDENTE

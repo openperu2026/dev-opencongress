@@ -1,25 +1,81 @@
+from types import SimpleNamespace
 from flask import Blueprint, render_template, request
-from sqlalchemy import select
+from sqlalchemy import select, text
 from backend.database.models import Bill, BillStep
 from .processed_session import SessionProcessed
 import json
 import os
+import sqlite3
 from .generate_seats import generate_seats
+from .build_bancada_bars import build_bancada_bars
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 
 
+def load_voter_bancada_dict():
+    """Load voter-bancada mapping from DB into dict"""
+    db_path = os.path.join(
+        os.path.dirname(__file__), "..", "mock_data", "example_voter_bancada.db"
+    )
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT voter, bancada FROM voter_bancada")
+    voter_bancada_map = {row[0]: row[1] for row in cursor.fetchall()}
+    conn.close()
+    return voter_bancada_map
+
+
 @bills_bp.route("/bills")
 def index():
-    q = request.args.get("q", "").strip()
+    title_q = request.args.get("title_q", "").strip()
+    author_q = request.args.get("author_q", "").strip()
+    params = {}
+    filters = []
+    author_display = None
+    author_id_query = author_q.isdigit()
+
+    if title_q:
+        filters.append("lower(bills.title) LIKE lower(:title_q)")
+        params["title_q"] = f"%{title_q}%"
+
+    if author_q:
+        if author_id_query:
+            filters.append("CAST(bills.author_id AS TEXT) = :author_id")
+            params["author_id"] = author_q
+            with SessionProcessed() as db:
+                author_display = db.execute(
+                    text("SELECT nombre FROM congresistas WHERE id = :author_id"),
+                    {"author_id": author_q},
+                ).scalar_one_or_none()
+        else:
+            filters.append("lower(congresistas.nombre) LIKE lower(:author_q)")
+            params["author_q"] = f"%{author_q}%"
+
     bills = []
+    if filters:
+        where_clause = " AND ".join(filters)
+        query = f"""
+            SELECT bills.*, congresistas.nombre as author_name
+            FROM bills
+            LEFT OUTER JOIN congresistas ON bills.author_id = congresistas.id
+            WHERE {where_clause}
+            ORDER BY bills.presentation_date DESC
+            LIMIT 50
+        """
 
-    if q:
         with SessionProcessed() as db:
-            stmt = select(Bill).where(Bill.title.ilike(f"%{q}%")).limit(50)
-            bills = db.execute(stmt).scalars().all()
+            rows = db.execute(text(query), params).mappings().all()
+            if rows and author_q and not author_id_query:
+                author_display = author_q
+            bills = [SimpleNamespace(**row) for row in rows]
 
-    return render_template("bills/search.html", q=q, bills=bills)
+    return render_template(
+        "bills/search.html",
+        title_q=title_q,
+        author_q=author_q,
+        author_display=author_display,
+        bills=bills,
+    )
 
 
 @bills_bp.route("/bills/<bill_id>")
@@ -73,12 +129,35 @@ def mock_votes(bill_id):
         # Generate seat positions and attributes server-side
         seats = generate_seats(vote_counts, groups)
 
+        # Load voter-bancada mapping and aggregate by bancada
+        voter_bancada_map = load_voter_bancada_dict()
+        bancada_votes = {}
+
+        # reparsing the votes list
+        for vote_type, names in groups.items():
+            for name in names:
+                bancada = voter_bancada_map.get(name, "unknown")
+                if bancada not in bancada_votes:
+                    bancada_votes[bancada] = {
+                        "yes": 0,
+                        "no": 0,
+                        "abstain": 0,
+                        "total": 0,
+                    }
+                if vote_type in bancada_votes[bancada]:
+                    bancada_votes[bancada][vote_type] += 1
+                    bancada_votes[bancada]["total"] += 1
+
+        bancada_rows, bancada_chart_height = build_bancada_bars(bancada_votes)
+
         return render_template(
             "bills/mock_votes.html",
             bill=bill,
             latest_step=latest_step,
             vote_counts=vote_counts,
             seats=seats,
+            bancada_rows=bancada_rows,
+            bancada_chart_height=bancada_chart_height,
         )
 
 

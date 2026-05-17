@@ -134,7 +134,7 @@ def test_can_create_raw_committee(session):
     session.commit()
 
     fetched = session.query(RawCommittee).filter_by(committee_type="Permanent").one()
-    assert fetched.legislative_year == 2024
+    assert fetched.legislative_year == "2024"
     assert "<html>" in fetched.raw_html
 
 
