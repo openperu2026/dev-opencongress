@@ -22,6 +22,13 @@ def summarize_bill(bill_id: str, presentation_date: date, steps: list[BillStep])
 
 def process_bill_text(bill_pages: list[RawBillPage]) -> BillText:
     # TODO: Connect with final version of the bill_text and difference pipeline.
+    if not bill_pages:
+        raise ValueError("No raw pages provided for bill text extraction")
+    ocr_models = {page.ocr_model for page in bill_pages}
+    if len(ocr_models) > 1:
+        raise ValueError(
+            f"Bill pages mix OCR models {sorted(ocr_models)}; expected a single model"
+        )
     ordered_pages = sorted(bill_pages, key=lambda page: page.page_num)
     first_page = ordered_pages[0]
     final_text = extract_bill_body("\n".join(page.text for page in ordered_pages))
