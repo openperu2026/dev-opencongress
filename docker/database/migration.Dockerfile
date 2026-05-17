@@ -14,9 +14,13 @@ RUN pip install --no-cache-dir \
     "tqdm>=4.67.3,<5" \
     "typing-extensions>=4.14.0,<5" \
     "pytesseract>=0.3.13" \
-    "numpy>=2.4.4"\
-    "pymupdf>=1.27.2.2" \
-    "pillow>=12.2.0"
+    "numpy>=2.4.4" \
+    "pymupdf>=1.27.2.2" \   
+    "pillow>=12.2.0" \
+    "httpx[http2]>=0.28.1" \
+    "opencv-python>=4.11.0.86"
+
+RUN apt-get update && apt-get install -y tesseract-ocr tesseract-ocr-spa
 
 COPY backend /app/backend
 COPY data/raw/OpenPeruRaw.db /app/data/raw/OpenPeruRaw.db

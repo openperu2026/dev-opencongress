@@ -314,7 +314,7 @@ class OpenPeruOrchestrator:
                 scraper = RawMotionScraper()
                 new_results = self._scrape_range(
                     scraper=scraper,
-                    raw_model=RawBill,
+                    raw_model=RawMotion,
                     scrape_fn=scraper.scrape_motion,
                     buffer_attr="raw_motions",
                     load_fn=scraper.load_raw_motions,
