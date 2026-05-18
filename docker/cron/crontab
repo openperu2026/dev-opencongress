@@ -2,7 +2,7 @@ SHELL=/bin/sh
 PATH=/usr/local/bin:/usr/bin:/bin
 CRON_TZ=America/Lima
 
-05 10 * * * /app/docker/cron/run-job.sh scrape-others >> /app/logs/cron.log 2>&1
+41 10 * * * /app/docker/cron/run-job.sh scrape-others >> /app/logs/cron.log 2>&1
 15 1 * * * /app/docker/cron/run-job.sh scrape-bills >> /app/logs/cron.log 2>&1
 25 1 * * * /app/docker/cron/run-job.sh scrape-motions >> /app/logs/cron.log 2>&1
 35 9 * * * /app/docker/cron/run-job.sh scrape-leyes >> /app/logs/cron.log 2>&1
