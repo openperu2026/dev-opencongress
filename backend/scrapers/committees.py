@@ -4,14 +4,14 @@ from loguru import logger
 from datetime import datetime
 from typing import Literal
 
+from lxml.html import HtmlElement
+
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
-    NoSuchElementException,
     TimeoutException,
-    WebDriverException,
 )
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -138,51 +138,60 @@ class RawCommitteeScraper:
 
     def get_html_with_selections(
         self,
-        driver: webdriver.Chrome,
-        wait: WebDriverWait,
-        year_value: str,
+        url: str,
+        period_value: str,
         committee_value: str,
-    ) -> str | None:
-        try:
-            self._select_year(driver, wait, year_value)
+    ) -> HtmlElement | None:
+        # browser = None
+        # page = None
+        pass
+        # try:
+        #     with sync_playwright() as p:
+        #         browser = p.chromium.launch(headless=True)
 
-            # capture something that should change after committee selection (best-effort)
-            before = driver.page_source
+        #         try:
+        #             page = browser.new_page()
+        #             page.goto(url, wait_until="domcontentloaded")
 
-            wait.until(EC.presence_of_element_located((By.NAME, "fld_78_Comision")))
-            Select(driver.find_element(By.NAME, "fld_78_Comision")).select_by_value(
-                committee_value
-            )
+        #     self._select_year(driver, wait, year_value)
 
-            wait.until(
-                lambda d: (
-                    Select(
-                        d.find_element(By.NAME, "fld_78_Comision")
-                    ).first_selected_option.get_attribute("value")
-                    == committee_value
-                )
-            )
+        #     # capture something that should change after committee selection (best-effort)
+        #     before = driver.page_source
 
-            # best-effort: wait for page_source to change
-            wait.until(lambda d: d.page_source != before)
+        #     wait.until(EC.presence_of_element_located((By.NAME, "fld_78_Comision")))
+        #     Select(driver.find_element(By.NAME, "fld_78_Comision")).select_by_value(
+        #         committee_value
+        #     )
 
-            return driver.page_source
+        #     wait.until(
+        #         lambda d: (
+        #             Select(
+        #                 d.find_element(By.NAME, "fld_78_Comision")
+        #             ).first_selected_option.get_attribute("value")
+        #             == committee_value
+        #         )
+        #     )
 
-        except TimeoutException as e:
-            logger.warning(
-                f"Selenium timeout (year={year_value}, committee={committee_value}): {e}"
-            )
-            return None
-        except NoSuchElementException as e:
-            logger.error(
-                f"Element not found (year={year_value}, committee={committee_value}): {e}"
-            )
-            return None
-        except WebDriverException as e:
-            logger.error(
-                f"WebDriver error (year={year_value}, committee={committee_value}): {e}"
-            )
-            return None
+        #     # best-effort: wait for page_source to change
+        #     wait.until(lambda d: d.page_source != before)
+
+        #     return driver.page_source
+
+        # except TimeoutException as e:
+        #     logger.warning(
+        #         f"Selenium timeout (year={year_value}, committee={committee_value}): {e}"
+        #     )
+        #     return None
+        # except NoSuchElementException as e:
+        #     logger.error(
+        #         f"Element not found (year={year_value}, committee={committee_value}): {e}"
+        #     )
+        #     return None
+        # except WebDriverException as e:
+        #     logger.error(
+        #         f"WebDriver error (year={year_value}, committee={committee_value}): {e}"
+        #     )
+        #     return None
 
     def get_raw_committees(self, only_current: bool = False) -> None:
         dict_years = self.get_options(url=self.url, select_name="idRegistroPadre")
