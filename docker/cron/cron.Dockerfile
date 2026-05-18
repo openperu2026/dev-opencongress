@@ -22,13 +22,12 @@ RUN apt-get update \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 COPY pyproject.toml uv.lock /app/
-RUN uv sync --locked --no-dev
+RUN uv sync --locked --no-dev \
+    && uv run playwright install --with-deps chromium
 
 COPY backend /app/backend
 COPY Makefile /app/Makefile
 COPY docker/cron /app/docker/cron
-
-ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 
 RUN chmod +x /app/docker/cron/entrypoint.sh /app/docker/cron/run-job.sh
 
