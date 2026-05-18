@@ -89,7 +89,7 @@ class Settings(BaseSettings):
     """
 
     # This should change depending on where the DB will be stored
-    DB_URL: str | None = os.getenv(
+    DB_URL: str = os.getenv(
         "DB_URL",
         "postgresql+psycopg://opencongress:opencongress@localhost:5999/opencongress",
     )
