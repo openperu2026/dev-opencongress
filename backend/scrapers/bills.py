@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime
 from loguru import logger
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
@@ -50,12 +49,7 @@ class RawBillScraper:
 
     def __search_api_url(self, bill_url: str) -> str:
         with sync_playwright() as p:
-            launch_kwargs = {"headless": True}
-            executable_path = os.getenv("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
-            if executable_path:
-                launch_kwargs["executable_path"] = executable_path
-
-            browser = p.chromium.launch(**launch_kwargs)
+            browser = p.chromium.launch(headless=True)
             page = browser.new_page()
 
             try:
