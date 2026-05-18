@@ -1,53 +1,110 @@
 from types import SimpleNamespace
 
 from flask import Blueprint, render_template, request
-from sqlalchemy import select, text
-from backend.database.models import Bill
+from sqlalchemy import create_engine, func, or_, select
+from sqlalchemy.orm import sessionmaker
+from backend.config import settings
+from backend.database.models import (
+    Bill,
+    ChamberMembership,
+    BillOrganization,
+    Congresista,
+    Membership,
+    Organization,
+    TypeOrganization,
+)
+
+
 from .processed_session import SessionProcessed
 
 congress_bp = Blueprint("congress", __name__, template_folder="../templates")
 
 
+#get the latest organizations names
+def _latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | None:
+    return db.execute(
+        select(Organization.org_name)
+        .join(Membership, Membership.org_id == Organization.org_id)
+        .where(
+            Membership.person_id == person_id,
+            Membership.org_type == org_type,
+        )
+        .order_by(Membership.end_date.desc(), Membership.start_date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+
+#Get the main information of the Congressmember
+def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
+    party_name = _latest_org_name(db, congresista.id, TypeOrganization.PARTY)
+    chamber_membership = db.execute(
+        select(ChamberMembership)
+        .where(
+            ChamberMembership.person_id == congresista.id,
+            ChamberMembership.org_id == 1,
+        )
+        .order_by(ChamberMembership.end_date.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    return SimpleNamespace(
+        id=congresista.id,
+        full_name=congresista.full_name,
+        first_name=congresista.first_name,
+        last_name=congresista.last_name,
+        photo_url=congresista.photo_url,
+        website=congresista.website,
+        party_name=party_name,
+        dist_electoral=(
+            chamber_membership.dist_electoral if chamber_membership else None
+        ),
+        condicion=(
+            chamber_membership.condicion if chamber_membership else "Not available"
+        ),
+        votes_in_election=(
+            chamber_membership.votes_in_election if chamber_membership else 0
+        ),
+    )
+
+
 @congress_bp.route("/congress")
 def index():
-    # q = request.args.get("q", "").strip()
-
     name_q = request.args.get("name_q", "").strip()
     party_q = request.args.get("party_q", "").strip()
     region_q = request.args.get("region_q", "").strip()
 
     congresistas = []
-
     filters = []
-    params = {}
 
     if name_q:
-        filters.append("lower(nombre) LIKE lower(:name_q)")
-        params["name_q"] = f"%{name_q}%"
+        filters.append(Congresista.full_name.ilike(f"%{name_q}%"))
 
     if party_q:
-        filters.append("lower(party_name) LIKE lower(:party_q)")
-        params["party_q"] = f"%{party_q}%"
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.org_type.in_(
+                        [TypeOrganization.PARTY]
+                    ),
+                    Organization.org_name.ilike(f"%{party_q}%"),
+                )
+            )
+        )
 
     if region_q:
-        filters.append("lower(dist_electoral) LIKE lower(:region_q)")
-        params["region_q"] = f"%{region_q}%"
+        filters.append(Congresista.full_name.ilike(f"%{region_q}%"))
 
     if filters:
-        where_clause = " AND ".join(filters)
-
-        query = f"""
-            SELECT *
-            FROM congresistas
-            WHERE {where_clause}
-            LIMIT 50
-        """
-
         with SessionProcessed() as db:
-            rows = db.execute(text(query), params).mappings()
-            congresistas = [
-                SimpleNamespace(**row, full_name=row["nombre"]) for row in rows
-            ]
+            rows = db.execute(
+                select(Congresista)
+                .where(*filters)
+                .order_by(Congresista.full_name.asc())
+                .limit(50)
+            ).scalars()
+            congresistas = [_congresista_view(db, row) for row in rows]
 
     return render_template(
         "congress/search.html",
@@ -61,68 +118,72 @@ def index():
 @congress_bp.route("/congress/<congresista_id>")
 def congress_detail(congresista_id):
     with SessionProcessed() as db:
-        row = (
-            db.execute(
-                text("SELECT * FROM congresistas WHERE id = :id"),
-                {"id": congresista_id},
-            )
-            .mappings()
-            .first()
-        )
+        congresista_row = db.get(Congresista, int(congresista_id))
 
-        congresista = (
-            SimpleNamespace(**row, full_name=row["nombre"]) if row is not None else None
-        )
-        if not congresista:
+        if not congresista_row:
             return "Not Found", 404
 
-        bills_authored = (
-            db.execute(
-                select(Bill)
-                .where(Bill.author_id == congresista.id)
-                .order_by(Bill.presentation_date.desc())
-                .limit(5)
+        congresista = _congresista_view(db, congresista_row)
+
+        #To avoid duplicated bills
+        latest_bill_dates = (
+            select(
+                BillOrganization.bill_id,
+                func.max(BillOrganization.presentation_date).label("latest_presentation_date"),
             )
-            .scalars()
-            .all()
+            .group_by(BillOrganization.bill_id)
+            .subquery()
         )
 
+
+
+        bills_authored = [
+            SimpleNamespace(
+                id=bill.id,
+                title=bill.title,
+            )
+            for bill in db.execute(
+                select(Bill)
+                .join(latest_bill_dates, latest_bill_dates.c.bill_id == Bill.id)
+                .where(Bill.author_id == congresista.id)
+                .order_by(latest_bill_dates.c.latest_presentation_date.desc())
+                .limit(5)
+            ).scalars()
+        ]
+
         bills_authored_count = db.execute(
-            text("SELECT COUNT(*) FROM bills WHERE author_id = :person_id"),
-            {"person_id": congresista.id},
+            select(func.count()).select_from(Bill).where(Bill.author_id == congresista.id)
         ).scalar_one()
 
         successful_bills_count = db.execute(
-            text(
-                """
-                SELECT COUNT(*)
-                FROM bills
-                WHERE author_id = :person_id
-                  AND (approved = 1 OR bill_approved = 1)
-                """
-            ),
-            {"person_id": congresista.id},
+            select(func.count())
+            .select_from(Bill)
+            .where(
+                Bill.author_id == congresista.id,
+                Bill.bill_approved.is_(True),
+            )
         ).scalar_one()
 
         memberships = (
             db.execute(
-                text(
-                    """
-                    SELECT
-                        m.role,
-                        m.start_date,
-                        m.end_date,
-                        o.org_name,
-                        o.org_type,
-                        o.comm_type
-                    FROM memberships AS m
-                    JOIN organizations AS o ON o.org_id = m.org_id
-                    WHERE m.person_id = :person_id
-                    ORDER BY m.end_date DESC, m.start_date DESC
-                    LIMIT 8
-                    """
-                ),
-                {"person_id": congresista.id},
+                select(
+                    Membership.role,
+                    Membership.start_date,
+                    Membership.end_date,
+                    Organization.org_name,
+                    Organization.org_type,
+                    Organization.org_subtype,
+                )
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.person_id == congresista.id,
+                    or_(
+                        Membership.org_type == TypeOrganization.COMMITTEE,
+                        Organization.org_type == TypeOrganization.COMMITTEE,
+                    ),
+                )
+                .order_by(Membership.end_date.desc(), Membership.start_date.desc())
+                .limit(8)
             )
             .mappings()
             .all()
@@ -131,7 +192,11 @@ def congress_detail(congresista_id):
         profile_stats = {
             "assistance_rate": "45%",
             "bills_authored": bills_authored_count,
-            "success_rate": "40%",
+            "success_rate": f"{(
+                            round(100 * (successful_bills_count / bills_authored_count), 1)
+                            if bills_authored_count
+                            else 0
+                            )} %",
             "successful_bills": successful_bills_count,
         }
 

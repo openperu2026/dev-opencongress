@@ -1,0 +1,233 @@
+# Spanish translations for PROJECT.
+# Copyright (C) 2026 ORGANIZATION
+# This file is distributed under the same license as the PROJECT project.
+# FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: PROJECT VERSION\n"
+"Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
+"POT-Creation-Date: 2026-05-17 16:59-0500\n"
+"PO-Revision-Date: 2026-05-17 15:22-0500\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language: es\n"
+"Language-Team: es <LL@li.org>\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=utf-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Generated-By: Babel 2.18.0\n"
+
+#: routes/landing.py:13 templates/base.html:32
+msgid "Bills"
+msgstr "Proyectos de ley"
+
+#: routes/landing.py:14 
+msgid "Congress Members"
+msgstr "Congresistas"
+
+#: routes/landing.py:15 templates/base.html:34
+msgid "Data"
+msgstr "Datos"
+
+#: templates/base.html:31 templates/base.html:46
+#: templates/landing/index.html:27
+msgid "About"
+msgstr "Acerca de"
+
+#: templates/base.html:33
+msgid "Congressmen"
+msgstr "Congresistas"
+
+#: templates/base.html:47
+msgid "Terms of Service"
+msgstr "Términos de servicio"
+
+#: templates/base.html:48
+msgid "Privacy"
+msgstr "Privacidad"
+
+#: templates/base.html:49
+msgid "Contact"
+msgstr "Contacto"
+
+#: templates/bills/detail.html:6 templates/bills/mock_votes.html:5
+#: templates/bills/search.html:22
+msgid "Title"
+msgstr "Título"
+
+#: templates/bills/detail.html:9 templates/bills/mock_votes.html:8
+msgid "Step"
+msgstr "Paso"
+
+#: templates/bills/detail.html:11
+msgid "Summary"
+msgstr "Resumen"
+
+#: templates/bills/detail.html:25
+msgid "View details"
+msgstr "Ver detalles"
+
+#: templates/bills/mock_votes.html:14
+msgid "Voting Results"
+msgstr "Resultados de votación"
+
+#: templates/bills/mock_votes.html:20
+msgid "IN FAVOR"
+msgstr "A FAVOR"
+
+#: templates/bills/mock_votes.html:21
+msgid "AGAINST"
+msgstr "EN CONTRA"
+
+#: templates/bills/mock_votes.html:22
+msgid "ABST"
+msgstr "ABSTENCIÓN"
+
+#: templates/bills/mock_votes.html:42 templates/bills/mock_votes.html:65
+msgid "In favor"
+msgstr "A favor"
+
+#: templates/bills/mock_votes.html:43 templates/bills/mock_votes.html:66
+msgid "Against"
+msgstr "En contra"
+
+#: templates/bills/mock_votes.html:44 templates/bills/mock_votes.html:67
+msgid "Abst"
+msgstr "Abstención"
+
+#: templates/bills/search.html:6
+msgid "Search the Bill"
+msgstr "Buscar proyectos de ley"
+
+#: templates/bills/search.html:8
+msgid "Bill title"
+msgstr "Título"
+
+#: templates/bills/search.html:9
+msgid "Write a bill title"
+msgstr "Escribe el título de un proyecto de ley"
+
+#: templates/bills/search.html:11 templates/bills/search.html:25
+msgid "Author"
+msgstr "Autor"
+
+#: templates/bills/search.html:12
+msgid "Write an author name"
+msgstr "Escribe el nombre de un autor"
+
+#: templates/bills/search.html:14 templates/congress/search.html:31
+msgid "Search"
+msgstr "Buscar"
+
+#: templates/bills/search.html:20
+msgid "Search Criteria"
+msgstr "Criterios de búsqueda"
+
+#: templates/bills/search.html:39
+msgid "No matching bills found."
+msgstr "No se encontraron proyectos de ley."
+
+#: templates/congress/congress_detail.html:19
+msgid "Region"
+msgstr "Región"
+
+#: templates/congress/congress_detail.html:22
+msgid "Party"
+msgstr "Partido"
+
+#: templates/congress/congress_detail.html:26
+msgid "Status"
+msgstr "Estado"
+
+#: templates/congress/congress_detail.html:30
+msgid "Election Votes"
+msgstr "Votos obtenidos"
+
+#: templates/congress/congress_detail.html:38
+msgid "Assistance Rate"
+msgstr "Tasa de asistencia"
+
+#: templates/congress/congress_detail.html:42
+msgid "Bills Authored"
+msgstr "Autor"
+
+#: templates/congress/congress_detail.html:46
+msgid "Rate of Successful"
+msgstr "Tasa de éxito"
+
+#: templates/congress/congress_detail.html:53
+msgid "View all bills authored"
+msgstr "Ver todos los proyectos de ley presentados"
+
+#: templates/congress/congress_detail.html:58
+msgid "Committee Membership"
+msgstr "Membresía en comisiones"
+
+#: templates/congress/congress_detail.html:69
+msgid "No committee membership records found."
+msgstr "No se encontraron registros de membresía en comisiones."
+
+#: templates/congress/congress_detail.html:74
+msgid "Recent Bills Authored"
+msgstr "Proyectos de ley recientes"
+
+#: templates/congress/congress_detail.html:86
+msgid "No authored bills found."
+msgstr "No se encontraron proyectos de ley."
+
+#: templates/congress/congress_detail.html:91
+msgid "Last Votings"
+msgstr "Últimas votaciones"
+
+#: templates/congress/congress_detail.html:102
+msgid "Official congress profile"
+msgstr "Perfil oficial del congresista"
+
+#: templates/congress/search.html:10
+msgid "Search the congressmen"
+msgstr "Congresistas"
+
+#: templates/congress/search.html:12
+msgid "By name"
+msgstr "Por nombre"
+
+#: templates/congress/search.html:13
+msgid "Write a congressperson name"
+msgstr "Escribe el nombre de un congresista"
+
+#: templates/congress/search.html:18
+msgid "By party"
+msgstr "Partido"
+
+#: templates/congress/search.html:19
+msgid "Write a congressperson party"
+msgstr "Escribe el partido de un congresista"
+
+#: templates/congress/search.html:25
+msgid "By region"
+msgstr "Región"
+
+#: templates/congress/search.html:26
+msgid "Write a congressperson region"
+msgstr "Escribe la región de un congresista"
+
+#: templates/congress/search.html:47
+msgid "No matching congresspeople found."
+msgstr "No se encontraron proyectos de ley."
+
+#: templates/landing/index.html:10
+msgid "Select the information about the peruvian congress that you want to explore"
+msgstr "Selecciona la información del Congreso peruano quieres explorar"
+
+#: templates/landing/index.html:29
+msgid ""
+"Open Congress brings together public information from the Peruvian "
+"Congress so bills,\n"
+"            congress members, political groups, and legislative activity "
+"can be explored in one place."
+msgstr ""
+"Open Congress reúne información pública del Congreso peruano para que los"
+" proyectos de ley, los congresistas, los grupos políticos y la actividad "
+"legislativa puedan explorarse en un solo lugar."
+

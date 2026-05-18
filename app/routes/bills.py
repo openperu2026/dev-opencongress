@@ -44,22 +44,21 @@ def index():
             params["author_id"] = author_q
             with SessionProcessed() as db:
                 author_display = db.execute(
-                    text("SELECT nombre FROM congresistas WHERE id = :author_id"),
+                    text("SELECT full_name FROM congresistas WHERE id = :author_id"),
                     {"author_id": author_q},
                 ).scalar_one_or_none()
         else:
-            filters.append("lower(congresistas.nombre) LIKE lower(:author_q)")
+            filters.append("lower(congresistas.full_name) LIKE lower(:author_q)")
             params["author_q"] = f"%{author_q}%"
 
     bills = []
     if filters:
         where_clause = " AND ".join(filters)
         query = f"""
-            SELECT bills.*, congresistas.nombre as author_name
+            SELECT bills.*, congresistas.full_name as author_name
             FROM bills
             LEFT OUTER JOIN congresistas ON bills.author_id = congresistas.id
             WHERE {where_clause}
-            ORDER BY bills.presentation_date DESC
             LIMIT 50
         """
 

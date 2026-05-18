@@ -18,15 +18,20 @@
 
         <!--<label for="menu-toggle" class="menu-toggle">Menu</label>-->
 
+            <div class="btn-group" role="group">
+                <a href="{{ url_for('i18n.set_lang', lang='en') }}">English</a>
+                <a href="{{ url_for('i18n.set_lang', lang='es') }}">Español</a>
+            </div>
+         
          <ul class="nav-links" id="menu">
             <li class="menu-close">
             <a href="#">X</a>
             </li>
 
-            <li><a href="/#about">About</a></li>
-            <li><a href="{{ url_for('bills.index') }}">Bills</a></li>
-            <li><a href="/congress">Congressmen</a></li>
-            <li><a href="#data">Data</a></li>
+            <li><a href="/#about">{{_('About')}}</a></li>
+            <li><a href="{{ url_for('bills.index') }}">{{_('Bills')}}</a></li>
+            <li><a href="/congress">{{_('Congressmen')}}</a></li>
+            <li><a href="#data">{{_('Data')}}</a></li>
 
          </ul>
     </nav>
@@ -38,10 +43,10 @@
     <footer class="footer">
         <div class="container footer-row">
             <ul class="footer-links">
-                <li><a href="#">About</a></li>
-                <li><a href="#">Terms of Service</a></li>
-                <li><a href="#">Privacy</a></li>
-                <li><a href="#">Contact</a></li>
+                <li><a href="#">{{_('About')}}</a></li>
+                <li><a href="#">{{_('Terms of Service')}}</a></li>
+                <li><a href="#">{{_('Privacy')}}</a></li>
+                <li><a href="#">{{_('Contact')}}</a></li>
             </ul>
         </div>
     </footer>
