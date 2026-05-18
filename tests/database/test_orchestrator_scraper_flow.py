@@ -272,5 +272,5 @@ def test_scrape_range_uses_plain_ley_numbers(monkeypatch, engine, session):
         entity_name="Leyes",
     )
 
-    assert calls == ["32559", "32560"]
+    assert calls == [32559, 32560]
     assert stats.scrapped == 2

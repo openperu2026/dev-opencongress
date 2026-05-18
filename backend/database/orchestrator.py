@@ -461,7 +461,7 @@ class OpenPeruOrchestrator:
 
         for number in tqdm(range(start, end + 1), desc=entity_name):
             if entity_name == "Leyes":
-                scrape_fn(str(number))
+                scrape_fn(number)
             else:
                 scrape_fn(str(year), str(number))
 
@@ -554,29 +554,6 @@ class OpenPeruOrchestrator:
         doc_motion_run = ScraperStats(start_time, end_time, count)
 
         return doc_bill_run, doc_motion_run
-
-    def _scrape_leyes_range(
-        self, ley_start: int, ley_end: int, flush_every: int = 100
-    ) -> ScraperStats:
-        from backend.scrapers.leyes import RawLeyesScraper
-
-        logger.info(f"Scraping leyes in range {ley_start}..{ley_end}")
-        scraper = RawLeyesScraper()
-        start_time = datetime.now()
-        count = 0
-        for ley_number in tqdm(range(ley_start, ley_end + 1), desc="Leyes"):
-            scraper.scrape_ley(ley_number)
-            count_leyes = len(scraper.raw_leyes)
-            if count_leyes >= flush_every:
-                count += count_leyes
-                scraper.load_raw_leyes()
-
-        remaining = len(scraper.raw_leyes)
-        if remaining:
-            count += remaining
-            scraper.load_raw_leyes()
-        end_time = datetime.now()
-        return ScraperStats(start_time, end_time, count)
 
     # -----------------------------
     # Processing internals
