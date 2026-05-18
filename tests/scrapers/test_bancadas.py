@@ -147,7 +147,6 @@ def test_get_html_with_selections_success(monkeypatch):
         {"selector": 'select[name="keyCondicion[]"]', "value": "eej"},
     ]
     assert page.timeout_waits == [1000]
-    assert page.closed is True
     assert browser.closed is True
 
 
@@ -166,7 +165,6 @@ def test_get_html_with_selections_handles_failures_and_cleans_up(monkeypatch):
     )
 
     assert html is None
-    assert page.closed is True
     assert browser.closed is True
 
 

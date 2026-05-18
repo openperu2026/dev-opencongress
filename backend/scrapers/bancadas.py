@@ -56,87 +56,89 @@ class RawBancadaScraper:
         try:
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                page = browser.new_page()
-                page.goto(url, wait_until="domcontentloaded")
 
-                page.wait_for_selector('select[name="idPeriodo[]"]', state="attached")
-                page.wait_for_selector(
-                    'select[name="keyCondicion[]"]', state="attached"
-                )
+                try:
+                    page = browser.new_page()
+                    page.goto(url, wait_until="domcontentloaded")
 
-                js_set_select = """
-                ({ selector, value }) => {
-                    const sel = document.querySelector(selector);
-                    if (!sel) {
-                        return false;
-                    }
+                    page.wait_for_selector(
+                        'select[name="idPeriodo[]"]', state="attached"
+                    )
+                    page.wait_for_selector(
+                        'select[name="keyCondicion[]"]', state="attached"
+                    )
 
-                    for (const opt of sel.options) {
-                        opt.selected = (opt.value === value);
-                    }
-
-                    sel.dispatchEvent(new Event("change", { bubbles: true }));
-                    return Array.from(sel.selectedOptions).map(opt => opt.value);
-                }
-                """
-
-                page.evaluate(
-                    js_set_select,
-                    {"selector": 'select[name="idPeriodo[]"]', "value": period_value},
-                )
-                page.wait_for_function(
-                    """
+                    js_set_select = """
                     ({ selector, value }) => {
                         const sel = document.querySelector(selector);
-                        return !!sel && Array.from(sel.selectedOptions).some(
-                            opt => opt.value === value
-                        );
-                    }
-                    """,
-                    arg={
-                        "selector": 'select[name="idPeriodo[]"]',
-                        "value": period_value,
-                    },
-                )
+                        if (!sel) {
+                            return false;
+                        }
 
-                page.evaluate(
-                    js_set_select,
-                    {
-                        "selector": 'select[name="keyCondicion[]"]',
-                        "value": condition_value,
-                    },
-                )
-                page.wait_for_function(
+                        for (const opt of sel.options) {
+                            opt.selected = (opt.value === value);
+                        }
+
+                        sel.dispatchEvent(new Event("change", { bubbles: true }));
+                        return Array.from(sel.selectedOptions).map(opt => opt.value);
+                    }
                     """
-                    ({ selector, value }) => {
-                        const sel = document.querySelector(selector);
-                        return !!sel && Array.from(sel.selectedOptions).some(
-                            opt => opt.value === value
-                        );
-                    }
-                    """,
-                    arg={
-                        "selector": 'select[name="keyCondicion[]"]',
-                        "value": condition_value,
-                    },
-                )
 
-                page.wait_for_selector(".table-cng", state="visible")
-                page.wait_for_timeout(1000)
+                    page.evaluate(
+                        js_set_select,
+                        {
+                            "selector": 'select[name="idPeriodo[]"]',
+                            "value": period_value,
+                        },
+                    )
+                    page.wait_for_function(
+                        """
+                        ({ selector, value }) => {
+                            const sel = document.querySelector(selector);
+                            return !!sel && Array.from(sel.selectedOptions).some(
+                                opt => opt.value === value
+                            );
+                        }
+                        """,
+                        arg={
+                            "selector": 'select[name="idPeriodo[]"]',
+                            "value": period_value,
+                        },
+                    )
 
-                return page.content()
+                    page.evaluate(
+                        js_set_select,
+                        {
+                            "selector": 'select[name="keyCondicion[]"]',
+                            "value": condition_value,
+                        },
+                    )
+                    page.wait_for_function(
+                        """
+                        ({ selector, value }) => {
+                            const sel = document.querySelector(selector);
+                            return !!sel && Array.from(sel.selectedOptions).some(
+                                opt => opt.value === value
+                            );
+                        }
+                        """,
+                        arg={
+                            "selector": 'select[name="keyCondicion[]"]',
+                            "value": condition_value,
+                        },
+                    )
+
+                    page.wait_for_selector(".table-cng", state="visible")
+                    page.wait_for_timeout(1000)
+
+                    return page.content()
+
+                finally:
+                    browser.close()
 
         except PlaywrightTimeoutError as e:
             logger.error(f"Error found: {e}")
             return None
-        except Exception as e:
-            logger.error(f"Error found: {e}")
-            return None
-        finally:
-            if page is not None:
-                page.close()
-            if browser is not None:
-                browser.close()
 
     def get_raw_bancadas(self, only_current: bool = True) -> None:
         dict_periods = self.get_options(url=self.url, select_name="idPeriodo[]")
