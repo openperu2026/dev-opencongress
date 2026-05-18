@@ -21,8 +21,14 @@ services:
     build:
       context: .
       dockerfile: docker/cron/cron.Dockerfile
-    env_file: .env
+    env_file:
+      - .env
+    environment:
+      TZ: America/Lima
+    volumes:
+      - cron_logs:/app/logs
     restart: unless-stopped
 
 volumes:
   migration_logs:
+  cron_logs:
