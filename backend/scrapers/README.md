@@ -29,9 +29,18 @@ uv run python -m backend --scrape
 
 Useful options (from orchestrator):
 
-- `--daily N`: refresh stale non-approved bills/motions older than `N` days.
-- `--only-bills`, `--only-motions`, `--only-others`.
+- `--only-bills`, `--only-motions`, `--only-leyes`, `--only-others`.
+- `--only-current`: scrape only the current period where supported.
 - `--scrape-documents`.
+
+## Refresh behavior
+
+The orchestrator handles incremental scraping:
+
+- Bills and motions scrape new IDs first.
+- Bills and motions then refresh pending daily rows whose latest raw snapshot is older than one day and not approved.
+- Leyes scrape new IDs.
+- Reference scrapers skip work when their latest raw scrape is already recent.
 
 ## Logging
 
