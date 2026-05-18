@@ -93,7 +93,10 @@ class RawBancadaScraper:
                         );
                     }
                     """,
-                    {"selector": 'select[name="idPeriodo[]"]', "value": period_value},
+                    arg={
+                        "selector": 'select[name="idPeriodo[]"]',
+                        "value": period_value,
+                    },
                 )
 
                 page.evaluate(
@@ -112,7 +115,7 @@ class RawBancadaScraper:
                         );
                     }
                     """,
-                    {
+                    arg={
                         "selector": 'select[name="keyCondicion[]"]',
                         "value": condition_value,
                     },
