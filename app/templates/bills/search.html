@@ -1,17 +1,21 @@
 {% extends "base.html" %}
 
 {% block content %}
-<form method="get" action="{{ url_for('bills.index') }}">
-    <div class="searching-container">
-        <h1 class="search-title">{{_('Search the Bill')}}</h1>
+<form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
+    <h1 class="search-title">{{_('Search the bill by:')}}</h1>
+    <div class="bar-search">
+        <div class="searching-container">
+            <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="{{_('Title')}}">
+        </div>
 
-        <h3>{{_('Bill title')}}</h3>
-        <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="{{_('Write a bill title')}}">
+        <div class="searching-container">
+            <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="{{_('Author')}}">
+        </div>
 
-        <h3>{{_('Author')}}</h3>
-        <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="{{_('Write an author name')}}">
+        <button type="submit" class="search-icon-button" aria-label="Search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
     </div>
-    <button type="submit">{{_('Search')}}</button>
 </form>
 
 
