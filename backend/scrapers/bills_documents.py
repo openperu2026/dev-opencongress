@@ -141,8 +141,8 @@ class RawBillDocumentScraper:
 
                 new_doc = RawBillDocument(
                     bill_id=bill_id,
-                    step_id=step_id,
-                    file_id=file_id,
+                    step_id=str(step_id),
+                    file_id=str(file_id),
                     step_date=datetime.strptime(step_date, "%Y-%m-%dT%H:%M:%S.%f%z"),
                     url=url,
                     s3_key=s3_key,
