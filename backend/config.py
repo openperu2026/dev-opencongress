@@ -91,8 +91,9 @@ class Settings(BaseSettings):
     # This should change depending on where the DB will be stored
     DB_URL: str = os.getenv(
         "DB_URL",
-        "postgresql+psycopg://opencongress:opencongress@db:5432/opencongress",
+        "postgresql+psycopg://opencongress:opencongress@localhost:5999/opencongress",
     )
+    SQLITE_PATH: str = os.getenv("SQLITE_PATH", "/app/data/raw/OpenPeruRaw.db")
     AWS_ACCESS_KEY_ID: str | None = os.getenv("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY: str | None = os.getenv("AWS_SECRET_ACCESS_KEY")
     AWS_REGION: str | None = os.getenv("AWS_REGION")
@@ -100,9 +101,7 @@ class Settings(BaseSettings):
     AWS_S3_PREFIX: str | None = os.getenv("AWS_S3_PREFIX")
 
     # This is only in case we need some API_KEYS. Allow us to handle safely.
-    model_config = ConfigDict(
-        env_file=directories.ROOT_DIR / ".env", extra="allow"
-    )
+    model_config = ConfigDict(env_file=directories.ROOT_DIR / ".env", extra="allow")
 
 
 settings = Settings()

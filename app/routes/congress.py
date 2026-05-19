@@ -1,9 +1,7 @@
 from types import SimpleNamespace
 
 from flask import Blueprint, render_template, request
-from sqlalchemy import create_engine, func, or_, select
-from sqlalchemy.orm import sessionmaker
-from backend.config import settings
+from sqlalchemy import func, or_, select
 from backend.database.models import (
     Bill,
     ChamberMembership,
@@ -20,7 +18,7 @@ from .processed_session import SessionProcessed
 congress_bp = Blueprint("congress", __name__, template_folder="../templates")
 
 
-#get the latest organizations names
+# get the latest organizations names
 def _latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | None:
     return db.execute(
         select(Organization.org_name)
@@ -34,7 +32,7 @@ def _latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | No
     ).scalar_one_or_none()
 
 
-#Get the main information of the Congressmember
+# Get the main information of the Congressmember
 def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
     party_name = _latest_org_name(db, congresista.id, TypeOrganization.PARTY)
     chamber_membership = db.execute(
@@ -85,9 +83,7 @@ def index():
                 select(Membership.person_id)
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
-                    Membership.org_type.in_(
-                        [TypeOrganization.PARTY]
-                    ),
+                    Membership.org_type.in_([TypeOrganization.PARTY]),
                     Organization.org_name.ilike(f"%{party_q}%"),
                 )
             )
@@ -125,17 +121,17 @@ def congress_detail(congresista_id):
 
         congresista = _congresista_view(db, congresista_row)
 
-        #To avoid duplicated bills
+        # To avoid duplicated bills
         latest_bill_dates = (
             select(
                 BillOrganization.bill_id,
-                func.max(BillOrganization.presentation_date).label("latest_presentation_date"),
+                func.max(BillOrganization.presentation_date).label(
+                    "latest_presentation_date"
+                ),
             )
             .group_by(BillOrganization.bill_id)
             .subquery()
         )
-
-
 
         bills_authored = [
             SimpleNamespace(
@@ -152,7 +148,9 @@ def congress_detail(congresista_id):
         ]
 
         bills_authored_count = db.execute(
-            select(func.count()).select_from(Bill).where(Bill.author_id == congresista.id)
+            select(func.count())
+            .select_from(Bill)
+            .where(Bill.author_id == congresista.id)
         ).scalar_one()
 
         successful_bills_count = db.execute(
@@ -192,11 +190,13 @@ def congress_detail(congresista_id):
         profile_stats = {
             "assistance_rate": "45%",
             "bills_authored": bills_authored_count,
-            "success_rate": f"{(
-                            round(100 * (successful_bills_count / bills_authored_count), 1)
-                            if bills_authored_count
-                            else 0
-                            )} %",
+            "success_rate": f"{
+                (
+                    round(100 * (successful_bills_count / bills_authored_count), 1)
+                    if bills_authored_count
+                    else 0
+                )
+            } %",
             "successful_bills": successful_bills_count,
         }
 
