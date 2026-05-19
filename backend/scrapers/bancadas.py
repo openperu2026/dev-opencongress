@@ -139,6 +139,7 @@ class RawBancadaScraper:
             logger.error(f"Error found: {e}")
             return None
 
+
     def get_raw_bancadas(self, only_current: bool = True) -> None:
         dict_periods = self.get_options(url=self.url, select_name="idPeriodo[]")
         dict_condicion = {"en Ejercicio": "eej"}
@@ -172,7 +173,7 @@ class RawBancadaScraper:
         logger.success(
             f"Successfully extracted {len(self.bancadas_list)} raw html bancadas"
         )
-
+        
     def update_tracking(self, bancada: RawBancada) -> RawBancada:
         """Update the tracking columns of a RawBancada object"""
 
