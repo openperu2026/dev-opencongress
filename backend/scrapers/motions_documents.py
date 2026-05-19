@@ -146,7 +146,7 @@ class RawMotionDocumentScraper:
                     step_date=datetime.strptime(step_date, "%Y-%m-%dT%H:%M:%S.%f%z"),
                     url=url,
                     s3_key=s3_key,
-                    local_path=dest_path,
+                    local_path=str(dest_path) if dest_path is not None else None,
                     timestamp=datetime.now(),
                     processed=False,
                     last_update=True,
