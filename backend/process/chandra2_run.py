@@ -61,7 +61,7 @@ def get_approved_bill_documents(limit: int = 25):
                     step_filter,
                     (raw_models.RawBillDocument.bill_id == step_filter.c.bill_id)
                     & (raw_models.RawBillDocument.step_id == step_filter.c.step_id),
-                )  # here
+                )
                 .where(raw_models.RawBillDocument.processed.is_(False))
             )
         )
@@ -169,7 +169,7 @@ def write_raw_bill_pages(
                 raise RuntimeError(
                     f"Unsupported OCR model: {ocr_model}. Expected 'chandra2'."
                 )
-            pages = mock_chandra2_vllm(doc.url)
+            pages = chandra2_vllm(doc.url)  # replace to mock when in local
             for page in pages:
                 page_num = page["page_num"]
                 text = page["text"]
@@ -195,7 +195,6 @@ def write_raw_bill_pages(
                         (doc.bill_id, doc.step_id, doc.file_id),
                     )
                     if raw_doc:
-                        # here
                         raw_doc.processed = True
                     continue
 
@@ -218,7 +217,6 @@ def write_raw_bill_pages(
                     (doc.bill_id, doc.step_id, doc.file_id),
                 )
                 if raw_doc:
-                    # here
                     raw_doc.processed = True
                 created += 1
 
