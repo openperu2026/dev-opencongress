@@ -27,6 +27,10 @@ The project aims to improve transparency and accountability by helping people un
     ```bash
     uv sync
     ```
+
+    Scraper developers should also install the Playwright browser binary
+    documented in `backend/scrapers/README.md`.
+
 4. **Activate the environment**
     ```bash
     source .venv/bin/activate
