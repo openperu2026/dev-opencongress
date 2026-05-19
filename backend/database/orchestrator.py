@@ -339,7 +339,7 @@ class OpenPeruOrchestrator:
                 )
                 self._load_scraper_results("motions.py")
 
-        if scrape_documents and (scrape_bills or scrape_motions):
+        if scrape_documents:
             with log_manager.stage("scraper", "documents") as stage_logger:
                 console.info("Starting document scraper")
                 stage_logger.info("Starting document scraper")
