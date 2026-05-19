@@ -41,7 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Run only non-bill/non-motion entities (congresistas, bancadas, organizations)",
     )
-    parser.add_argument(
+    target_group.add_argument(
         "--scrape-documents",
         action="store_true",
         help="Scrape pending bill/motion documents",
@@ -63,23 +63,33 @@ def main(argv: list[str] | None = None) -> None:
     run_motions = True
     run_leyes = True
     run_others = True
+    run_documents = True
 
     if args.only_bills:
         run_motions = False
         run_others = False
         run_leyes = False
+        run_documents = False
     elif args.only_motions:
         run_bills = False
         run_others = False
         run_leyes = False
+        run_documents = False
     elif args.only_leyes:
         run_motions = False
         run_bills = False
         run_others = False
+        run_documents = False
     elif args.only_others:
         run_bills = False
         run_motions = False
         run_leyes = False
+        run_documents = False
+    elif args.scrape_documents:
+        run_bills = False
+        run_motions = False
+        run_leyes = False
+        run_others = False
 
     if args.scrape:
         orchestrator.run_scrapers(
@@ -88,7 +98,7 @@ def main(argv: list[str] | None = None) -> None:
             scrape_leyes=run_leyes,
             scrape_others=run_others,
             only_current=args.only_current,
-            scrape_documents=args.scrape_documents,
+            scrape_documents=run_documents,
         )
 
     if not args.skip_processing:
