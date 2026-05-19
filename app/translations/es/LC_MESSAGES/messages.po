@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-17 16:59-0500\n"
+"POT-Creation-Date: 2026-05-18 21:57-0500\n"
 "PO-Revision-Date: 2026-05-17 15:22-0500\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,41 +18,45 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: routes/landing.py:13 templates/base.html:32
+#: routes/landing.py:13 templates/base.html:31
 msgid "Bills"
 msgstr "Proyectos de ley"
 
-#: routes/landing.py:14 
+#: routes/landing.py:14
 msgid "Congress Members"
 msgstr "Congresistas"
 
-#: routes/landing.py:15 templates/base.html:34
-msgid "Data"
-msgstr "Datos"
+#: templates/base.html:29
+msgid "Home"
+msgstr ""
 
-#: templates/base.html:31 templates/base.html:46
-#: templates/landing/index.html:27
+#: templates/base.html:30 templates/base.html:52
+#: templates/landing/index.html:30
 msgid "About"
 msgstr "Acerca de"
 
-#: templates/base.html:33
+#: templates/base.html:32
 msgid "Congressmen"
 msgstr "Congresistas"
 
-#: templates/base.html:47
+#: templates/base.html:33
+msgid "Data"
+msgstr "Datos"
+
+#: templates/base.html:53
 msgid "Terms of Service"
 msgstr "Términos de servicio"
 
-#: templates/base.html:48
+#: templates/base.html:54
 msgid "Privacy"
 msgstr "Privacidad"
 
-#: templates/base.html:49
+#: templates/base.html:55
 msgid "Contact"
 msgstr "Contacto"
 
 #: templates/bills/detail.html:6 templates/bills/mock_votes.html:5
-#: templates/bills/search.html:22
+#: templates/bills/search.html:8 templates/bills/search.html:26
 msgid "Title"
 msgstr "Título"
 
@@ -96,43 +100,29 @@ msgstr "En contra"
 msgid "Abst"
 msgstr "Abstención"
 
-#: templates/bills/search.html:6
-msgid "Search the Bill"
-msgstr "Buscar proyectos de ley"
+#: templates/bills/search.html:5
+msgid "Search the bill by:"
+msgstr "Busca el proyecto de ley por:"
 
-#: templates/bills/search.html:8
-msgid "Bill title"
-msgstr "Título"
-
-#: templates/bills/search.html:9
-msgid "Write a bill title"
-msgstr "Escribe el título de un proyecto de ley"
-
-#: templates/bills/search.html:11 templates/bills/search.html:25
+#: templates/bills/search.html:12 templates/bills/search.html:29
 msgid "Author"
 msgstr "Autor"
 
-#: templates/bills/search.html:12
-msgid "Write an author name"
-msgstr "Escribe el nombre de un autor"
-
-#: templates/bills/search.html:14 templates/congress/search.html:31
-msgid "Search"
-msgstr "Buscar"
-
-#: templates/bills/search.html:20
+#: templates/bills/search.html:24 templates/congress/search.html:43
 msgid "Search Criteria"
 msgstr "Criterios de búsqueda"
 
-#: templates/bills/search.html:39
+#: templates/bills/search.html:43
 msgid "No matching bills found."
 msgstr "No se encontraron proyectos de ley."
 
-#: templates/congress/congress_detail.html:19
+#: templates/congress/congress_detail.html:19 templates/congress/search.html:26
+#: templates/congress/search.html:27 templates/congress/search.html:51
 msgid "Region"
 msgstr "Región"
 
-#: templates/congress/congress_detail.html:22
+#: templates/congress/congress_detail.html:22 templates/congress/search.html:19
+#: templates/congress/search.html:20 templates/congress/search.html:48
 msgid "Party"
 msgstr "Partido"
 
@@ -184,43 +174,31 @@ msgstr "Últimas votaciones"
 msgid "Official congress profile"
 msgstr "Perfil oficial del congresista"
 
-#: templates/congress/search.html:10
-msgid "Search the congressmen"
-msgstr "Congresistas"
+#: templates/congress/search.html:8
+msgid "Search a congressmember by:"
+msgstr "Busca al congresista por:"
 
-#: templates/congress/search.html:12
-msgid "By name"
+#: templates/congress/search.html:13 templates/congress/search.html:14
+#: templates/congress/search.html:45
+#, fuzzy
+msgid "Name"
 msgstr "Por nombre"
 
-#: templates/congress/search.html:13
-msgid "Write a congressperson name"
-msgstr "Escribe el nombre de un congresista"
+#: templates/congress/search.html:33
+msgid "Clear"
+msgstr ""
 
-#: templates/congress/search.html:18
-msgid "By party"
-msgstr "Partido"
-
-#: templates/congress/search.html:19
-msgid "Write a congressperson party"
-msgstr "Escribe el partido de un congresista"
-
-#: templates/congress/search.html:25
-msgid "By region"
-msgstr "Región"
-
-#: templates/congress/search.html:26
-msgid "Write a congressperson region"
-msgstr "Escribe la región de un congresista"
-
-#: templates/congress/search.html:47
+#: templates/congress/search.html:65
 msgid "No matching congresspeople found."
 msgstr "No se encontraron proyectos de ley."
 
-#: templates/landing/index.html:10
-msgid "Select the information about the peruvian congress that you want to explore"
+#: templates/landing/index.html:11
+msgid ""
+"Select the information about the peruvian congress that you want to "
+"explore"
 msgstr "Selecciona la información del Congreso peruano quieres explorar"
 
-#: templates/landing/index.html:29
+#: templates/landing/index.html:32
 msgid ""
 "Open Congress brings together public information from the Peruvian "
 "Congress so bills,\n"
@@ -230,4 +208,31 @@ msgstr ""
 "Open Congress reúne información pública del Congreso peruano para que los"
 " proyectos de ley, los congresistas, los grupos políticos y la actividad "
 "legislativa puedan explorarse en un solo lugar."
+
+#~ msgid "Write a congressperson name"
+#~ msgstr "Escribe el nombre de un congresista"
+
+#~ msgid "By party"
+#~ msgstr "Partido"
+
+#~ msgid "Write a congressperson party"
+#~ msgstr "Escribe el partido de un congresista"
+
+#~ msgid "By region"
+#~ msgstr "Región"
+
+#~ msgid "Write a congressperson region"
+#~ msgstr "Escribe la región de un congresista"
+
+#~ msgid "Bill title"
+#~ msgstr "Título"
+
+#~ msgid "Write a bill title"
+#~ msgstr "Escribe el título de un proyecto de ley"
+
+#~ msgid "Write an author name"
+#~ msgstr "Escribe el nombre de un autor"
+
+#~ msgid "Search"
+#~ msgstr "Buscar"
 
