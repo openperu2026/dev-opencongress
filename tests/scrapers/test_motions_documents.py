@@ -6,7 +6,6 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.database.raw_models import Base as RawBase, RawMotion, RawMotionDocument
-import backend.scrapers.motions_documents as motions_documents
 from backend.scrapers.motions_documents import (
     RawMotionDocumentScraper,
     BASE_URL,
@@ -76,12 +75,11 @@ def test_filter_steps_skips_existing_steps(monkeypatch):
 # --------------------------------------------------------------------------------------
 
 
-def test_get_motion_documents_populates_urls_and_calls_render_pdf(monkeypatch):
+def test_get_motion_documents_populates_urls(monkeypatch):
     """
     get_motion_documents should:
       - fetch the latest RawMotion
       - filter/prioritize steps
-      - call render_pdf for each file
       - populate scraper.documents with RawMotionDocument objects
     """
     engine, SessionLocal = _setup_inmemory_db()
@@ -120,15 +118,6 @@ def test_get_motion_documents_populates_urls_and_calls_render_pdf(monkeypatch):
         )
         session.commit()
 
-    # Patch render_pdf so we don't hit the network
-    captured = {}
-
-    def fake_render_pdf(url):
-        captured["url"] = url
-        return {1: f"TEXT_FROM_{url}_page_1", 2: f"TEXT_FROM_{url}_page_2"}
-
-    monkeypatch.setattr(motions_documents, "render_pdf", fake_render_pdf)
-
     scraper.get_motion_documents(motion_id=motion_id)
 
     # One document should have been created
@@ -140,7 +129,6 @@ def test_get_motion_documents_populates_urls_and_calls_render_pdf(monkeypatch):
     expected_b64 = base64.b64encode(str(111).encode()).decode()
     expected_url = f"{BASE_URL}/seguimiento-adjunto/{expected_b64}/pdf"
     assert doc.url == expected_url
-    assert captured["url"] == expected_url
     assert doc.motion_id == motion_id
     assert doc.step_id == 10
     assert doc.file_id == 111
@@ -234,10 +222,8 @@ def test_load_raw_documents_calls_add_and_resets_urls(monkeypatch):
         return True
 
     monkeypatch.setattr(scraper, "add_documents_to_db", fake_add)
-    monkeypatch.setattr(scraper, "add_pages_to_db", fake_add)
 
     scraper.load_raw_documents()
 
     assert called["called"] is True
     assert scraper.documents == []
-    assert scraper.pages == []

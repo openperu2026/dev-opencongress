@@ -533,7 +533,10 @@ class OpenPeruOrchestrator:
         bill_ids = bill_docs.get_bills_pending_documents()
         for bill_id in tqdm(bill_ids, desc="Bill documents"):
             bill_docs.get_bill_documents(
-                bill_id=bill_id, update=False, download_local=True, upload_s3=False
+                bill_id=bill_id,
+                update=False,
+                download_local=False,
+                upload_s3=False,
             )
             count += len(bill_docs.documents)
             bill_docs.load_raw_documents()
@@ -546,7 +549,10 @@ class OpenPeruOrchestrator:
         motion_ids = motion_docs.get_motions_pending_documents()
         for motion_id in tqdm(motion_ids, desc="Motion documents"):
             motion_docs.get_motion_documents(
-                motion_id=motion_id, update=False, download_local=True, upload_s3=False
+                motion_id=motion_id,
+                update=False,
+                download_local=False,
+                upload_s3=False,
             )
             count += len(motion_docs.documents)
             motion_docs.load_raw_documents()

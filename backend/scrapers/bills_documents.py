@@ -6,14 +6,15 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, Integer, cast, exists
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings, directories
-from backend.scrapers.utils import render_pdf, get_url
-from backend.database.raw_models import RawBillDocument, RawBill, RawBillPage
+from backend.scrapers.utils import get_url
+from backend.database.raw_models import RawBillDocument, RawBill
+from backend.database.models import BillStep
 
-BASE_URL = "https://wb2server.congreso.gob.pe/spley-portal-service/"
+BASE_URL = "https://api.congreso.gob.pe/spley-portal-service/"
 DB_PATH = settings.DB_URL
 
 
@@ -28,17 +29,40 @@ class RawBillDocumentScraper:
         self.Session = sessionmaker(bind=self.engine)
 
         self.documents: list[RawBillDocument] = []
-        self.pages: list[RawBillPage] = []
 
     def get_bills_pending_documents(self) -> list[str]:
+        """
+        Return bill IDs that have at least one step without a scraped document.
+
+        A bill is considered pending when it has a record in `bill_steps` for a
+        given step, but there is no matching record in `raw_bill_documents` for the
+        same `bill_id` and `step_id`.
+
+        Returns:
+            list[str]: Distinct bill IDs with one or more missing raw documents.
+        """
+
         with self.Session() as session:
             stmt = (
                 select(RawBill.id)
-                .outerjoin(RawBillDocument, RawBill.id == RawBillDocument.bill_id)
-                .where(RawBillDocument.bill_id.is_(None))
+                .distinct()
+                .where(
+                    exists(
+                        select(1).where(
+                            BillStep.bill_id == RawBill.id,
+                            ~exists(
+                                select(1).where(
+                                    RawBillDocument.bill_id == BillStep.bill_id,
+                                    cast(RawBillDocument.step_id, Integer)
+                                    == BillStep.step_id,
+                                )
+                            ),
+                        )
+                    )
+                )
             )
 
-            return session.scalars(stmt).all()
+            return list(session.scalars(stmt).all())
 
     def filter_steps(self, extracted_steps: list[dict], bill_id: str):
         """
@@ -62,10 +86,11 @@ class RawBillDocumentScraper:
     def get_bill_documents(
         self,
         bill_id: str,
+        *,
         update: bool = False,
         download_local: bool = False,
         upload_s3: bool = False,
-    ) -> tuple[list[RawBillDocument], list[RawBillPage]] | None:
+    ) -> None:
         """
         Extract the urls from a RawBill's files and extract the text from each of its pages
         """
@@ -90,7 +115,7 @@ class RawBillDocumentScraper:
 
         logger.info(f"Extracting files from {len(steps)} steps of bill {bill_id}")
 
-        for ix, step in enumerate(steps):
+        for _, step in enumerate(steps):
             files = step.get("archivos")
             step_date = step.get("fecha")
 
@@ -103,9 +128,6 @@ class RawBillDocumentScraper:
 
                 b64_id = base64.b64encode(str(file_id).encode()).decode()
                 url = f"{BASE_URL}/archivo/{b64_id}/pdf"
-                logger.info(f"Extracting document {ix + 1}/{len(steps)} at url: {url}")
-                pages_text = render_pdf(url)
-                logger.success(f"Successfully extracted text from {url}")
 
                 file_name = self._build_filename(bill_id, step_id, file_id)
                 dest_path = directories.BILL_DOCUMENTS / file_name
@@ -129,18 +151,6 @@ class RawBillDocumentScraper:
                     processed=False,
                     last_update=True,
                 )
-
-                for page_num, text in pages_text.items():
-                    self.pages.append(
-                        RawBillPage(
-                            bill_id=bill_id,
-                            step_id=step_id,
-                            file_id=file_id,
-                            page_num=page_num,
-                            text=text,
-                            ocr_model="Tesseract",  # TODO: Add models to the pipeline
-                        )
-                    )
 
                 self.documents.append(new_doc)
 
@@ -168,36 +178,10 @@ class RawBillDocumentScraper:
                 session.rollback()
                 return False
 
-    def add_pages_to_db(self) -> bool:
-        """
-        Add the pages to the database.
-        Returns True on success, False on failure.
-        """
-
-        assert self.pages, "Pages must be scraped before it can be saved"
-
-        with self.Session() as session:
-            try:
-                session.add_all(self.pages)
-                session.commit()
-                logger.success(
-                    f"Added {len(self.pages)} documents to Raw Bill Pages table"
-                )
-                return True
-
-            except SQLAlchemyError as e:
-                logger.error(
-                    f"Failed to add pages from bill {self.pages[0].bill_id}: {e}"
-                )
-                session.rollback()
-                return False
-
     def load_raw_documents(self):
         if self.documents:
             self.add_documents_to_db()
-            self.add_pages_to_db()
             self.documents = []
-            self.pages = []
         else:
             return None
 
