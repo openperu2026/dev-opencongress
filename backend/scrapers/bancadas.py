@@ -41,6 +41,10 @@ class RawBancadaScraper:
             - select_name (str): the name of the dropdown element
         """
         parse = parse_url(url)
+
+        if parse is None:
+            return {}
+
         options = parse.xpath(f'//*[@name="{select_name}"]/option')
         return {
             elem.text: elem.get("value") for elem in options if elem.text is not None

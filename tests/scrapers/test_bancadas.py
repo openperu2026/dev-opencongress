@@ -1,38 +1,37 @@
-import datetime
+from datetime import datetime
 
 import pytest
 from lxml import html as lxml_html
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, create_engine
+from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import declarative_base, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 import backend.scrapers.bancadas as bancadas
+from backend.database.raw_models import Base, RawBancada
 from backend.scrapers.bancadas import RawBancadaScraper
 
 
-def test_get_options_returns_expected_dict(monkeypatch):
-    doc = lxml_html.fromstring(
-        """
-        <html>
-          <body>
-            <select name="idPeriodo[]">
-              <option value="1">2021-2026</option>
-              <option value="2"></option>
-            </select>
-          </body>
-        </html>
-        """
-    )
+# ---------- helpers ----------
 
-    monkeypatch.setattr(bancadas, "parse_url", lambda url: doc)
 
-    scraper = RawBancadaScraper()
-    options = scraper.get_options(
-        url="https://fake-url.test",
-        select_name="idPeriodo[]",
-    )
+def make_scraper():
+    """
+    Avoid calling RawBancadaScraper.__init__ because it creates
+    a real engine from settings.DB_URL.
+    """
+    scraper = RawBancadaScraper.__new__(RawBancadaScraper)
+    scraper.url = "https://fake-url.test"
+    return scraper
 
-    assert options == {"2021-2026": "1"}
+
+def setup_inmemory_db():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(engine)
+    SessionLocal = sessionmaker(bind=engine)
+    return engine, SessionLocal
+
+
+# ---------- fakes ----------
 
 
 class FakePage:
@@ -44,7 +43,6 @@ class FakePage:
         self.evaluate_calls = []
         self.function_waits = []
         self.timeout_waits = []
-        self.closed = False
 
     def goto(self, url, wait_until=None):
         self.goto_calls.append((url, wait_until))
@@ -77,18 +75,13 @@ class FakePage:
             raise bancadas.PlaywrightTimeoutError("content failed")
         return self.html
 
-    def close(self):
-        self.closed = True
-
 
 class FakeBrowser:
     def __init__(self, page):
         self.page = page
         self.closed = False
-        self.new_page_calls = 0
 
     def new_page(self):
-        self.new_page_calls += 1
         return self.page
 
     def close(self):
@@ -116,14 +109,56 @@ class FakePlaywrightContext:
         return False
 
 
+# ---------- get_options ----------
+
+
+def test_get_options_returns_expected_dict(monkeypatch):
+    scraper = make_scraper()
+
+    doc = lxml_html.fromstring(
+        """
+        <html>
+          <body>
+            <select name="idPeriodo[]">
+              <option value="1">2021-2026</option>
+              <option value="2"></option>
+            </select>
+          </body>
+        </html>
+        """
+    )
+
+    monkeypatch.setattr(bancadas, "parse_url", lambda url: doc)
+
+    options = scraper.get_options(
+        url="https://fake-url.test",
+        select_name="idPeriodo[]",
+    )
+
+    assert options == {"2021-2026": "1"}
+
+
+def test_get_options_returns_empty_when_parse_fails(monkeypatch):
+    scraper = make_scraper()
+
+    monkeypatch.setattr(bancadas, "parse_url", lambda url: None)
+
+    assert scraper.get_options("https://fake-url.test") == {}
+
+
+# ---------- get_html_with_selections ----------
+
+
 def test_get_html_with_selections_success(monkeypatch):
+    scraper = make_scraper()
+
     page = FakePage(html="<html>captured</html>")
     browser = FakeBrowser(page)
     chromium = FakeChromium(browser)
     playwright = FakePlaywrightContext(chromium)
+
     monkeypatch.setattr(bancadas, "sync_playwright", lambda: playwright)
 
-    scraper = RawBancadaScraper()
     html = scraper.get_html_with_selections(
         url="https://fake-url.test",
         period_value="2021",
@@ -151,13 +186,15 @@ def test_get_html_with_selections_success(monkeypatch):
 
 
 def test_get_html_with_selections_handles_failures_and_cleans_up(monkeypatch):
+    scraper = make_scraper()
+
     page = FakePage(fail_on="wait_for_selector")
     browser = FakeBrowser(page)
     chromium = FakeChromium(browser)
     playwright = FakePlaywrightContext(chromium)
+
     monkeypatch.setattr(bancadas, "sync_playwright", lambda: playwright)
 
-    scraper = RawBancadaScraper()
     html = scraper.get_html_with_selections(
         url="https://fake-url.test",
         period_value="2021",
@@ -168,60 +205,62 @@ def test_get_html_with_selections_handles_failures_and_cleans_up(monkeypatch):
     assert browser.closed is True
 
 
-class _DummyRawBancada:
-    def __init__(
-        self, timestamp, legislative_period, raw_html, last_update, changed, processed
-    ):
-        self.timestamp = timestamp
-        self.legislative_period = legislative_period
-        self.raw_html = raw_html
-        self.last_update = last_update
-        self.changed = changed
-        self.processed = processed
+# ---------- get_raw_bancadas ----------
 
 
 def test_get_raw_bancadas_only_current(monkeypatch):
-    monkeypatch.setattr(bancadas, "RawBancada", _DummyRawBancada)
+    scraper = make_scraper()
 
     def fake_get_options(url, select_name="idPeriodo[]"):
         assert select_name == "idPeriodo[]"
-        return {"2021-2026": "1", "2016-2021": "2"}
+        return {
+            "2021-2026": "1",
+            "2016-2021": "2",
+        }
 
-    scraper = RawBancadaScraper()
     monkeypatch.setattr(scraper, "get_options", fake_get_options)
     monkeypatch.setattr(
         scraper,
         "get_html_with_selections",
         lambda url, period, cond: f"<html>{period}-{cond}</html>",
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda b: b)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: bancada)
 
     scraper.get_raw_bancadas(only_current=True)
 
     assert len(scraper.bancadas_list) == 1
+
     bancada = scraper.bancadas_list[0]
     assert bancada.legislative_period == "2021-2026"
     assert bancada.raw_html == "<html>1-eej</html>"
+    assert bancada.processed is False
+    assert bancada.last_update is True
 
 
 def test_get_raw_bancadas_all_periods_single_condition(monkeypatch):
-    monkeypatch.setattr(bancadas, "RawBancada", _DummyRawBancada)
+    scraper = make_scraper()
 
-    scraper = RawBancadaScraper()
-    monkeypatch.setattr(
-        scraper,
-        "get_options",
-        lambda url, select_name="idPeriodo[]": {
-            "2021-2026": "1",
-            "2016-2021": "2",
-        },
-    )
+    def fake_get_options(url, select_name="idPeriodo[]"):
+        if select_name == "idPeriodo[]":
+            return {
+                "2021-2026": "1",
+                "2016-2021": "2",
+            }
+
+        if select_name == "keyCondicion[]":
+            return {
+                "en Ejercicio": "eej",
+            }
+
+        return {}
+
+    monkeypatch.setattr(scraper, "get_options", fake_get_options)
     monkeypatch.setattr(
         scraper,
         "get_html_with_selections",
         lambda url, period, cond: f"<html>{period}-{cond}</html>",
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda b: b)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: bancada)
 
     scraper.get_raw_bancadas(only_current=False)
 
@@ -236,34 +275,39 @@ def test_get_raw_bancadas_all_periods_single_condition(monkeypatch):
     ]
 
 
-Base = declarative_base()
+def test_get_raw_bancadas_skips_none_html(monkeypatch):
+    scraper = make_scraper()
+
+    monkeypatch.setattr(
+        scraper,
+        "get_options",
+        lambda url, select_name="idPeriodo[]": {
+            "2021-2026": "1",
+        },
+    )
+    monkeypatch.setattr(
+        scraper,
+        "get_html_with_selections",
+        lambda url, period, cond: None,
+    )
+    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: bancada)
+
+    scraper.get_raw_bancadas(only_current=True)
+
+    assert scraper.bancadas_list == []
 
 
-class RawBancadaTrackingTest(Base):
-    __tablename__ = "raw_bancadas"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime, nullable=False)
-    legislative_period = Column(String, nullable=False)
-    raw_html = Column(String, nullable=False)
-    last_update = Column(Boolean, nullable=False, default=False)
-    changed = Column(Boolean, nullable=False, default=False)
-    processed = Column(Boolean, nullable=False, default=False)
+# ---------- update_tracking ----------
 
 
-def test_update_tracking_marks_first_snapshot_changed(monkeypatch):
-    monkeypatch.setattr(bancadas, "RawBancada", RawBancadaTrackingTest)
+def test_update_tracking_marks_first_snapshot_changed():
+    engine, SessionLocal = setup_inmemory_db()
 
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
+    scraper = make_scraper()
+    scraper.Session = SessionLocal
 
-    scraper = RawBancadaScraper()
-    scraper.engine = engine
-    scraper.Session = TestSession
-
-    bancada = RawBancadaTrackingTest(
-        timestamp=datetime.datetime.now(),
+    bancada = RawBancada(
+        timestamp=datetime(2026, 1, 1),
         legislative_period="2021-2026",
         raw_html="<html>v1</html>",
         last_update=False,
@@ -278,33 +322,27 @@ def test_update_tracking_marks_first_snapshot_changed(monkeypatch):
     assert tracked.processed is False
 
 
-def test_update_tracking_marks_identical_snapshot_processed(monkeypatch):
-    monkeypatch.setattr(bancadas, "RawBancada", RawBancadaTrackingTest)
+def test_update_tracking_marks_identical_snapshot_processed():
+    engine, SessionLocal = setup_inmemory_db()
 
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
+    scraper = make_scraper()
+    scraper.Session = SessionLocal
 
-    scraper = RawBancadaScraper()
-    scraper.engine = engine
-    scraper.Session = TestSession
+    old = RawBancada(
+        timestamp=datetime(2026, 1, 1),
+        legislative_period="2021-2026",
+        raw_html="<html>same</html>",
+        last_update=True,
+        changed=True,
+        processed=False,
+    )
 
-    now = datetime.datetime.now()
-    with TestSession() as session:
-        session.add(
-            RawBancadaTrackingTest(
-                timestamp=now,
-                legislative_period="2021-2026",
-                raw_html="<html>same</html>",
-                last_update=True,
-                changed=True,
-                processed=False,
-            )
-        )
+    with SessionLocal() as session:
+        session.add(old)
         session.commit()
 
-    new_snapshot = RawBancadaTrackingTest(
-        timestamp=now + datetime.timedelta(minutes=1),
+    new = RawBancada(
+        timestamp=datetime(2026, 1, 2),
         legislative_period="2021-2026",
         raw_html="<html>same</html>",
         last_update=False,
@@ -312,44 +350,38 @@ def test_update_tracking_marks_identical_snapshot_processed(monkeypatch):
         processed=False,
     )
 
-    tracked = scraper.update_tracking(new_snapshot)
+    tracked = scraper.update_tracking(new)
 
     assert tracked.changed is False
     assert tracked.last_update is True
     assert tracked.processed is True
 
-    with TestSession() as session:
-        previous = session.query(RawBancadaTrackingTest).one()
+    with SessionLocal() as session:
+        previous = session.query(RawBancada).first()
         assert previous.last_update is False
 
 
-def test_update_tracking_marks_changed_snapshot_and_flips_previous(monkeypatch):
-    monkeypatch.setattr(bancadas, "RawBancada", RawBancadaTrackingTest)
+def test_update_tracking_marks_changed_snapshot_and_flips_previous():
+    engine, SessionLocal = setup_inmemory_db()
 
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
+    scraper = make_scraper()
+    scraper.Session = SessionLocal
 
-    scraper = RawBancadaScraper()
-    scraper.engine = engine
-    scraper.Session = TestSession
+    old = RawBancada(
+        timestamp=datetime(2026, 1, 1),
+        legislative_period="2021-2026",
+        raw_html="<html>old</html>",
+        last_update=True,
+        changed=True,
+        processed=False,
+    )
 
-    now = datetime.datetime.now()
-    with TestSession() as session:
-        session.add(
-            RawBancadaTrackingTest(
-                timestamp=now,
-                legislative_period="2021-2026",
-                raw_html="<html>old</html>",
-                last_update=True,
-                changed=True,
-                processed=False,
-            )
-        )
+    with SessionLocal() as session:
+        session.add(old)
         session.commit()
 
-    new_snapshot = RawBancadaTrackingTest(
-        timestamp=now + datetime.timedelta(minutes=1),
+    new = RawBancada(
+        timestamp=datetime(2026, 1, 2),
         legislative_period="2021-2026",
         raw_html="<html>new</html>",
         last_update=False,
@@ -357,59 +389,61 @@ def test_update_tracking_marks_changed_snapshot_and_flips_previous(monkeypatch):
         processed=False,
     )
 
-    tracked = scraper.update_tracking(new_snapshot)
+    tracked = scraper.update_tracking(new)
 
     assert tracked.changed is True
     assert tracked.last_update is True
     assert tracked.processed is False
 
-    with TestSession() as session:
-        previous = session.query(RawBancadaTrackingTest).one()
+    with SessionLocal() as session:
+        previous = session.query(RawBancada).first()
         assert previous.last_update is False
 
 
-class RawBancadaInsertTest(Base):
-    __tablename__ = "raw_bancadas_insert"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    timestamp = Column(DateTime, nullable=False)
-    legislative_period = Column(String, nullable=False)
-    raw_html = Column(String, nullable=False)
+# ---------- add_bancadas_to_db ----------
 
 
 def test_add_bancadas_to_db_success():
-    engine = create_engine("sqlite:///:memory:")
-    Base.metadata.create_all(engine)
-    TestSession = sessionmaker(bind=engine)
+    engine, SessionLocal = setup_inmemory_db()
 
-    scraper = RawBancadaScraper()
-    scraper.engine = engine
-    scraper.Session = TestSession
+    scraper = make_scraper()
+    scraper.Session = SessionLocal
 
-    now = datetime.datetime.now()
     scraper.bancadas_list = [
-        RawBancadaInsertTest(
-            timestamp=now,
+        RawBancada(
+            timestamp=datetime(2026, 1, 1),
             legislative_period="2021-2026",
             raw_html="<html>1</html>",
+            changed=True,
+            processed=False,
+            last_update=True,
         ),
-        RawBancadaInsertTest(
-            timestamp=now,
+        RawBancada(
+            timestamp=datetime(2026, 1, 1),
             legislative_period="2016-2021",
             raw_html="<html>2</html>",
+            changed=True,
+            processed=False,
+            last_update=True,
         ),
     ]
 
     result = scraper.add_bancadas_to_db()
+
     assert result is True
 
-    with TestSession() as session:
-        count = session.query(RawBancadaInsertTest).count()
-        assert count == 2
+    with SessionLocal() as session:
+        rows = session.query(RawBancada).all()
+
+    assert len(rows) == 2
+    assert {row.legislative_period for row in rows} == {
+        "2021-2026",
+        "2016-2021",
+    }
 
 
 def test_add_bancadas_to_db_raises_when_empty_list():
-    scraper = RawBancadaScraper()
+    scraper = make_scraper()
     scraper.bancadas_list = []
 
     with pytest.raises(AssertionError):
@@ -417,13 +451,23 @@ def test_add_bancadas_to_db_raises_when_empty_list():
 
 
 def test_add_bancadas_to_db_handles_sqlalchemy_error():
+    scraper = make_scraper()
+
+    scraper.bancadas_list = [
+        RawBancada(
+            timestamp=datetime.now(),
+            legislative_period="2021-2026",
+            raw_html="<html></html>",
+        )
+    ]
+
     class DummySession:
         def __init__(self):
             self.rollback_called = False
             self.close_called = False
 
         def bulk_save_objects(self, objs):
-            raise SQLAlchemyError("Boom")
+            raise SQLAlchemyError("boom")
 
         def commit(self):
             pass
@@ -433,9 +477,6 @@ def test_add_bancadas_to_db_handles_sqlalchemy_error():
 
         def close(self):
             self.close_called = True
-
-    scraper = RawBancadaScraper()
-    scraper.bancadas_list = [object()]
 
     dummy_session = DummySession()
     scraper.Session = lambda: dummy_session

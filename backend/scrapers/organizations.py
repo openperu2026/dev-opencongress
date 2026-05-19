@@ -126,6 +126,10 @@ class RawOrganizationScraper:
         for type_org, url in self.urls.items():
             dict_periods = self.get_options(url=url, select_name="idRegistroPadre")
 
+            if not dict_periods:
+                logger.warning(f"No years found for type={type_org}")
+                continue
+
             if only_current:
                 # Only scrape current period
                 key, val = list(dict_periods.items())[0]
