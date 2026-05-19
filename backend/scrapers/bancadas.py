@@ -2,7 +2,6 @@ from loguru import logger
 from typing import Literal
 from datetime import datetime
 
-from lxml.html import HtmlElement
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
 from sqlalchemy.orm import sessionmaker
@@ -49,7 +48,7 @@ class RawBancadaScraper:
 
     def get_html_with_selections(
         self, url: str, period_value: str, condition_value: str = ""
-    ) -> HtmlElement | None:
+    ) -> str | None:
         browser = None
         page = None
 
