@@ -145,6 +145,7 @@ class RawOrganizationScraper:
                 if html is not None:
                     new_org = RawOrganization(
                         timestamp=datetime.now(),
+                        org_link=url,
                         legislative_year=year,
                         type_org=type_org,
                         raw_html=html,
