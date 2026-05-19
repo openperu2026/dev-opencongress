@@ -135,8 +135,8 @@ def test_get_bill_documents_populates_documents(monkeypatch):
     assert len(scraper.documents) == 1
     doc = scraper.documents[0]
     assert doc.bill_id == bill_id
-    assert doc.file_id == 111
-    assert doc.step_id == 10
+    assert doc.file_id == "111"
+    assert doc.step_id == "10"
     assert doc.url == expected_url
     # step_date parsed correctly
     assert isinstance(doc.step_date, datetime)

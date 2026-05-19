@@ -130,8 +130,8 @@ def test_get_motion_documents_populates_urls(monkeypatch):
     expected_url = f"{BASE_URL}/seguimiento-adjunto/{expected_b64}/pdf"
     assert doc.url == expected_url
     assert doc.motion_id == motion_id
-    assert doc.step_id == 10
-    assert doc.file_id == 111
+    assert doc.step_id == "10"
+    assert doc.file_id == "111"
     # Check that step_date was parsed correctly
     assert doc.step_date == datetime.strptime(step_date_str, "%Y-%m-%dT%H:%M:%S.%f%z")
 
