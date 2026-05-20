@@ -1,7 +1,8 @@
-from datetime import datetime
+from datetime import date
 from types import SimpleNamespace
 
 import pytest
+from backend import TypeBillStep
 import backend.process.summarization as summarization
 
 
@@ -50,7 +51,7 @@ def bill_factory():
     def _make(
         *,
         bill_id="2021_1",
-        presentation_date=datetime(2021, 1, 1),
+        presentation_date=date(2021, 1, 1),
         title="Ley de prueba",
         status="En comisión",
     ):
@@ -70,8 +71,8 @@ def step_factory():
 
     def _make(
         *,
-        step_type="presented",
-        step_date=datetime(2021, 1, 1),
+        step_type=TypeBillStep.PRESENTADO,
+        step_date=date(2021, 1, 1),
         step_detail="Presentado en mesa de partes",
     ):
         return SimpleNamespace(
@@ -110,27 +111,35 @@ def test_format_elapsed_time_behavior(days, expected):
 
 def test_rank_steps_prefers_higher_score_then_newer_date(step_factory):
     steps = [
-        step_factory(step_type="approved", step_date=datetime(2021, 5, 2)),
-        step_factory(step_type="published", step_date=datetime(2021, 5, 3)),
-        step_factory(step_type="approved", step_date=datetime(2021, 5, 1)),
+        step_factory(
+            step_type=TypeBillStep.VOTACION,
+            step_date=date(2021, 5, 2),
+            step_detail="Aprobado",
+        ),
+        step_factory(step_type=TypeBillStep.PUBLICADO, step_date=date(2021, 5, 3)),
+        step_factory(
+            step_type=TypeBillStep.VOTACION,
+            step_date=date(2021, 5, 1),
+            step_detail="Aprobado",
+        ),
     ]
 
     ranked = summarization._rank_steps(steps)
 
-    assert ranked[0]["type"] == "published"
-    assert ranked[1]["type"] == "approved"
-    assert ranked[1]["step"].step_date == datetime(2021, 5, 2)
-    assert ranked[2]["step"].step_date == datetime(2021, 5, 1)
+    assert ranked[0]["type"] == TypeBillStep.PUBLICADO
+    assert ranked[1]["type"] == TypeBillStep.VOTACION
+    assert ranked[1]["step"].step_date == date(2021, 5, 2)
+    assert ranked[2]["step"].step_date == date(2021, 5, 1)
 
 
 def test_find_ranked_step_filters_by_needles(step_factory):
     steps = [
         step_factory(
-            step_type="approved",
+            step_type=TypeBillStep.VOTACION,
             step_detail="Aprobado sin exoneración",
         ),
         step_factory(
-            step_type="approved",
+            step_type=TypeBillStep.VOTACION,
             step_detail="Aprobado con exoneración de segunda votación",
         ),
     ]
@@ -139,12 +148,45 @@ def test_find_ranked_step_filters_by_needles(step_factory):
 
     out = summarization._find_ranked_step(
         ranked,
-        {"approved"},
+        {TypeBillStep.VOTACION},
         needles=("exoneración de segunda votación",),
     )
 
     assert out is not None
     assert "exoneración" in out.step_detail.lower()
+
+
+def test_approved_vote_uses_step_detail(step_factory):
+    approved = step_factory(
+        step_type=TypeBillStep.VOTACION,
+        step_detail="APROBADO 1ERA. VOTACIÓN",
+    )
+    not_approved = step_factory(
+        step_type=TypeBillStep.VOTACION,
+        step_detail="No alcanzó N° de votos",
+    )
+
+    assert summarization._is_approved_vote(approved)
+    assert not summarization._is_approved_vote(not_approved)
+
+
+def test_observed_autograph_requires_autograph_type_and_detail(step_factory):
+    observed = step_factory(
+        step_type=TypeBillStep.AUTOGRAFA,
+        step_detail="Autógrafa observada por el Poder Ejecutivo",
+    )
+    regular_autograph = step_factory(
+        step_type=TypeBillStep.AUTOGRAFA,
+        step_detail="Autógrafa enviada al Poder Ejecutivo",
+    )
+    text_update = step_factory(
+        step_type=TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION,
+        step_detail="Autógrafa observada por el Poder Ejecutivo",
+    )
+
+    assert summarization._is_observed_autograph(observed)
+    assert not summarization._is_observed_autograph(regular_autograph)
+    assert not summarization._is_observed_autograph(text_update)
 
 
 def test_summarize_bill_from_db_requires_bill_id():
@@ -181,13 +223,13 @@ def test_summarize_bill_from_db_single_paragraph_when_few_steps(
     bill = bill_factory(bill_id="2021_11", title="Reforma constitucional")
     steps = [
         step_factory(
-            step_type="presented",
-            step_date=datetime(2021, 1, 10),
+            step_type=TypeBillStep.PRESENTADO,
+            step_date=date(2021, 1, 10),
             step_detail="Presentado",
         ),
         step_factory(
-            step_type="committee stage",
-            step_date=datetime(2021, 2, 1),
+            step_type=TypeBillStep.EN_COMISION,
+            step_date=date(2021, 2, 1),
             step_detail="Pasa a comisión",
         ),
     ]
@@ -210,33 +252,33 @@ def test_summarize_bill_from_db_two_paragraphs_when_many_steps(
     )
     steps = [
         step_factory(
-            step_type="presented",
-            step_date=datetime(2021, 1, 1),
+            step_type=TypeBillStep.PRESENTADO,
+            step_date=date(2021, 1, 1),
             step_detail="Presentado",
         ),
         step_factory(
-            step_type="committee stage",
-            step_date=datetime(2021, 1, 10),
+            step_type=TypeBillStep.EN_COMISION,
+            step_date=date(2021, 1, 10),
             step_detail="Pasa a comisión",
         ),
         step_factory(
-            step_type="debate",
-            step_date=datetime(2021, 1, 20),
+            step_type=TypeBillStep.DEBATE_EN_EL_PLENO,
+            step_date=date(2021, 1, 20),
             step_detail="Debate en pleno",
         ),
         step_factory(
-            step_type="approved",
-            step_date=datetime(2021, 2, 1),
+            step_type=TypeBillStep.VOTACION,
+            step_date=date(2021, 2, 1),
             step_detail="Aprobado",
         ),
         step_factory(
-            step_type="text update",
-            step_date=datetime(2021, 2, 5),
+            step_type=TypeBillStep.AUTOGRAFA,
+            step_date=date(2021, 2, 5),
             step_detail="Se actualiza texto",
         ),
         step_factory(
-            step_type="assigned to committee",
-            step_date=datetime(2021, 2, 10),
+            step_type=TypeBillStep.EN_COMISION,
+            step_date=date(2021, 2, 10),
             step_detail="Retorna a comisión",
         ),
     ]
