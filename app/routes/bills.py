@@ -89,8 +89,23 @@ def bill_detail(bill_id):
 
         all_steps, latest_step = extract_steps(db, bill_id)
 
+        # Only the types that actually carry comparable content; the others
+        # (no_change, unavailable, first_version, missing row) shouldn't get
+        # a "View changes" link.
+        diff_types = dict(
+            db.execute(
+                select(BillDifference.step_id, BillDifference.difference_type).where(
+                    BillDifference.bill_id == bill_id
+                )
+            ).all()
+        )
+
         return render_template(
-            "bills/detail.html", bill=bill, latest_step=latest_step, all_steps=all_steps
+            "bills/detail.html",
+            bill=bill,
+            latest_step=latest_step,
+            all_steps=all_steps,
+            diff_types=diff_types,
         )
 
 
