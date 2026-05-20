@@ -6,12 +6,13 @@ from datetime import datetime
 from pathlib import Path
 
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, Integer, cast, exists
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings, directories
-from backend.scrapers.utils import render_pdf, get_url
-from backend.database.raw_models import RawMotionDocument, RawMotion, RawMotionPage
+from backend.scrapers.utils import get_url
+from backend.database.raw_models import RawMotionDocument, RawMotion
+from backend.database.models import MotionStep
 
 BASE_URL = "https://api.congreso.gob.pe/smociones-portal-service"
 DB_PATH = settings.DB_URL
@@ -28,19 +29,39 @@ class RawMotionDocumentScraper:
         self.Session = sessionmaker(bind=self.engine)
 
         self.documents: list[RawMotionDocument] = []
-        self.pages: list[RawMotionPage] = []
 
     def get_motions_pending_documents(self) -> list[str]:
+        """
+        Return motion IDs that have at least one step without a scraped document.
+
+        A motion is considered pending when it has a record in `motion_steps` for a
+        given step, but there is no matching record in `raw_motion_documents` for the
+        same `motion_id` and `step_id`.
+
+        Returns:
+            list[str]: Distinct motion IDs with one or more missing raw documents.
+        """
         with self.Session() as session:
             stmt = (
                 select(RawMotion.id)
-                .outerjoin(
-                    RawMotionDocument, RawMotion.id == RawMotionDocument.motion_id
+                .distinct()
+                .where(
+                    exists(
+                        select(1).where(
+                            MotionStep.motion_id == RawMotion.id,
+                            ~exists(
+                                select(1).where(
+                                    RawMotionDocument.motion_id == MotionStep.motion_id,
+                                    cast(RawMotionDocument.step_id, Integer)
+                                    == MotionStep.step_id,
+                                )
+                            ),
+                        )
+                    )
                 )
-                .where(RawMotionDocument.motion_id.is_(None))
             )
 
-            return session.scalars(stmt).all()
+            return list(session.scalars(stmt).all())
 
     def filter_steps(self, extracted_steps: list[dict], motion_id: str):
         """
@@ -62,10 +83,11 @@ class RawMotionDocumentScraper:
     def get_motion_documents(
         self,
         motion_id: str,
+        *,
         update: bool = False,
         download_local: bool = False,
         upload_s3: bool = False,
-    ) -> tuple[list[RawMotionDocument], list[RawMotionPage]] | None:
+    ) -> None:
         """
         Extract the documents from a RawMotion's files and extract the text from each of its pages
         """
@@ -93,7 +115,7 @@ class RawMotionDocumentScraper:
 
         logger.info(f"Extracting files from {len(steps)} steps of motion {motion_id}")
 
-        for ix, step in enumerate(steps):
+        for _, step in enumerate(steps):
             files = step.get("adjuntos")
             step_date = step.get("fecSeguimiento")
 
@@ -106,9 +128,6 @@ class RawMotionDocumentScraper:
 
                 b64_id = base64.b64encode(str(file_id).encode()).decode()
                 url = f"{BASE_URL}/seguimiento-adjunto/{b64_id}/pdf"
-                logger.info(f"Extracting document {ix + 1}/{len(steps)} at url: {url}")
-                pages_text = render_pdf(url)
-                logger.success(f"Successfully extracted text from {url}")
 
                 file_name = self._build_filename(motion_id, step_id, file_id)
                 dest_path = directories.MOTION_DOCUMENTS / file_name
@@ -122,28 +141,17 @@ class RawMotionDocumentScraper:
 
                 new_doc = RawMotionDocument(
                     motion_id=motion_id,
-                    step_id=step_id,
-                    file_id=file_id,
+                    step_id=str(step_id),
+                    file_id=str(file_id),
                     step_date=datetime.strptime(step_date, "%Y-%m-%dT%H:%M:%S.%f%z"),
                     url=url,
                     s3_key=s3_key,
-                    local_path=dest_path,
+                    local_path=str(dest_path) if dest_path is not None else None,
                     timestamp=datetime.now(),
                     processed=False,
                     last_update=True,
                 )
 
-                for page_num, text in pages_text.items():
-                    self.pages.append(
-                        RawMotionPage(
-                            motion_id=motion_id,
-                            step_id=step_id,
-                            file_id=file_id,
-                            page_num=page_num,
-                            text=text,
-                            ocr_model="Tesseract",  # TODO: Add ocr_model to the pipeline
-                        )
-                    )
                 self.documents.append(new_doc)
 
     def add_documents_to_db(self) -> bool:
@@ -173,36 +181,10 @@ class RawMotionDocumentScraper:
             # Close Session
             session.close()
 
-    def add_pages_to_db(self) -> bool:
-        """
-        Add the pages to the database.
-        Returns True on success, False on failure.
-        """
-
-        assert self.pages, "Documents must be scraped before it can be saved"
-
-        with self.Session() as session:
-            try:
-                session.add_all(self.pages)
-                session.commit()
-                logger.success(
-                    f"Added {len(self.pages)} documents to Raw Motion Documents table"
-                )
-                return True
-
-            except SQLAlchemyError as e:
-                logger.error(
-                    f"Failed to add documents from motion {self.pages[0].motion_id}: {e}"
-                )
-                session.rollback()
-                return False
-
     def load_raw_documents(self):
         if self.documents:
             self.add_documents_to_db()
-            self.add_pages_to_db()
             self.documents = []
-            self.pages = []
         else:
             return None
 
