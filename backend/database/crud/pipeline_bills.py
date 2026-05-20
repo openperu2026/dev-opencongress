@@ -162,7 +162,7 @@ def find_raw_bill_pages(
     Since the ``feature/data_migration`` migration, ``raw_bill_pages`` is keyed
     by ``ocr_model`` as well, so a document can hold one page row per model.
     Filtering by ``ocr_model`` keeps the page sequence unambiguous; bills are
-    OCR'd with chandraOCR, hence the default.
+    OCR'd with chandra2, hence the default.
     """
     return (
         raw_db.query(RawBillPage)
