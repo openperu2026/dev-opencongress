@@ -47,14 +47,20 @@ def test_different_texts_returns_modified_with_structured_payload():
     assert any(run["op"] != "equal" for run in hunk["word_diff"])
 
 
-def test_new_none_treated_as_deletion():
+def test_new_none_is_unavailable():
+    # Regression: missing new text (no BillText row for a later step) used
+    # to render as "everything deleted". A later step with no extracted
+    # text means we cannot diff — not that the body was removed.
     old = "Artículo 1.- Algo.\n"
     result = compute_bill_difference(old, None)
-    assert result["type"] == "modified"
-    payload = result["content"]
-    assert payload["summary"]["nodes_deleted"] >= 1
-    # An inserted node would imply content on the B side that doesn't exist.
-    assert payload["summary"]["nodes_inserted"] == 0
+    assert result["type"] == "unavailable"
+    assert result["content"] is None
+
+
+def test_both_none_is_unavailable():
+    result = compute_bill_difference(None, None)
+    assert result["type"] == "unavailable"
+    assert result["content"] is None
 
 
 # ── Size-ratio guard ────────────────────────────────────────────────────────

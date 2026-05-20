@@ -91,7 +91,7 @@ def compute_bill_difference(old_text: str | None, new_text: str | None) -> dict:
     Returns ``{"type": <kind>, "content": <payload | None>}``.
 
     ``type`` is one of:
-      - ``"unavailable"``  — both sides None
+      - ``"unavailable"``  — new text missing (no extraction yet); cannot diff
       - ``"first_version"`` — no prior version
       - ``"no_change"``    — texts equal after normalization
       - ``"incomparable"`` — size ratio exceeded; probably mismatched documents
@@ -99,25 +99,27 @@ def compute_bill_difference(old_text: str | None, new_text: str | None) -> dict:
 
     ``content`` for ``modified`` is documented in ``_build_payload``.
     """
-    if old_text is None and new_text is None:
+    if new_text is None:
+        # Either no BillText row for this step yet, or we explicitly have no
+        # new side to compare. Either way: no diff. Without this, a prior
+        # text + missing new text would render as "everything deleted".
         return {"type": "unavailable", "content": None}
     if old_text is None:
         return {"type": "first_version", "content": None}
 
-    if new_text is not None:
-        lo, hi = sorted([len(old_text), len(new_text)])
-        # One side empty, the other not: probably failed OCR / extraction —
-        # don't materialize an O(N) deletion or insertion payload.
-        if lo == 0 and hi > 0:
-            return {"type": "incomparable", "content": None}
-        if lo > 0 and hi / lo > _MAX_SIZE_RATIO:
-            return {"type": "incomparable", "content": None}
+    lo, hi = sorted([len(old_text), len(new_text)])
+    # One side empty, the other not: probably failed OCR / extraction —
+    # don't materialize an O(N) deletion or insertion payload.
+    if lo == 0 and hi > 0:
+        return {"type": "incomparable", "content": None}
+    if lo > 0 and hi / lo > _MAX_SIZE_RATIO:
+        return {"type": "incomparable", "content": None}
 
     if old_text == new_text:
         return {"type": "no_change", "content": None}
 
     old_norm = _normalize_for_diff(old_text)
-    new_norm = _normalize_for_diff(new_text or "")
+    new_norm = _normalize_for_diff(new_text)
 
     if old_norm == new_norm:
         return {"type": "no_change", "content": None}
