@@ -13,5 +13,8 @@ scrape-motions:
 scrape-leyes:
 	uv run -m backend --scrape --skip-processing --only-leyes
 
+process-first-summary:
+	uv run -m backend --only-bills --first-summary
+
 process:
 	uv run -m backend

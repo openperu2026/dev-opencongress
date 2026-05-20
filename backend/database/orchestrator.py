@@ -6,8 +6,9 @@ from typing import Type, Callable
 
 from tqdm import tqdm
 from loguru import logger
-from sqlalchemy import create_engine, func, select
+from sqlalchemy import create_engine, func, select, or_, update
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import (
     settings,
@@ -60,6 +61,7 @@ from backend.process.organizations import (
 )
 from backend.process.leyes import process_leyes
 from backend.process.schema import Membership, Organization
+from backend.process.summarization import summarize_bill_from_db
 from backend.process.utils import (
     get_current_leg_year,
     find_organization_schema,
@@ -378,6 +380,7 @@ class OpenPeruOrchestrator:
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
+        first_load: bool = False,
     ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
@@ -418,6 +421,11 @@ class OpenPeruOrchestrator:
                     limit=bills_limit,
                 )
                 self._log_stage_summary("bills", summary["bills"])
+
+            with log_manager.stage("process", "bills"):
+                console.info("Starting populating bill summaries")
+                summary["bill_summary"] = self._process_bills_summaries(first_load)
+                self._log_stage_summary("bill_summary", summary["bill_summary"])
 
         if process_motions:
             with log_manager.stage("process", "motions"):
@@ -1075,6 +1083,80 @@ class OpenPeruOrchestrator:
         logger.info(
             f"[bills] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
+        return stats
+
+    def _process_bills_summaries(
+        self,
+        *,
+        first_load: bool = False,
+    ) -> ProcessStats:
+        stats = ProcessStats()
+        clean_inserted = 0
+        clean_updated = 0
+
+        with self.DBSession() as db:
+            if first_load:
+                stmt = select(Bill.id).where(
+                    or_(
+                        Bill.summary_oc.is_(None),
+                        func.trim(Bill.summary_oc) == "",
+                    )
+                )
+            else:
+                stmt = (
+                    select(Bill.id)
+                    .join(RawBill, Bill.id == RawBill.id)
+                    .where(
+                        RawBill.last_update.is_(True),
+                        RawBill.changed.is_(True),
+                    )
+                )
+
+            pending_bill_ids = list(db.scalars(stmt).all())
+
+        if first_load:
+            clean_inserted = len(pending_bill_ids)
+        else:
+            clean_updated = len(pending_bill_ids)
+
+        for bill_id in tqdm(pending_bill_ids, desc="Processing summaries"):
+            try:
+                result = summarize_bill_from_db(bill_id)
+
+                with self.DBSession() as db:
+                    db.execute(
+                        update(Bill)
+                        .where(Bill.id == bill_id)
+                        .values(summary_oc=result["summary"])
+                    )
+                    db.commit()
+
+                stats.processed += 1
+
+            except KeyError as e:
+                stats.errors += 1
+                logger.error(
+                    f"[bill_summary] Missing expected key {e} for bill_id={bill_id}"
+                )
+                continue
+
+            except SQLAlchemyError as e:
+                stats.errors += 1
+                logger.exception(
+                    f"[bill_summary] Database error while processing bill_id={bill_id}: {e}"
+                )
+                continue
+
+        logger.info(
+            "[bill_summary] "
+            f"pending_summaries={len(pending_bill_ids)} "
+            f"processed={stats.processed} "
+            f"skipped={stats.skipped} "
+            f"errors={stats.errors} "
+            f"clean_inserted={clean_inserted} "
+            f"clean_updated={clean_updated}"
+        )
+
         return stats
 
     def _process_motions(
