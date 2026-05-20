@@ -206,9 +206,11 @@ def bill_difference(bill_id, step_id):
         new_bt = get_billtext_for_step(db, bill_id, step_id)
         new_text = new_bt.text if new_bt else None
         old_text = None
+        prev_step = None
         if diff and diff.prev_step_id is not None:
             old_bt = get_billtext_for_step(db, bill_id, diff.prev_step_id)
             old_text = old_bt.text if old_bt else None
+            prev_step = db.get(BillStep, (bill_id, diff.prev_step_id))
 
         # ETag covers every input the renderer (and the page) depends on so
         # any change forces a client refetch.
@@ -251,6 +253,7 @@ def bill_difference(bill_id, step_id):
                 "bills/difference.html",
                 bill=bill,
                 step=step,
+                prev_step=prev_step,
                 difference_type=difference_type,
                 old_version_text=old_text,
                 new_version_text=new_text,

@@ -252,6 +252,25 @@ def test_no_change_path_does_not_render_diff(client, session_factory):
     assert "No changes between versions." in body
 
 
+def test_unavailable_path_renders_status_message(client, session_factory):
+    # Regression: when a later step has no extracted text, the diff used
+    # to render the prior text as fully deleted. It now stores 'unavailable';
+    # the template must show the explanatory status instead of a deletion.
+    _seed_bill(session_factory)
+    _seed_step(session_factory)
+    _seed_difference(
+        session_factory,
+        difference_type="unavailable",
+        difference_content=None,
+    )
+
+    resp = client.get("/bills/2021_1234/difference/1")
+    body = resp.get_data(as_text=True)
+    assert resp.status_code == 200
+    assert "Text could not be extracted for comparison." in body
+    assert "diff-tok-delete" not in body
+
+
 # ── Failure-mode fallbacks ──────────────────────────────────────────────────
 
 

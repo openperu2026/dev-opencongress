@@ -35,7 +35,7 @@ The template branches on `difference_type`. Five cases:
 | `no_change` | Texts equal after normalization | `<p class="diff-status diff-status-equal">` |
 | `first_version` | No prior version exists | `<p class="diff-status diff-status-info">` |
 | `incomparable` | Size ratio > 10× — probably mismatched documents | `<p class="diff-status diff-status-warning">` |
-| `unavailable` | Diff row missing or both texts None | `<p class="diff-status diff-status-warning">` |
+| `unavailable` | Diff row missing, or the new step has no extracted text yet | `<p class="diff-status diff-status-warning">` |
 
 If `difference_content` is present but the route fails to JSON-decode it,
 or the renderer raises, the route logs the exception and the template

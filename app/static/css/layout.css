@@ -904,10 +904,17 @@ source-list{*/
 
 .diff-column h2 {
     font-size: 15px;
-    margin: 0 0 10px;
+    margin: 0 0 4px;
     color: var(--color-frame);
     text-transform: uppercase;
     letter-spacing: 0.5px;
+}
+
+.diff-step-name {
+    margin: 0 0 10px;
+    font-size: 13px;
+    color: #4a5560;
+    font-style: italic;
 }
 
 .diff-text {

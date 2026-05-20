@@ -12,6 +12,7 @@
 <div class="diff-versions">
   <div class="diff-column">
     <h2>Version 1</h2>
+    <p class="diff-step-name">{{ prev_step.step_type.value if prev_step else '—' }}</p>
     {% if old_version_text %}
       <pre class="diff-text">{{ old_version_text }}</pre>
     {% else %}
@@ -20,6 +21,7 @@
   </div>
   <div class="diff-column">
     <h2>Version 2</h2>
+    <p class="diff-step-name">{{ step.step_type.value }}</p>
     {% if new_version_text %}
       <pre class="diff-text">{{ new_version_text }}</pre>
     {% else %}

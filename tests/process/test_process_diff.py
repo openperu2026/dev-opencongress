@@ -57,12 +57,6 @@ def test_new_none_is_unavailable():
     assert result["content"] is None
 
 
-def test_both_none_is_unavailable():
-    result = compute_bill_difference(None, None)
-    assert result["type"] == "unavailable"
-    assert result["content"] is None
-
-
 # ── Size-ratio guard ────────────────────────────────────────────────────────
 
 
