@@ -1065,6 +1065,8 @@ class OpenPeruOrchestrator:
                                 version_id=text_schema.version_id,
                                 text=text_schema.text,
                             )
+                            for page in pages:
+                                page.processed = True
                             raw_doc.processed = True
 
                     raw_bill.processed = True
