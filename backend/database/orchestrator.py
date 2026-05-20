@@ -424,7 +424,9 @@ class OpenPeruOrchestrator:
 
             with log_manager.stage("process", "bills"):
                 console.info("Starting populating bill summaries")
-                summary["bill_summary"] = self._process_bills_summaries(first_load)
+                summary["bill_summary"] = self._process_bills_summaries(
+                    first_load=first_load
+                )
                 self._log_stage_summary("bill_summary", summary["bill_summary"])
 
         if process_motions:
