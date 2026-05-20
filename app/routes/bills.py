@@ -1,7 +1,10 @@
+from hashlib import sha1
 from types import SimpleNamespace
-from flask import Blueprint, render_template, request
+from flask import Blueprint, current_app, make_response, render_template, request
 from sqlalchemy import select, text
-from backend.database.models import Bill, BillStep
+from app.diff_render import RENDERER_VERSION, render_payload_html
+from backend.database.crud.pipeline_bills import get_billtext_for_step
+from backend.database.models import Bill, BillDifference, BillStep
 from .processed_session import SessionProcessed
 import json
 import os
@@ -170,3 +173,77 @@ def extract_steps(db, bill_id):
     latest_step = all_steps[0] if all_steps else None
 
     return all_steps, latest_step
+
+
+@bills_bp.route("/bills/<bill_id>/difference/<int:step_id>")
+def bill_difference(bill_id, step_id):
+    with SessionProcessed() as db:
+        bill = db.get(Bill, bill_id)
+        if not bill:
+            return "Not Found", 404
+
+        step = db.get(BillStep, (bill_id, step_id))
+        if not step:
+            return "Not Found", 404
+
+        diff = db.get(BillDifference, (bill_id, step_id))
+
+        new_bt = get_billtext_for_step(db, bill_id, step_id)
+        new_text = new_bt.text if new_bt else None
+        old_text = None
+        if diff and diff.prev_step_id is not None:
+            old_bt = get_billtext_for_step(db, bill_id, diff.prev_step_id)
+            old_text = old_bt.text if old_bt else None
+
+        # ETag covers every input the renderer (and the page) depends on so
+        # any change forces a client refetch.
+        content_hash = (
+            sha1(diff.difference_content.encode("utf-8")).hexdigest()[:12]
+            if diff and diff.difference_content
+            else "none"
+        )
+        difference_type = diff.difference_type if diff else "unavailable"
+        etag = f"bd-{bill_id}-{step_id}-{difference_type}-{content_hash}-r{RENDERER_VERSION}"
+
+        if request.if_none_match.contains(etag):
+            return "", 304
+
+        # Both parse and render are guarded: a malformed row or a renderer
+        # bug must not take the page down — the template falls back to the
+        # "no difference data available" branch.
+        text_html = None
+        if diff and diff.difference_content:
+            try:
+                parsed = json.loads(diff.difference_content)
+            except (ValueError, TypeError):
+                current_app.logger.exception(
+                    "Failed to parse difference_content for bill %s step %s",
+                    bill_id,
+                    step_id,
+                )
+                parsed = None
+            if isinstance(parsed, dict):
+                try:
+                    text_html = render_payload_html(parsed)
+                except Exception:
+                    current_app.logger.exception(
+                        "Renderer failed for bill %s step %s", bill_id, step_id
+                    )
+                    text_html = None
+
+        resp = make_response(
+            render_template(
+                "bills/difference.html",
+                bill=bill,
+                step=step,
+                difference_type=difference_type,
+                old_version_text=old_text,
+                new_version_text=new_text,
+                text_html=text_html,
+            )
+        )
+        resp.set_etag(etag)
+        resp.headers["Cache-Control"] = (
+            "public, max-age=300, stale-while-revalidate=86400"
+        )
+        return resp

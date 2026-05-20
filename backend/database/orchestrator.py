@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from datetime import date, datetime, timedelta
 from typing import Type, Callable
@@ -44,6 +45,7 @@ from backend.process.bills import (
     process_bill_organizations,
     process_bill_text,
 )
+from backend.process.diff import compute_bill_difference
 from backend.process.congresistas import (
     process_cong_memberships,
     process_profile_content,
@@ -1087,6 +1089,16 @@ class OpenPeruOrchestrator:
                     )
                     db.rollback()
                     stats.errors += 1
+                    continue
+
+                # Diff precompute is isolated from the bill load: a failure
+                # here logs but does not roll back upstream rows.
+                try:
+                    self._compute_bill_differences(db, bill.id)
+                except Exception as diff_exc:
+                    logger.exception(
+                        f"Diff computation failed for bill {bill.id}: {diff_exc}"
+                    )
 
             db.commit()
             raw_db.commit()
@@ -1168,6 +1180,61 @@ class OpenPeruOrchestrator:
         )
 
         return stats
+
+    def _compute_bill_differences(self, db, bill_id: str) -> None:
+        """Compute and store text diffs for every step of a bill against the
+        most recent text-bearing predecessor.
+
+        Step ordering is ``(step_date ASC, step_id ASC)`` so same-date steps
+        pair deterministically across pipeline runs. Steps with no BillText
+        are skipped as predecessors — we walk back through text-less steps
+        so the next text-bearing step doesn't get stored as ``first_version``
+        when an earlier version exists.
+        """
+        steps = (
+            db.execute(
+                select(db_models.BillStep)
+                .where(db_models.BillStep.bill_id == bill_id)
+                .order_by(
+                    db_models.BillStep.step_date.asc(),
+                    db_models.BillStep.step_id.asc(),
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+        billtexts: list[db_models.BillText | None] = [
+            crud_bills.get_billtext_for_step(db, bill_id, s.step_id) for s in steps
+        ]
+
+        def _prior_with_text(
+            idx: int,
+        ) -> tuple[db_models.BillStep | None, db_models.BillText | None]:
+            for j in range(idx - 1, -1, -1):
+                if billtexts[j] is not None:
+                    return steps[j], billtexts[j]
+            return None, None
+
+        for i, step in enumerate(steps):
+            new_bt = billtexts[i]
+            prev_step, old_bt = _prior_with_text(i)
+
+            result = compute_bill_difference(
+                old_bt.text if old_bt else None,
+                new_bt.text if new_bt else None,
+            )
+
+            crud_bills.upsert_bill_difference(
+                db,
+                bill_id=bill_id,
+                step_id=step.step_id,
+                prev_step_id=prev_step.step_id if prev_step else None,
+                difference_type=result["type"],
+                difference_content=json.dumps(result["content"])
+                if result["content"]
+                else None,
+            )
 
     def _process_motions(
         self, *, include_documents: bool, limit: int | None

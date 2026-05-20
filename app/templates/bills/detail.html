@@ -26,6 +26,7 @@
               <!-- real data -->
               <!-- <a href="/bills/{{ bill.id }}/vote/{{ step.vote_event_id }}">View details</a> -->
             {% endif %}
+            <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('View changes')}}</a>
           </div>
         </div>
       {% endfor %}

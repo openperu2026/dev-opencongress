@@ -133,6 +133,20 @@ Normative body sliced from each bill PDF: from the first matched heading (e.g. �
 | version_id | Integer | PK | |
 | text | String (nullable) | | Body slice, or null if no heading matched |
 
+### BillDifference
+
+Processed table: `bill_differences`.
+
+Precomputed text diff between a bill step and the most recent text-bearing predecessor. One row per `BillStep`; `step_id` identifies the "new" version. `difference_content` holds the JSON-serialized hybrid diff payload (`parser_version`, `summary`, `nodes`) produced by `backend/process/diff.py`; the renderer schema is documented in `compute_bill_difference` / `_build_payload` and consumed by the frontend per [`bill_difference_contract.md`](./bill_difference_contract.md).
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| bill_id | String | PK, FK → bill_steps.bill_id | Bill |
+| step_id | Integer | PK, FK → bill_steps.step_id | The "new" version step |
+| prev_step_id | Integer (nullable) | | The previous text-bearing step (`step_id` within the same bill), or null for the first version |
+| difference_type | String | | One of `modified`, `no_change`, `first_version`, `incomparable`, `unavailable` |
+| difference_content | Text (nullable) | | JSON payload (structured diff) when `difference_type = "modified"`; null otherwise |
+
 ### ChamberMembership
 
 Tracks which congresista belongs to which chamber per legislative period.
