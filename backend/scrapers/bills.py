@@ -92,7 +92,8 @@ class RawBillScraper:
 
             # Successfully built the raw bill!
             bill = self.create_raw_bill(year, bill_number, resp["data"])
-            self.raw_bills.append(self.update_tracking(bill))
+            tracked_bill = self.update_tracking(bill)
+            self.raw_bills.extend(tracked_bill)
             logger.success(f"Successfully scraped Raw Bill {year}_{bill_number}")
 
         else:
@@ -118,7 +119,7 @@ class RawBillScraper:
 
         return raw_bill
 
-    def update_tracking(self, bill: RawBill) -> RawBill:
+    def update_tracking(self, bill: RawBill) -> list[RawBill]:
         """Update the tracking columns of a RawBill object"""
 
         # Create a new session
@@ -131,27 +132,30 @@ class RawBillScraper:
                 .first()
             )
 
-            # First ever version of this bill
+            # First ever version of this: add tracking columns and return bill
             if last_bill is None:
                 bill.changed = True
                 bill.last_update = True
                 bill.processed = False
-            else:
-                # Compare last vs new
-                bill.changed = bill != last_bill
+
+                return [bill]
+
+            # If has changed: add tracking columns properly and return bill and last bill
+            if bill != last_bill:
+                bill.changed = True
                 bill.last_update = True
-                bill.processed = not bill.changed
-
-                # Update the old version AFTER comparison
+                bill.processed = False
                 last_bill.last_update = False
-                session.add(last_bill)
-                session.commit()
 
-            return bill
+                return [bill, last_bill]
+
+            # No changes
+            return []
+
         except SQLAlchemyError as e:
             logger.error(f"Failed to add update tracking to Raw Bills table: {e}")
             session.rollback()
-            return False
+            return []
 
         finally:
             # Close Session
