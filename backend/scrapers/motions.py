@@ -54,7 +54,7 @@ class RawMotionScraper:
 
             # Successfully built the raw bill!
             new_motion = self.create_raw_motion(year, motion_number, resp["data"])
-            self.raw_motions.append(self.update_tracking(new_motion))
+            self.raw_motions.extend(self.update_tracking(new_motion))
             logger.success(f"Successfully scraped Raw Motion {year}_{motion_number}")
 
         else:
@@ -101,18 +101,26 @@ class RawMotionScraper:
                 motion.changed = True
                 motion.last_update = True
                 motion.processed = False
-            else:
+
+                return [motion]
+
+            if motion != last_motion:
                 # Compare last vs new
-                motion.changed = motion != last_motion
+                motion.changed = True
                 motion.last_update = True
-                motion.processed = not motion.changed
-
-                # Update the old version AFTER comparison
+                motion.processed = False
                 last_motion.last_update = False
-                session.add(last_motion)
-                session.commit()
 
-            return motion
+                return [motion, last_motion]
+
+            # No changes
+            return []
+
+        except SQLAlchemyError as e:
+            logger.error(f"Failed to add update tracking to Raw Motions table: {e}")
+            session.rollback()
+            return []
+
         finally:
             if self.session is None:
                 session.close()
