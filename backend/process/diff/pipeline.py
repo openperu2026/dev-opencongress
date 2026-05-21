@@ -15,14 +15,14 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from backend.process.diff_line import line_diff
-from backend.process.diff_structural import (
+from backend.process.diff.line import line_diff
+from backend.process.diff.structural import (
     Alignment,
     HEADER_LOOKAHEAD_PATTERN,
     align_nodes,
     parse_structure,
 )
-from backend.process.diff_word import word_diff
+from backend.process.diff.word import word_diff
 
 # Documents whose sizes differ by more than this factor are flagged as
 # incomparable rather than producing a noisy diff (e.g. full dictamen vs

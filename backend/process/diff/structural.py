@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from functools import cached_property
 
 # ── Section patterns tuned for Peruvian legislative text ─────────────────────
 #
@@ -70,12 +71,36 @@ class StructuralNode:
 
     `node_id` is a stable, content-independent identifier shared across
     versions when an article keeps its number (the primary alignment anchor).
+
+    `body`, `fingerprint`, and `body_words` are cached: they are derived from
+    `text` and computed lazily for the alignment passes. ``StructuralNode``
+    is mutated during parsing (``text`` is filled in after construction), so
+    do not access these properties before ``parse_structure`` finishes.
     """
 
     node_id: str
     kind: str
     label: str
     text: str
+
+    @cached_property
+    def body(self) -> str:
+        """Text minus the header line, so a renumbered article fingerprints the same."""
+        lines = self.text.splitlines()
+        if lines and lines[0].strip() == self.label.strip():
+            return "\n".join(lines[1:])
+        return self.text
+
+    @cached_property
+    def fingerprint(self) -> str:
+        """Stable short prefix of the whitespace-collapsed body, for bucket matching."""
+        body = re.sub(r"\s+", " ", self.body).strip().lower()
+        return body[:_FINGERPRINT_LEN]
+
+    @cached_property
+    def body_words(self) -> set[str]:
+        """Lowercase word set of the body, used for Jaccard similarity."""
+        return {w for w in re.findall(r"\w{3,}", self.body.lower())}
 
 
 def _make_node_id(kind: str, raw: str) -> str:
@@ -93,8 +118,9 @@ def _make_node_id(kind: str, raw: str) -> str:
         return f"{kind}_{int(raw_u)}"
     if all(ch in _ROMAN for ch in raw_u):
         return f"{kind}_{_roman_to_int(raw_u)}"
-    # Fallback: a slug.
-    slug = re.sub(r"[^a-z0-9]+", "_", raw.lower()).strip("_")
+    # Fallback: a slug. Use Unicode-aware ``\w`` so accented letters survive
+    # ("Constitución" → "constitución", not "constituci_n").
+    slug = re.sub(r"[^\w]+", "_", raw.lower(), flags=re.UNICODE).strip("_")
     return f"{kind}_{slug or 'x'}"
 
 
@@ -194,24 +220,6 @@ _JACCARD_THRESHOLD = 0.6
 _FINGERPRINT_LEN = 60
 
 
-def _body(node: StructuralNode) -> str:
-    """Node text minus its header line — used for content-based alignment so
-    a renumbered article still fingerprints the same."""
-    lines = node.text.splitlines()
-    if lines and lines[0].strip() == node.label.strip():
-        return "\n".join(lines[1:])
-    return node.text
-
-
-def _fingerprint(node: StructuralNode) -> str:
-    body = re.sub(r"\s+", " ", _body(node)).strip().lower()
-    return body[:_FINGERPRINT_LEN]
-
-
-def _word_set(text: str) -> set[str]:
-    return {w for w in re.findall(r"\w{3,}", text.lower())}
-
-
 def _jaccard(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 1.0
@@ -257,12 +265,12 @@ def align_nodes(
     for n in b_nodes:
         if n.node_id in matched_b:
             continue
-        fp_b.setdefault((n.kind, _fingerprint(n)), []).append(n)
+        fp_b.setdefault((n.kind, n.fingerprint), []).append(n)
 
     for a in a_nodes:
         if a.node_id in matched_a:
             continue
-        bucket = fp_b.get((a.kind, _fingerprint(a)))
+        bucket = fp_b.get((a.kind, a.fingerprint))
         if not bucket:
             continue
         b = bucket.pop(0)
@@ -274,15 +282,13 @@ def align_nodes(
     rem_a = [n for n in a_nodes if n.node_id not in matched_a]
     rem_b = [n for n in b_nodes if n.node_id not in matched_b]
     if rem_a and rem_b:
-        sets_a = {n.node_id: _word_set(_body(n)) for n in rem_a}
-        sets_b = {n.node_id: _word_set(_body(n)) for n in rem_b}
         scores: list[tuple[float, StructuralNode, StructuralNode]] = []
         for a in rem_a:
             for b in rem_b:
                 if a.kind != b.kind and "preamble" not in (a.kind, b.kind):
                     # Don't match an article against a title.
                     continue
-                s = _jaccard(sets_a[a.node_id], sets_b[b.node_id])
+                s = _jaccard(a.body_words, b.body_words)
                 if s >= _JACCARD_THRESHOLD:
                     scores.append((s, a, b))
         scores.sort(key=lambda t: -t[0])

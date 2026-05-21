@@ -431,7 +431,7 @@ class BillDifference(Base):
     when this is the first text-bearing step.
 
     ``difference_content`` is a JSON-serialized hybrid payload
-    (parser_version, summary, nodes) — see ``backend/process/diff.py``.
+    (parser_version, summary, nodes) — see ``backend/process/diff/``.
     """
 
     __tablename__ = "bill_differences"

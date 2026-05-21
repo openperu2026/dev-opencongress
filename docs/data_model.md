@@ -137,7 +137,7 @@ Normative body sliced from each bill PDF: from the first matched heading (e.g. â
 
 Processed table: `bill_differences`.
 
-Precomputed text diff between a bill step and the most recent text-bearing predecessor. One row per `BillStep`; `step_id` identifies the "new" version. `difference_content` holds the JSON-serialized hybrid diff payload (`parser_version`, `summary`, `nodes`) produced by `backend/process/diff.py`; the renderer schema is documented in `compute_bill_difference` / `_build_payload` and consumed by the frontend per [`bill_difference_contract.md`](./bill_difference_contract.md).
+Precomputed text diff between a bill step and the most recent text-bearing predecessor. One row per `BillStep`; `step_id` identifies the "new" version. `difference_content` holds the JSON-serialized hybrid diff payload (`parser_version`, `summary`, `nodes`) produced by the `backend/process/diff/` package; the renderer schema is documented in `compute_bill_difference` / `_build_payload` and consumed by the frontend per [`bill_difference_contract.md`](./bill_difference_contract.md).
 
 | Column | Type | Key | Description |
 |---|---|---|---|

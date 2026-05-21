@@ -218,7 +218,7 @@ Implications for the frontend:
 | Renderer tests | `tests/app/test_diff_render.py` |
 | Template | `app/templates/bills/difference.html` |
 | CSS | `app/static/css/layout.css` (search for "Hybrid diff renderer") |
-| Structured payload schema | `backend/process/diff.py` (`_build_payload` docstring) |
+| Structured payload schema | `backend/process/diff/pipeline.py` (`_build_payload` docstring) |
 
 ---
 
@@ -261,7 +261,7 @@ This requires backend work that isn't done yet:
    punctuation and Spanish-specific opening marks (`¿`, `¡`).
 
 The structured payload schema is documented in
-`backend/process/diff.py` (`_build_payload` docstring). It looks like:
+`backend/process/diff/pipeline.py` (`_build_payload` docstring). It looks like:
 
 ```json
 {

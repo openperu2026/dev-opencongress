@@ -1,11 +1,8 @@
-from backend.process.diff import (
-    PARSER_VERSION,
-    _normalize_for_diff,
-    compute_bill_difference,
-)
-from backend.process.diff_line import line_diff
-from backend.process.diff_structural import align_nodes, parse_structure
-from backend.process.diff_word import word_diff
+from backend.process.diff import PARSER_VERSION, compute_bill_difference
+from backend.process.diff.pipeline import _normalize_for_diff
+from backend.process.diff.line import line_diff
+from backend.process.diff.structural import align_nodes, parse_structure
+from backend.process.diff.word import word_diff
 
 
 # ── compute_bill_difference type semantics ──────────────────────────────────
@@ -384,7 +381,7 @@ def test_indented_header_survives_reflow():
     # the lookahead missed those and the article got swallowed back into
     # the preamble.  Confirm an indented header (any amount of leading
     # whitespace) is now preserved as its own line.
-    from backend.process.diff_structural import parse_structure
+    from backend.process.diff.structural import parse_structure
 
     norm = _normalize_for_diff("preamble text\n   Artículo 5.- contenido")
     node_ids = [n.node_id for n in parse_structure(norm)]
@@ -392,7 +389,7 @@ def test_indented_header_survives_reflow():
 
 
 def test_indented_titulo_also_survives():
-    from backend.process.diff_structural import parse_structure
+    from backend.process.diff.structural import parse_structure
 
     norm = _normalize_for_diff("body\n\t\tTÍTULO II\nsiguiente")
     node_ids = [n.node_id for n in parse_structure(norm)]

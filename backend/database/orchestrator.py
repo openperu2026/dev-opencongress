@@ -82,6 +82,7 @@ class OpenPeruOrchestrator:
     """
 
     def __init__(self, db_url: str = settings.DB_URL, engine=None):
+        """Bind to ``db_url`` (or reuse ``engine``), ensure tables exist, and drop step/vote FKs."""
         self.db_engine = engine or create_engine(db_url, pool_pre_ping=True)
         self.DBSession = sessionmaker(
             bind=self.db_engine, autocommit=False, autoflush=False
@@ -104,6 +105,7 @@ class OpenPeruOrchestrator:
             return bool(last_ts and last_ts >= cutoff)
 
     def _get_approved_ids(self, model: Type[Bill] | Type[Motion]) -> list[str]:
+        """Return ids of Bills/Motions whose ``*_approved`` flag is True (never re-scrape these)."""
         with self.DBSession() as db:
             approved_col = (
                 model.bill_approved if model is Bill else model.motion_approved
@@ -146,6 +148,7 @@ class OpenPeruOrchestrator:
         self,
         raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
     ) -> int:
+        """Return the highest numeric id present in ``raw_model`` (0 if empty)."""
         with self.DBSession() as db:
             ids = db.scalars(select(raw_model.id).distinct()).all()
 
@@ -158,6 +161,7 @@ class OpenPeruOrchestrator:
         return max(int(item.split("_", 1)[1]) for item in ids)
 
     def _load_scraper_results(self, scraper_name: str) -> None:
+        """Persist a ScraperStats row for ``scraper_name`` and log a one-line summary."""
         stats = self.scraper_results[scraper_name]
         with self.DBSession() as db:
             upsert_scraper_run(db, scraper_name, stats)
@@ -166,6 +170,7 @@ class OpenPeruOrchestrator:
         )
 
     def _log_stage_summary(self, stage: str, stats: ProcessStats) -> None:
+        """Log processed/skipped/errors counts for a processing stage."""
         log_manager.console_logger().info(
             f"{stage}: processed={stats.processed}, skipped={stats.skipped}, errors={stats.errors}"
         )
@@ -461,6 +466,7 @@ class OpenPeruOrchestrator:
         flush_every: int = 100,
         entity_name: str = "items",
     ) -> ScraperStats:
+        """Scrape ids from (last_scraped+1) up to the remote max, flushing every ``flush_every`` rows."""
         start = self._get_last_id_scraped(raw_model) + 1
         end = get_last_id(entity_name)
         # TODO: update this for next congreso
@@ -504,6 +510,7 @@ class OpenPeruOrchestrator:
         flush_every: int = 100,
         entity_name: str = "items",
     ) -> ScraperStats:
+        """Re-scrape rows older than ``max_age_days`` and not yet approved, sleeping briefly every 10 ids."""
         pending_ids = self._get_ids_to_update(raw_model, model, max_age_days)
         start_time = datetime.now()
         count = 0
@@ -534,6 +541,7 @@ class OpenPeruOrchestrator:
         return ScraperStats(start_time, end_time, count)
 
     def _scrape_pending_documents(self) -> tuple[ScraperStats, ScraperStats]:
+        """Fetch documents for bills and motions still missing them; returns (bill_stats, motion_stats)."""
         from backend.scrapers.bills_documents import RawBillDocumentScraper
         from backend.scrapers.motions_documents import RawMotionDocumentScraper
 
@@ -577,6 +585,7 @@ class OpenPeruOrchestrator:
     # Processing internals
     # -----------------------------
     def _membership_dates(self, membership: Membership) -> tuple[date, date]:
+        """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28)."""
         seed = membership.start_date or membership.time_stamp
         leg_year = get_current_leg_year(seed)
         derived_start = date(leg_year, 7, 28)
@@ -597,6 +606,7 @@ class OpenPeruOrchestrator:
     def _upsert_organization_with_count(
         self, db, org_schema: Organization
     ) -> tuple[db_models.Organization, bool]:
+        """Upsert an organization; second return is True if this was a new insert."""
         pre = crud_core.find_organization(
             db,
             org_name=org_schema.org_name,
@@ -613,6 +623,7 @@ class OpenPeruOrchestrator:
         org: db_models.Organization,
         membership: Membership,
     ) -> db_models.Membership:
+        """Upsert a Membership row linking ``cong`` to ``org`` with derived dates and non-null extras."""
         start_date, end_date = self._membership_dates(membership)
         extra_fields = {
             "condicion": membership.condicion,
@@ -633,6 +644,7 @@ class OpenPeruOrchestrator:
         )
 
     def _process_congresistas(self) -> ProcessStats:
+        """Process unprocessed RawCongresista rows into Congresista + Organization + Membership records."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -717,6 +729,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_organization_definitions(self) -> ProcessStats:
+        """Load chambers, committees, and admin organizations into the clean Organization table."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -801,6 +814,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_admin_memberships(self) -> ProcessStats:
+        """Link congresistas to admin organizations; marks RawOrganization processed only if all members resolved."""
         stats = ProcessStats()
         with self.DBSession() as raw_db, self.DBSession() as db:
             organizations = (
@@ -853,6 +867,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_bancada_definitions(self) -> ProcessStats:
+        """Upsert Organization rows for each bancada in the 2021-2026 legislative period."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -899,6 +914,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_bancada_memberships(self) -> ProcessStats:
+        """Link congresistas to bancada organizations; only marks raw processed when every member resolves."""
         stats = ProcessStats()
         with self.DBSession() as raw_db, self.DBSession() as db:
             rows = (
@@ -963,6 +979,7 @@ class OpenPeruOrchestrator:
     def _process_bills(
         self, *, include_documents: bool, limit: int | None
     ) -> ProcessStats:
+        """Process unprocessed RawBill rows into Bill + steps + org/cong relations + (optionally) text and diffs."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -1208,20 +1225,11 @@ class OpenPeruOrchestrator:
             crud_bills.get_billtext_for_step(db, bill_id, s.step_id) for s in steps
         ]
 
-        def _prior_with_text(
-            idx: int,
-        ) -> tuple[db_models.BillStep | None, db_models.BillText | None]:
-            for j in range(idx - 1, -1, -1):
-                if billtexts[j] is not None:
-                    return steps[j], billtexts[j]
-            return None, None
-
-        for i, step in enumerate(steps):
-            new_bt = billtexts[i]
-            prev_step, old_bt = _prior_with_text(i)
-
+        prev_step: db_models.BillStep | None = None
+        prev_bt: db_models.BillText | None = None
+        for step, new_bt in zip(steps, billtexts):
             result = compute_bill_difference(
-                old_bt.text if old_bt else None,
+                prev_bt.text if prev_bt else None,
                 new_bt.text if new_bt else None,
             )
 
@@ -1236,9 +1244,14 @@ class OpenPeruOrchestrator:
                 else None,
             )
 
+            if new_bt is not None:
+                prev_step = step
+                prev_bt = new_bt
+
     def _process_motions(
         self, *, include_documents: bool, limit: int | None
     ) -> ProcessStats:
+        """Process unprocessed RawMotion rows into Motion + steps + org/cong relations + (optionally) text."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -1370,6 +1383,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_leyes(self, *, limit: int | None) -> ProcessStats:
+        """Process unprocessed RawLey rows into Ley records, skipping any whose referenced Bill is missing."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
