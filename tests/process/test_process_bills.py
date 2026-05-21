@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 import backend.process.bills as mod
-from backend import TypeRoleBill, TypeBillStep
+from backend import OcrModel, TypeRoleBill, TypeBillStep
 
 
 def _raw_bill(
@@ -50,6 +50,7 @@ def _raw_page(
     file_id="12",
     page_num=1,
     text="",
+    ocr_model=OcrModel.CHANDRA.value,
 ):
     return SimpleNamespace(
         bill_id=bill_id,
@@ -57,6 +58,7 @@ def _raw_page(
         file_id=file_id,
         page_num=page_num,
         text=text,
+        ocr_model=ocr_model,
     )
 
 
@@ -274,4 +276,19 @@ def test_process_bill_text_raises_when_body_missing():
     pages = [_raw_page(text="Texto sin encabezado")]
 
     with pytest.raises(ValueError):
+        mod.process_bill_text(pages)
+
+
+def test_process_bill_text_raises_on_empty_pages():
+    with pytest.raises(ValueError, match="No raw pages"):
+        mod.process_bill_text([])
+
+
+def test_process_bill_text_raises_on_mixed_ocr_models():
+    pages = [
+        _raw_page(page_num=1, text="FÓRMULA LEGAL\nArticulo 1."),
+        _raw_page(page_num=2, text="Articulo 2.", ocr_model=OcrModel.TESSERACT.value),
+    ]
+
+    with pytest.raises(ValueError, match="mix OCR models"):
         mod.process_bill_text(pages)
