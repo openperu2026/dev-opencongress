@@ -383,11 +383,13 @@ class OpenPeruOrchestrator:
         process_motions: bool = True,
         process_leyes: bool = True,
         process_others: bool = True,
+        process_bill_differences: bool = True,
         include_documents: bool = True,
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
         first_load: bool = False,
+        bill_differences_limit: int | None = None,
     ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
@@ -435,6 +437,14 @@ class OpenPeruOrchestrator:
                     first_load=first_load
                 )
                 self._log_stage_summary("bill_summary", summary["bill_summary"])
+
+        if process_bill_differences:
+            with log_manager.stage("process", "bill_differences"):
+                console.info("Starting bill differences processing")
+                summary["bill_differences"] = self._process_bill_differences(
+                    limit=bill_differences_limit,
+                )
+                self._log_stage_summary("bill_differences", summary["bill_differences"])
 
         if process_motions:
             with log_manager.stage("process", "motions"):
@@ -1106,16 +1116,6 @@ class OpenPeruOrchestrator:
                     )
                     db.rollback()
                     stats.errors += 1
-                    continue
-
-                # Diff precompute is isolated from the bill load: a failure
-                # here logs but does not roll back upstream rows.
-                try:
-                    self._compute_bill_differences(db, bill.id)
-                except Exception as diff_exc:
-                    logger.exception(
-                        f"Diff computation failed for bill {bill.id}: {diff_exc}"
-                    )
 
             db.commit()
             raw_db.commit()
@@ -1196,6 +1196,44 @@ class OpenPeruOrchestrator:
             f"clean_updated={clean_updated}"
         )
 
+        return stats
+
+    def _process_bill_differences(self, *, limit: int | None) -> ProcessStats:
+        """Recompute diffs for every bill that has at least one ``bill_texts`` row.
+
+        Driven off ``bill_texts`` rather than ``RawBill`` so this stage is
+        independent of raw bill processing — it can be re-run on its own
+        after a ``PARSER_VERSION`` bump or a fix to the diff package without
+        having to mark raw bills unprocessed.
+        """
+        stats = ProcessStats()
+        with self.DBSession() as db:
+            query = (
+                select(db_models.BillText.bill_id)
+                .distinct()
+                .order_by(db_models.BillText.bill_id)
+            )
+            if limit is not None:
+                query = query.limit(limit)
+            bill_ids = db.execute(query).scalars().all()
+
+            for bill_id in tqdm(bill_ids, desc="Bill differences"):
+                # Commit per bill: each bill is its own atomic unit, so a
+                # failure on one doesn't roll back diffs already written for
+                # earlier bills in the same batch.
+                try:
+                    self._compute_bill_differences(db, bill_id)
+                    db.commit()
+                    stats.processed += 1
+                except Exception as exc:
+                    logger.exception(
+                        f"Error computing bill differences for bill_id={bill_id}: {exc}"
+                    )
+                    db.rollback()
+                    stats.errors += 1
+        logger.info(
+            f"[bill_differences] bills_total={len(bill_ids)} processed={stats.processed} errors={stats.errors}"
+        )
         return stats
 
     def _compute_bill_differences(self, db, bill_id: str) -> None:

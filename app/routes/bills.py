@@ -219,7 +219,10 @@ def bill_difference(bill_id, step_id):
             if diff and diff.difference_content
             else "none"
         )
-        difference_type = diff.difference_type if diff else "unavailable"
+        # No row means the diff stage hasn't reached this step yet — distinct
+        # from ``unavailable``, which means we tried and the new text is
+        # missing. The template's final ``else`` branch handles ``None``.
+        difference_type = diff.difference_type if diff else None
         etag = f"bd-{bill_id}-{step_id}-{difference_type}-{content_hash}-r{RENDERER_VERSION}"
 
         if request.if_none_match.contains(etag):

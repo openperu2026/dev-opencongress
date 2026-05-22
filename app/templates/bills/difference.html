@@ -4,7 +4,7 @@
 <div class="bill-header">
   <h1>BILL Nº {{ bill.id }}: {{ bill.title }}</h1>
   <div class="bill-meta">
-    <p><strong>Step:</strong> {{ step.step_type }}</p>
+    <p><strong>Step:</strong> {{ step.step_type.value }}</p>
   </div>
   <a class="diff-back-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">← Back to bill</a>
 </div>
