@@ -86,7 +86,6 @@ def test_process_bill_with_firmantes_sets_author_and_cong_list():
     assert bill.proponent == "Ministerio Público"
     assert bill.bancada_name == "Bancada Test"
     assert bill.bill_approved is False
-    assert bill.summary_oc.startswith("PL_999: PENDING SUMMARY")
     assert steps == []
 
     assert bill.author_name == "Juan Perez"

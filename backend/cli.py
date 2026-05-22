@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip loading documents in processing stage",
     )
+    parser.add_argument(
+        "--first-summary",
+        action="store_true",
+        help="Computes the first processing of summaries for bills",
+    )
     return parser
 
 
@@ -108,4 +113,5 @@ def main(argv: list[str] | None = None) -> None:
             process_leyes=run_leyes,
             process_others=run_others,
             include_documents=not args.no_documents,
+            first_load=args.first_summary,
         )

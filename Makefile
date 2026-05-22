@@ -16,5 +16,8 @@ scrape-leyes:
 scrape-documents:
 	uv run -m backend --scrape --skip-processing --scrape-documents
 
+process-first-summary:
+	uv run -m backend --only-bills --first-summary
+
 process:
 	uv run -m backend

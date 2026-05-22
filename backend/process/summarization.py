@@ -1,10 +1,11 @@
-from datetime import datetime
+from datetime import datetime, date
 import re
 import sys
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend import TypeBillStep
 from backend.config import settings
 from backend.database import models as db_models
 
@@ -27,6 +28,38 @@ MONTHS_ES = {
 OBSERVED_AUTOGRAPH_NEEDLES = ("autógrafa observada", "autografa observada")
 MAJORITY_NEEDLES = ("en mayoría", "en mayoria")
 NO_APPROVAL_NEEDLES = ("no aprobación", "no aprobacion", "archivo")
+APPROVAL_NEEDLES = (
+    "aprobado",
+    "aprobada",
+    "aprueba",
+    "acuerdo del pleno",
+    "exoneración de segunda votación",
+    "exoneracion de segunda votación",
+    "exoneración de segunda votacion",
+    "exoneracion de segunda votacion",
+)
+NEGATIVE_APPROVAL_NEEDLES = (
+    "no aprobado",
+    "no aprobada",
+    "no aprobación",
+    "no aprobacion",
+    "no alcanzó",
+    "no alcanzo",
+)
+DEBATE_TYPES = {
+    TypeBillStep.DEBATE_EN_EL_PLENO,
+    TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE,
+}
+COMMITTEE_DECISION_TYPES = {
+    TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
+    TypeBillStep.EXONERACION_DE_DICTAMEN,
+}
+INSISTENCE_TYPES = {
+    TypeBillStep.VOTACION,
+    TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
+    TypeBillStep.EXONERACION_DE_DICTAMEN,
+    TypeBillStep.RECONSIDERACION,
+}
 
 
 def _session_factory():
@@ -38,6 +71,16 @@ def _enum_text(value) -> str:
     if value is None:
         return ""
     return value.value if hasattr(value, "value") else str(value)
+
+
+def _step_type(step: db_models.BillStep) -> TypeBillStep | None:
+    value = step.step_type
+    if isinstance(value, TypeBillStep):
+        return value
+    try:
+        return TypeBillStep(value)
+    except ValueError:
+        return None
 
 
 def _clean_text(text: str | None) -> str:
@@ -101,16 +144,24 @@ def _normalize_caps_sentence(text: str) -> str:
     return "".join(normalized)
 
 
-def _format_date(date_value: datetime | None) -> str:
+def _format_date(date_value: date | None) -> str:
     if date_value is None:
         return ""
     return f"{date_value.day} de {MONTHS_ES[date_value.month]} de {date_value.year}"
 
 
-def _format_month_year(date_value: datetime | None) -> str:
+def _format_month_year(date_value: date | None) -> str:
     if date_value is None:
         return ""
     return f"{MONTHS_ES[date_value.month]} de {date_value.year}"
+
+
+def _date_only(date_value: date | datetime | None) -> date | None:
+    if date_value is None:
+        return None
+    if isinstance(date_value, datetime):
+        return date_value.date()
+    return date_value
 
 
 def _format_elapsed_time(days: int) -> str:
@@ -143,36 +194,43 @@ def _format_elapsed_time(days: int) -> str:
     return elapsed_text
 
 
-def _build_context(bill_id: str, steps) -> str:
+def _build_context(bill_id: str, steps: list[db_models.BillStep]) -> str:
     lines = [
         f"Proyecto: {bill_id}",
         "Linea de tiempo de pasos legislativos (en orden cronologico):",
     ]
     for idx, step in enumerate(steps, start=1):
-        step_date = step.step_date.date().isoformat() if step.step_date else ""
+        step_date = step.step_date.isoformat() if step.step_date else ""
         step_type = _enum_text(step.step_type)
         line = f"{idx}. [{step_date}] ({step_type}) {_clean_text(step.step_detail)}"
         lines.append(line)
     return "\n".join(lines)
 
 
-def _score_step(step) -> int:
-    step_type = _enum_text(step.step_type)
+def _score_step(step: db_models.BillStep) -> int:
+    step_type = _step_type(step)
     detail = _clean_text(step.step_detail).lower()
 
     base_scores = {
-        "promulgated": 100,
-        "published": 95,
-        "approved": 85,
-        "vote": 75,
-        "debate": 70,
-        "committee stage": 65,
-        "text update": 60,
-        "presented": 50,
-        "assigned to committee": 45,
-        "reconsideration": 40,
+        TypeBillStep.PUBLICADO: 100,
+        TypeBillStep.PROMULGADO: 95,
+        TypeBillStep.AUTOGRAFA: 90,
+        TypeBillStep.ARCHIVADO: 87,
+        TypeBillStep.RETIRADO: 87,
+        TypeBillStep.RECHAZADO: 87,
+        TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION: 60,
+        TypeBillStep.PRESENTADO: 50,
+        TypeBillStep.EN_COMISION: 45,
+        TypeBillStep.RECONSIDERACION: 40,
     }
+    for debate_type in DEBATE_TYPES:
+        base_scores[debate_type] = 70
+    for committee_type in COMMITTEE_DECISION_TYPES:
+        base_scores[committee_type] = 65
+
     score = base_scores.get(step_type, 20)
+    if step_type == TypeBillStep.VOTACION:
+        score = 85 if _is_approved_vote(step) else 75
 
     if any(needle in detail for needle in OBSERVED_AUTOGRAPH_NEEDLES):
         score = max(score, 94)
@@ -186,14 +244,14 @@ def _score_step(step) -> int:
     return score
 
 
-def _rank_steps(steps):
+def _rank_steps(steps: list[db_models.BillStep]) -> list[dict]:
     ranked = []
     for step in steps:
         ranked.append(
             {
                 "step": step,
                 "score": _score_step(step),
-                "type": _enum_text(step.step_type),
+                "type": _step_type(step),
                 "detail": _clean_text(step.step_detail),
             }
         )
@@ -201,16 +259,24 @@ def _rank_steps(steps):
     ranked.sort(
         key=lambda item: (
             -item["score"],
-            datetime.max - (item["step"].step_date or datetime.min),
-            item["type"],
+            date.max - (_date_only(item["step"].step_date) or date.min),
+            _enum_text(item["type"]),
         )
     )
     return ranked
 
 
-def _find_ranked_step(ranked_steps, accepted_types, needles=()):
+def _find_ranked_step(
+    ranked_steps: list[dict],
+    accepted_types: set[TypeBillStep],
+    needles=(),
+    predicate=None,
+):
     for item in ranked_steps:
         if item["type"] not in accepted_types:
+            continue
+
+        if predicate is not None and not predicate(item["step"]):
             continue
 
         if not needles:
@@ -223,10 +289,44 @@ def _find_ranked_step(ranked_steps, accepted_types, needles=()):
     return None
 
 
-def _paragraph_one(bill_id: str, bill, steps) -> str:
-    start_date = (
-        bill.presentation_date if bill.presentation_date else steps[0].step_date
+def _detail_contains(step: db_models.BillStep, needles: tuple[str, ...]) -> bool:
+    detail = _clean_text(step.step_detail).lower()
+    return any(needle in detail for needle in needles)
+
+
+def _is_approved_vote(step: db_models.BillStep) -> bool:
+    if _step_type(step) != TypeBillStep.VOTACION:
+        return False
+
+    detail = _clean_text(step.step_detail).lower()
+    if any(needle in detail for needle in NEGATIVE_APPROVAL_NEEDLES):
+        return False
+    return any(needle in detail for needle in APPROVAL_NEEDLES)
+
+
+def _is_observed_autograph(step: db_models.BillStep) -> bool:
+    return _step_type(step) == TypeBillStep.AUTOGRAFA and _detail_contains(
+        step,
+        OBSERVED_AUTOGRAPH_NEEDLES,
     )
+
+
+def _has_second_vote_exoneration(step: db_models.BillStep) -> bool:
+    return _detail_contains(
+        step,
+        (
+            "exoneración de segunda votación",
+            "exoneracion de segunda votación",
+            "exoneración de segunda votacion",
+            "exoneracion de segunda votacion",
+        ),
+    )
+
+
+def _paragraph_one(
+    bill_id: str, bill: db_models.Bill, steps: list[db_models.BillStep]
+) -> str:
+    start_date = steps[0].step_date
     title = _clean_text(bill.title)
     start_month_year = _format_month_year(start_date)
 
@@ -238,27 +338,34 @@ def _paragraph_one(bill_id: str, bill, steps) -> str:
 
     majority_committee_step = _find_ranked_step(
         ranked_steps,
-        {"committee stage"},
+        COMMITTEE_DECISION_TYPES,
         needles=MAJORITY_NEEDLES,
     )
-    debate_step = _find_ranked_step(ranked_steps, {"debate"})
-    approved_step = _find_ranked_step(ranked_steps, {"approved"})
+    debate_step = _find_ranked_step(ranked_steps, DEBATE_TYPES)
+    approved_step = _find_ranked_step(
+        ranked_steps,
+        {TypeBillStep.VOTACION},
+        predicate=_is_approved_vote,
+    )
     exoneration_step = _find_ranked_step(
         ranked_steps,
-        {"approved", "vote", "exemption"},
-        needles=("exoneración de segunda votación",),
+        {TypeBillStep.VOTACION},
+        predicate=_has_second_vote_exoneration,
     )
     exec_observed_step = _find_ranked_step(
         ranked_steps,
-        {"text update"},
-        needles=OBSERVED_AUTOGRAPH_NEEDLES,
+        {TypeBillStep.AUTOGRAFA},
+        predicate=_is_observed_autograph,
     )
-    reconsideration_step = _find_ranked_step(ranked_steps, {"reconsideration"})
+    reconsideration_step = _find_ranked_step(
+        ranked_steps,
+        {TypeBillStep.RECONSIDERACION},
+    )
     reconsideration_rejected = False
     if reconsideration_step:
         reconsideration_rejected_step = _find_ranked_step(
             ranked_steps,
-            {"approved"},
+            {TypeBillStep.VOTACION},
             needles=("reconsideración", "rechazada"),
         )
         if reconsideration_rejected_step:
@@ -268,8 +375,9 @@ def _paragraph_one(bill_id: str, bill, steps) -> str:
 
     insistence_approval_step = _find_ranked_step(
         ranked_steps,
-        {"approved"},
+        {TypeBillStep.VOTACION},
         needles=("insistencia",),
+        predicate=_is_approved_vote,
     )
     if exec_observed_step and not insistence_approval_step:
         if debate_step:
@@ -301,14 +409,14 @@ def _paragraph_one(bill_id: str, bill, steps) -> str:
                 "con exoneración de segunda votación."
             )
     else:
-        withdrawn_step = _find_ranked_step(ranked_steps, {"withdrawn"})
+        withdrawn_step = _find_ranked_step(ranked_steps, {TypeBillStep.RETIRADO})
         archived_or_rejected_step = _find_ranked_step(
             ranked_steps,
-            {"archived", "rejected", "withdrawn"},
+            {TypeBillStep.ARCHIVADO, TypeBillStep.RECHAZADO, TypeBillStep.RETIRADO},
         )
         no_approval_step = _find_ranked_step(
             ranked_steps,
-            {"committee stage", "archived"},
+            COMMITTEE_DECISION_TYPES | {TypeBillStep.ARCHIVADO},
             needles=NO_APPROVAL_NEEDLES,
         )
 
@@ -363,17 +471,17 @@ def _paragraph_two(bill, steps) -> str:
 
     exec_observed_step = _find_ranked_step(
         ranked_steps,
-        {"text update"},
-        needles=OBSERVED_AUTOGRAPH_NEEDLES,
+        {TypeBillStep.AUTOGRAFA},
+        predicate=_is_observed_autograph,
     )
     insistence_step = _find_ranked_step(
         ranked_steps,
-        {"approved", "committee stage", "reconsideration"},
+        INSISTENCE_TYPES,
         needles=("insistencia",),
     )
 
-    promulgated_step = _find_ranked_step(ranked_steps, {"promulgated"})
-    published_step = _find_ranked_step(ranked_steps, {"published"})
+    promulgated_step = _find_ranked_step(ranked_steps, {TypeBillStep.PROMULGADO})
+    published_step = _find_ranked_step(ranked_steps, {TypeBillStep.PUBLICADO})
 
     # Use the observation and insistence narrative only when both events
     # are present.
@@ -389,9 +497,9 @@ def _paragraph_two(bill, steps) -> str:
     elif exec_observed_step and not insistence_step:
         observed_month_year = _format_month_year(exec_observed_step.step_date)
         status_text = _clean_text(bill.status).lower()
-        last_step_type = _enum_text(steps[-1].step_type)
+        last_step_type = _step_type(steps[-1])
 
-        if last_step_type == "assigned to committee" or "comisión" in status_text:
+        if last_step_type == TypeBillStep.EN_COMISION or "comisión" in status_text:
             sentence_one = (
                 f"En {observed_month_year}, el Poder Ejecutivo observó "
                 "la autógrafa y el proyecto retornó a comisión para su "
@@ -406,9 +514,9 @@ def _paragraph_two(bill, steps) -> str:
     else:
         # When there is no special observation pattern, summarize the elapsed
         # span from the first to the last step.
-        first_date = steps[0].step_date
-        last_date = steps[-1].step_date
-        elapsed_days = (last_date.date() - first_date.date()).days
+        first_date = _date_only(steps[0].step_date)
+        last_date = _date_only(steps[-1].step_date)
+        elapsed_days = (last_date - first_date).days
         elapsed_text = _format_elapsed_time(elapsed_days)
         sentence_one = (
             "El último estado identificado fue del "
@@ -444,6 +552,23 @@ def _paragraph_two(bill, steps) -> str:
         )
 
     return f"{sentence_one} {sentence_two}"
+
+
+def summarize_bill_from_steps(bill: db_models.Bill, steps: list[db_models.BillStep]):
+    context = _build_context(bill.id, steps)
+    paragraph_one = _paragraph_one(bill.id, bill, steps).strip()
+
+    if len(steps) <= 5:
+        summary = paragraph_one
+    else:
+        paragraph_two = _paragraph_two(bill, steps).strip()
+        summary = f"{paragraph_one}\n\n{paragraph_two}"
+
+    return {
+        "bill_id": bill.id,
+        "context": context,
+        "summary": summary,
+    }
 
 
 def summarize_bill_from_db(bill_id: str) -> dict:
@@ -482,20 +607,7 @@ def summarize_bill_from_db(bill_id: str) -> dict:
                 ),
             }
 
-        context = _build_context(bill_id, steps)
-        paragraph_one = _paragraph_one(bill_id, bill, steps).strip()
-
-        if len(steps) <= 5:
-            summary = paragraph_one
-        else:
-            paragraph_two = _paragraph_two(bill, steps).strip()
-            summary = f"{paragraph_one}\n\n{paragraph_two}"
-
-        return {
-            "bill_id": bill_id,
-            "context": context,
-            "summary": summary,
-        }
+    return summarize_bill_from_steps(bill, steps)
 
 
 if __name__ == "__main__":
