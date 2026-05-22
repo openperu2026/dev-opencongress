@@ -65,7 +65,7 @@ def test_returns_only_requested_ocr_model(session):
 
 
 def test_defaults_to_chandra(session):
-    """Bills default to the chandraOCR pages without an explicit argument."""
+    """Bills default to the chandra2 pages without an explicit argument."""
     _seed_document(session)
     session.add_all(
         [
