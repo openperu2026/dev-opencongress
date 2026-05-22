@@ -6,7 +6,14 @@ from backend.database import models as db_models
 from backend.database.crud import pipeline_bills as crud_bills
 from backend.database.crud import pipeline_motions as crud_motions
 from backend.database.orchestrator import OpenPeruOrchestrator
-from backend.database.raw_models import RawBill, RawLey, RawMotion
+from backend.database.raw_models import (
+    RawBill,
+    RawBillDocument,
+    RawBillPage,
+    RawLey,
+    RawMotion,
+)
+from backend import OcrModel
 from backend.database.crud.pipeline_core import ProcessStats
 from backend.process import schema
 from backend import TypeBillStep, TypeMotionStep
@@ -97,6 +104,111 @@ def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrat
         assert bill.author_id is None
         assert raw.processed is True
         assert db.query(db_models.BillCongresistas).count() == 0
+
+
+def test_process_bills_marks_raw_pages_processed_when_bill_text_extracted(
+    orchestrator,
+):
+    """When include_documents=True and bill text is extracted, the raw pages
+    that fed the extraction must be flipped to processed=True alongside the
+    raw document."""
+    bill_id = "2026_2"
+    step_id = "5"
+    file_id = "50"
+    presentation_date = datetime(2026, 1, 10)
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        db.add(
+            RawBill(
+                id=bill_id,
+                timestamp=presentation_date,
+                general=json.dumps(
+                    {
+                        "fecPresentacion": "2026-01-10",
+                        "titulo": "Proyecto con texto",
+                        "sumilla": "Resumen",
+                        "observaciones": None,
+                        "desEstado": "Presentado",
+                        "desProponente": "Ministerio Público",
+                        "desGpar": "Bancada Ausente",
+                    }
+                ),
+                congresistas=json.dumps([]),
+                steps=json.dumps([]),
+                committees=json.dumps([]),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.add(
+            RawBillDocument(
+                timestamp=presentation_date,
+                bill_id=bill_id,
+                step_id=step_id,
+                file_id=file_id,
+                step_date=presentation_date,
+                url="https://example.com/doc.pdf",
+                last_update=True,
+                processed=False,
+            )
+        )
+        db.add_all(
+            [
+                RawBillPage(
+                    timestamp=presentation_date,
+                    bill_id=bill_id,
+                    step_id=step_id,
+                    file_id=file_id,
+                    page_num=1,
+                    text="FÓRMULA LEGAL\nArticulo 1. Inicio.",
+                    ocr_model=OcrModel.CHANDRA.value,
+                    last_update=True,
+                    processed=False,
+                ),
+                RawBillPage(
+                    timestamp=presentation_date,
+                    bill_id=bill_id,
+                    step_id=step_id,
+                    file_id=file_id,
+                    page_num=2,
+                    text="Articulo 2. Final.",
+                    ocr_model=OcrModel.CHANDRA.value,
+                    last_update=True,
+                    processed=False,
+                ),
+            ]
+        )
+        db.commit()
+
+    stats = orchestrator._process_bills(include_documents=True, limit=None)
+
+    with orchestrator.DBSession() as db:
+        raw_doc = db.get(RawBillDocument, (bill_id, step_id, file_id))
+        pages = (
+            db.query(RawBillPage)
+            .filter(
+                RawBillPage.bill_id == bill_id,
+                RawBillPage.step_id == step_id,
+                RawBillPage.file_id == file_id,
+            )
+            .order_by(RawBillPage.page_num)
+            .all()
+        )
+        bill_text = db.get(db_models.BillText, (bill_id, int(step_id), int(file_id), 1))
+
+        assert stats.processed == 1
+        assert stats.errors == 0
+        assert bill_text is not None
+        assert raw_doc.processed is True
+        assert len(pages) == 2
+        assert all(page.processed is True for page in pages)
 
 
 def test_process_motions_loads_motion_when_author_is_missing(orchestrator):

@@ -3,6 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from sqlalchemy.orm import Session
 
+from backend import OcrModel
 from backend.database import models as db_models
 from backend.process import schema
 from backend.database.crud.pipeline_core import (
@@ -149,14 +150,26 @@ def find_raw_bill_documents(raw_db: Session, bill_id: str) -> list[RawBillDocume
 
 
 def find_raw_bill_pages(
-    raw_db: Session, bill_id: str, step_id: str | int, file_id: str | int
+    raw_db: Session,
+    bill_id: str,
+    step_id: str | int,
+    file_id: str | int,
+    ocr_model: str = OcrModel.CHANDRA.value,
 ) -> list[RawBillPage]:
+    """Return the latest pages of a bill document for a single OCR model.
+
+    Since the ``feature/data_migration`` migration, ``raw_bill_pages`` is keyed
+    by ``ocr_model`` as well, so a document can hold one page row per model.
+    Filtering by ``ocr_model`` keeps the page sequence unambiguous; bills are
+    OCR'd with chandraOCR, hence the default.
+    """
     return (
         raw_db.query(RawBillPage)
         .filter(
             RawBillPage.bill_id == bill_id,
             RawBillPage.step_id == str(step_id),
             RawBillPage.file_id == str(file_id),
+            RawBillPage.ocr_model == ocr_model,
             RawBillPage.last_update.is_(True),
         )
         .order_by(RawBillPage.page_num)

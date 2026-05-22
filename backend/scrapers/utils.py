@@ -13,6 +13,30 @@ import cv2
 import os
 import shutil
 
+URLS = {
+    "Bills": {
+        "method": "POST",
+        "url": "https://api.congreso.gob.pe/spley-portal-service/proyecto-ley/lista-con-filtro",
+        "referer": "https://wb2server.congreso.gob.pe/spley-portal/",
+        "data_var": "proyectos",
+        "id_var": "pleyNum",
+    },
+    "Motions": {
+        "method": "POST",
+        "url": "https://api.congreso.gob.pe/smociones-portal-service/mocion/lista-con-filtros",
+        "referer": "https://wb2server.congreso.gob.pe/smociones-portal/",
+        "data_var": "mociones",
+        "id_var": "mocionNum",
+    },
+    "Leyes": {
+        "method": "GET",
+        "url": "https://api.congreso.gob.pe/adlp-visor-service/ley/leyes",
+        "referer": "https://wb2server.congreso.gob.pe/adlp-visor/",
+        "data_var": "leyes",
+        "id_var": "numLey",
+    },
+}
+
 
 _TESSERACT_CONFIGURED = False
 
@@ -226,3 +250,43 @@ async def fetch_multiple_urls_async(
 
         html_responses = await asyncio.gather(*tasks)
         return [fromstring(html) for html in html_responses if html]
+
+
+def get_last_id(entity: str) -> int:
+    config = URLS[entity]
+
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "User-Agent": "Mozilla/5.0",
+        "Referer": config["referer"],
+    }
+
+    with httpx.Client(headers=headers, timeout=30) as client:
+        if config["method"] == "POST":
+            payload = {
+                "perParId": 2021,
+                "pageSize": 10,
+                "rowStart": 0,
+            }
+            r = client.post(config["url"], json=payload)
+
+        else:
+            params = {
+                "pagina": 1,
+                "tam_pagina": 25,
+                "tiponorma": 0,
+                "nroley1": 0,
+                "nroley2": 0,
+                "fecha1": "",
+                "fecha2": "",
+                "titulo": "",
+            }
+            r = client.get(config["url"], params=params)
+
+        r.raise_for_status()
+        data = r.json()
+
+    if entity == "Leyes":
+        return int(data["data"][0][config["id_var"]])
+
+    return data["data"][config["data_var"]][0][config["id_var"]]

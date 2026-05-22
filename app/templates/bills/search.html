@@ -1,28 +1,32 @@
 {% extends "base.html" %}
 
 {% block content %}
-<form method="get" action="{{ url_for('bills.index') }}">
-    <div class="searching-container">
-        <h1 class="search-title">Search the Bill</h1>
+<form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
+    <h1 class="search-title">{{_('Search the bill by:')}}</h1>
+    <div class="bar-search">
+        <div class="searching-container">
+            <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="{{_('Title')}}">
+        </div>
 
-        <h3>Bill title</h3>
-        <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="Write a bill title">
+        <div class="searching-container">
+            <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="{{_('Author')}}">
+        </div>
 
-        <h3>Author</h3>
-        <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="Write an author name">
+        <button type="submit" class="search-icon-button" aria-label="Search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
     </div>
-    <button type="submit">Search</button>
 </form>
 
 
 {% if bills %}
     <div class = "search-criteria">
-        <h3>Search Criteria</h3>
+        <h3>{{_('Search Criteria')}}</h3>
         {% if title_q %}
-            <span>Title: {{title_q}}</span>
+            <span>{{_('Title')}}: {{title_q}}</span>
         {% endif %}
         {% if author_display %}
-            <span>Author: {{author_display}}</span>
+            <span>{{_('Author')}}: {{author_display}}</span>
         {% endif %}
     </div>
 
@@ -36,7 +40,7 @@
         {% endfor %}
     </ul>
 {% elif title_q or author_q %}
-    <p>No matching bills found.</p>
+    <p>{{_('No matching bills found.')}}</p>
 {% endif %}
 
 {% endblock %}

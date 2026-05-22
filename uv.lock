@@ -104,6 +104,15 @@ wheels = [
 ]
 
 [[package]]
+name = "babel"
+version = "2.18.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/b2/51899539b6ceeeb420d40ed3cd4b7a40519404f9baf3d4ac99dc413a834b/babel-2.18.0.tar.gz", hash = "sha256:b80b99a14bd085fcacfa15c9165f651fbb3406e66cc603abf11c5750937c992d", size = 9959554, upload-time = "2026-02-01T12:30:56.078Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/f5/21d2de20e8b8b0408f0681956ca2c69f1320a3848ac50e6e7f39c6159675/babel-2.18.0-py3-none-any.whl", hash = "sha256:e2b422b277c2b9a9630c1d7903c2a00d0830c409c59ac8cae9081c92f1aeba35", size = 10196845, upload-time = "2026-02-01T12:30:53.445Z" },
+]
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.14.3"
 source = { registry = "https://pypi.org/simple" }
@@ -685,6 +694,21 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/26/00/35d85dcce6c57fdc871f3867d465d780f302a175ea360f62533f12b27e2b/flask-3.1.3.tar.gz", hash = "sha256:0ef0e52b8a9cd932855379197dd8f94047b359ca0a78695144304cb45f87c9eb", size = 759004 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7f/9c/34f6962f9b9e9c71f6e5ed806e0d0ff03c9d1b0b2340088a0cf4bce09b18/flask-3.1.3-py3-none-any.whl", hash = "sha256:f4bcbefc124291925f1a26446da31a5178f9483862233b23c0c96a20701f670c", size = 103424 },
+]
+
+[[package]]
+name = "flask-babel"
+version = "4.0.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "babel" },
+    { name = "flask" },
+    { name = "jinja2" },
+    { name = "pytz" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/58/1a/4c65e3b90bda699a637bfb7fb96818b0a9bbff7636ea91aade67f6020a31/flask_babel-4.0.0.tar.gz", hash = "sha256:dbeab4027a3f4a87678a11686496e98e1492eb793cbdd77ab50f4e9a2602a593", size = 10178, upload-time = "2023-10-02T01:10:49.914Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/14/c2/e0ab5abe37882e118482884f2ec660cd06da644ddfbceccf5f88f546b574/flask_babel-4.0.0-py3-none-any.whl", hash = "sha256:638194cf91f8b301380f36d70e2034c77ee25b98cb5d80a1626820df9a6d4625", size = 9602, upload-time = "2023-10-02T01:10:48.58Z" },
 ]
 
 [[package]]
@@ -1799,11 +1823,13 @@ source = { virtual = "." }
 dependencies = [
     { name = "accelerate" },
     { name = "asyncio" },
+    { name = "babel" },
     { name = "boto3" },
     { name = "chandra-ocr" },
     { name = "coverage" },
     { name = "fitz" },
     { name = "flask" },
+    { name = "flask-babel" },
     { name = "httpx", extra = ["http2"] },
     { name = "ipykernel" },
     { name = "ipython" },
@@ -1847,11 +1873,13 @@ dev = [
 requires-dist = [
     { name = "accelerate", specifier = ">=1.13.0" },
     { name = "asyncio", specifier = ">=3.4.3" },
+    { name = "babel", specifier = ">=2.18.0" },
     { name = "boto3", specifier = ">=1.35.0" },
     { name = "chandra-ocr", specifier = ">=0.2.0" },
     { name = "coverage", specifier = ">=7.13.5" },
     { name = "fitz", specifier = ">=0.0.1.dev2" },
     { name = "flask", specifier = ">=3.1.3" },
+    { name = "flask-babel", specifier = ">=4.0.0" },
     { name = "httpx", extras = ["http2"], specifier = ">=0.28.1" },
     { name = "ipykernel", specifier = ">=6.29.5" },
     { name = "ipython", specifier = ">=9.0.2" },
@@ -2578,6 +2606,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/96/47/e1aa6dd78686a707407c1fe2131d46e4e9fbd3a225180d58926578fadb06/pyxnat-1.6.4.tar.gz", hash = "sha256:68f918e80f5ee8b8039fa5a972afb5b16ecda8851d7da9bfce60f152c9a5a859", size = 80977 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f0/2e/f4c728fe3ddcdd9721647858641c80905887c0df9e4e877ed5a722330eaf/pyxnat-1.6.4-py3-none-any.whl", hash = "sha256:8ed3c5f4774d84c08ffdf0fb80826149fd9907556b5f5f0bc187b7d36ad105d3", size = 110698 },
+]
+
+[[package]]
+name = "pytz"
+version = "2026.2"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ff/46/dd499ec9038423421951e4fad73051febaa13d2df82b4064f87af8b8c0c3/pytz-2026.2.tar.gz", hash = "sha256:0e60b47b29f21574376f218fe21abc009894a2321ea16c6754f3cad6eb7cdd6a", size = 320861, upload-time = "2026-05-04T01:35:29.667Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ec/dd/96da98f892250475bdf2328112d7468abdd4acc7b902b6af23f4ed958ea0/pytz-2026.2-py2.py3-none-any.whl", hash = "sha256:04156e608bee23d3792fd45c94ae47fae1036688e75032eea2e3bf0323d1f126", size = 510141, upload-time = "2026-05-04T01:35:27.408Z" },
 ]
 
 [[package]]

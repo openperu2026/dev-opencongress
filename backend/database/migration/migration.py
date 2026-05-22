@@ -12,10 +12,10 @@ from sqlalchemy import Table, func, select, text
 from sqlalchemy.engine import Engine
 
 from backend.database.models import Base
-from backend.config import directories
+from backend.config import directories, settings
 
-DEFAULT_DB_URL = "postgresql+psycopg://opencongress:opencongress@db:5432/opencongress"
-DEFAULT_SQLITE_PATH = "/app/data/raw/OpenPeruRaw.db"
+DEFAULT_DB_URL = settings.DB_URL
+DEFAULT_SQLITE_PATH = settings.SQLITE_PATH
 BATCH_SIZE = 1000
 
 COMMON_RAW_COLUMNS = ("timestamp", "last_update", "changed", "processed")

@@ -26,7 +26,7 @@ class RawBase(Base):
     )
 
     # Columns to ignore in ALL raw models
-    _ignore_eq = ["timestamp", "last_update", "changed", "processed"]
+    _ignore_eq = {"id", "timestamp", "last_update", "changed", "processed"}
 
     def __eq__(self, other):
         """

@@ -4,32 +4,36 @@
 
 
 <div class="hero">
+    
+    <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="Open Congress logo">
 
-        <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="Open Congress logo">
-        <p class="page-subtitle">
-            Select what information about the peruvian congress you want to explore
-
-        </p>
+    <p class="page-subtitle">
+        {{_('Select the information about the peruvian congress that you want to explore')}}
+    </p>
         
-        <div class="menu-landing">
-            {% for item in menu_items %}
-                <div class="menu-card">
-                    <a href="{{ item.url }}">
-                        {{ item.name }}
+    <div class="menu-landing">
+        {% for item in menu_items %}
+            <div class="menu-card">
+                 <a href="{{ item.url }}">
+                 {{ item.name }}
                     </a>
-                </div>
-            {% endfor %}
-        </div>
+            </div>
+        {% endfor %}
+    </div>
+
+    </div>
+
 </div>
 
 <section id="about" class="about-section">
     <div class="about-content">
-        <h2>About</h2>
+        <h2>{{_('About')}}</h2>
         <p>
-            Open Congress brings together public information from the Peruvian Congress so bills,
-            congress members, political groups, and legislative activity can be explored in one place.
+            {{_('Open Congress brings together public information from the Peruvian Congress so bills,
+            congress members, political groups, and legislative activity can be explored in one place.')}}
         </p>
     </div>
 </section>
+
 
 {% endblock %}
