@@ -144,14 +144,6 @@ def chandra2_vllm(url: str):
     ]
 
 
-def mock_chandra2_vllm(url: str):
-    """
-    Mock OCR output for local development when Chandra OCR is unavailable.
-    """
-    print(f"Mock OCR used for source: {url}")
-    return [{"page_num": 1, "text": "[mock] OCR output"}]
-
-
 def write_raw_bill_pages(
     raw_docs: list[raw_models.RawBillDocument],
     ocr_model: str = "chandra2",
