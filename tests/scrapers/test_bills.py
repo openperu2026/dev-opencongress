@@ -25,7 +25,7 @@ def test_create_raw_bill_sets_id_and_sections():
         "seguimientos": [{"evento": "derivado"}],
     }
 
-    raw_bill = scraper.create_raw_bill(year, bill_number, data)
+    raw_bill = scraper.create_raw_bill(year, bill_number, data, "www.example.org")
 
     assert isinstance(raw_bill, RawBill)
     assert raw_bill.id == f"{year}_{bill_number}"
@@ -38,6 +38,7 @@ def test_create_raw_bill_sets_id_and_sections():
 
     # Missing section in data => attribute should remain None
     assert raw_bill.committees is None
+    assert raw_bill.api_url == "www.example.org"
 
 
 # ---------- add_bills_to_db ----------

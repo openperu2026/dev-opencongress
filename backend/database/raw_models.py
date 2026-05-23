@@ -96,6 +96,7 @@ class RawBill(RawBase):
         committees (str) Information about committees
         congresistas (str) Information about authors and proponents
         steps (str) Information about bill steps
+        api_url (str): Congress internal API to fetch.
         timestamp (datetime): timestamp of the scraping task
         last_update (bool): Column that indicates if this tuple is the last update for the bill_id
         changed (bool): Column that indicates if the last update has any difference from the previous update
@@ -109,6 +110,7 @@ class RawBill(RawBase):
     committees: Mapped[str] = mapped_column(nullable=True)
     congresistas: Mapped[str] = mapped_column(nullable=True)
     steps: Mapped[str] = mapped_column(nullable=True)
+    api_url: Mapped[str | None] = mapped_column(nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("id", "timestamp", name="pk_raw_bills"),
