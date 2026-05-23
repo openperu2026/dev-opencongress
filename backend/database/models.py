@@ -421,6 +421,38 @@ class BillText(Base):
     )
 
 
+class BillDifference(Base):
+    """
+    Precomputed text diff between a bill step and the most recent
+    text-bearing predecessor step.
+
+    One row per ``(bill_id, step_id)``. ``prev_step_id`` is the step_id
+    (within the same bill) whose text was used as the "old" side; ``None``
+    when this is the first text-bearing step.
+
+    ``difference_content`` is a JSON-serialized hybrid payload
+    (parser_version, summary, nodes) — see ``backend/process/diff/``.
+    """
+
+    __tablename__ = "bill_differences"
+
+    bill_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
+    prev_step_id: Mapped[int] = mapped_column(nullable=True)
+    difference_type: Mapped[str] = mapped_column(nullable=False)
+    difference_content: Mapped[str] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        PrimaryKeyConstraint("bill_id", "step_id", name="pk_bill_differences"),
+        ForeignKeyConstraint(
+            ["bill_id", "step_id"],
+            ["bill_steps.bill_id", "bill_steps.step_id"],
+            name="fk_bill_differences_bill_steps",
+        ),
+        Index("ix_billdifference_bill_id", "bill_id"),
+    )
+
+
 class Congresista(Base):
     """
     Represents a member of the peruvian parliament

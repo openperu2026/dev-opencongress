@@ -1,7 +1,8 @@
 import json
-from datetime import datetime
+from datetime import date, datetime
 import pytest
 
+from backend.core.enums import Proponents
 from backend.database import models as db_models
 from backend.database.crud import pipeline_bills as crud_bills
 from backend.database.crud import pipeline_motions as crud_motions
@@ -46,6 +47,7 @@ def test_run_processing_loads_reference_definitions_before_memberships(monkeypat
         process_motions=False,
         process_leyes=False,
         process_others=True,
+        process_bill_differences=False,
     )
 
     assert calls == ["orgs", "bancadas", "congresistas", "admin_ms", "bancada_ms"]
@@ -394,3 +396,134 @@ def test_motion_step_upsert_retains_planned_vote_event_reference(orchestrator):
         )
 
         assert step.vote_event_id == "M_2026_20_1"
+
+
+def _seed_bill_with_two_text_steps(db, bill_id="2026_30"):
+    db.add(
+        db_models.Bill(
+            id=bill_id,
+            title="PL",
+            summary_congreso="Resumen",
+            observations="",
+            status="Presentado",
+            proponent=Proponents.CONGRESO,
+            bill_approved=False,
+            summary_oc="Resumen OC",
+        )
+    )
+    db.add(
+        db_models.BillStep(
+            bill_id=bill_id,
+            step_id=1,
+            vote_step=False,
+            step_type=TypeBillStep.VOTACION,
+            step_date=date(2026, 1, 10),
+            step_detail="presented",
+        )
+    )
+    db.add(
+        db_models.BillStep(
+            bill_id=bill_id,
+            step_id=2,
+            vote_step=False,
+            step_type=TypeBillStep.VOTACION,
+            step_date=date(2026, 1, 20),
+            step_detail="amended",
+        )
+    )
+    db.add(
+        db_models.BillText(
+            bill_id=bill_id,
+            step_id=1,
+            file_id=1,
+            version_id=1,
+            text="Artículo 1.- Texto original.\n",
+        )
+    )
+    db.add(
+        db_models.BillText(
+            bill_id=bill_id,
+            step_id=2,
+            file_id=1,
+            version_id=1,
+            text="Artículo 1.- Texto modificado.\n",
+        )
+    )
+    db.commit()
+
+
+def test_process_bill_differences_runs_over_bill_texts(orchestrator):
+    with orchestrator.DBSession() as db:
+        _seed_bill_with_two_text_steps(db, bill_id="2026_30")
+
+    stats = orchestrator._process_bill_differences(limit=None)
+
+    assert stats.processed == 1
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        rows = (
+            db.query(db_models.BillDifference)
+            .filter_by(bill_id="2026_30")
+            .order_by(db_models.BillDifference.step_id)
+            .all()
+        )
+        assert [r.step_id for r in rows] == [1, 2]
+        assert rows[0].difference_type == "first_version"
+        assert rows[0].prev_step_id is None
+        assert rows[1].difference_type == "modified"
+        assert rows[1].prev_step_id == 1
+        assert rows[1].difference_content is not None
+
+
+def test_process_bill_differences_isolates_failures_per_bill(orchestrator, monkeypatch):
+    # Regression: a failure on one bill must not roll back diffs already
+    # written for earlier bills in the same batch. We seed two bills, then
+    # force ``_compute_bill_differences`` to raise on the second one; the
+    # first bill's BillDifference rows must still be persisted.
+    with orchestrator.DBSession() as db:
+        _seed_bill_with_two_text_steps(db, bill_id="2026_40")
+        _seed_bill_with_two_text_steps(db, bill_id="2026_41")
+
+    real = orchestrator._compute_bill_differences
+
+    def raise_on_41(db, bill_id):
+        if bill_id == "2026_41":
+            raise RuntimeError("boom")
+        return real(db, bill_id)
+
+    monkeypatch.setattr(orchestrator, "_compute_bill_differences", raise_on_41)
+
+    stats = orchestrator._process_bill_differences(limit=None)
+
+    assert stats.processed == 1
+    assert stats.errors == 1
+
+    with orchestrator.DBSession() as db:
+        persisted = {row.bill_id for row in db.query(db_models.BillDifference).all()}
+        assert persisted == {"2026_40"}
+
+
+def test_process_bill_differences_skips_bills_without_text(orchestrator):
+    # A bill with no bill_texts row should not appear in the driver query at
+    # all — _process_bill_differences is driven off bill_texts.
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Bill(
+                id="2026_31",
+                title="PL",
+                summary_congreso="Resumen",
+                observations="",
+                status="Presentado",
+                proponent=Proponents.CONGRESO,
+                bill_approved=False,
+                summary_oc="Resumen OC",
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_bill_differences(limit=None)
+
+    assert stats.processed == 0
+    with orchestrator.DBSession() as db:
+        assert db.query(db_models.BillDifference).count() == 0

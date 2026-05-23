@@ -10,6 +10,7 @@ This module transforms raw SQLAlchemy rows into validated, normalized Pydantic s
 - `congresistas.py`, `organizations.py`, `bancadas.py`: process reference entities and memberships.
 - `votes.py`: vote-related parsing helpers.
 - `utils.py`: shared processing utilities.
+- `diff/`: three-layer hybrid bill-text diff (structural → line → word). Public surface is `compute_bill_difference` in `diff/__init__.py`; renderer contract in [`docs/bill_difference_contract.md`](../../docs/bill_difference_contract.md).
 
 ## Role in pipeline
 

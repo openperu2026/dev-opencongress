@@ -26,6 +26,9 @@
               <!-- real data -->
               <!-- <a href="/bills/{{ bill.id }}/vote/{{ step.vote_event_id }}">View details</a> -->
             {% endif %}
+            {% if diff_types.get(step.step_id) in ('modified', 'incomparable') %}
+              <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('View changes')}}</a>
+            {% endif %}
           </div>
         </div>
       {% endfor %}
