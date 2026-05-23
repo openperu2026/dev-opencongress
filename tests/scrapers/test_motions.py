@@ -176,7 +176,7 @@ def test_scrape_motion_appends_raw_motion(monkeypatch, session):
         "backend.scrapers.motions.get_url_text",
         fake_get_url_text,
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda motion: motion)
+    monkeypatch.setattr(scraper, "update_tracking", lambda motion: [motion])
 
     scraper.scrape_motion("2021", "7")
 
