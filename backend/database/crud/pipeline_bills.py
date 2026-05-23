@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from enum import Enum
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend import OcrModel
 from backend.database import models as db_models
 from backend.process import schema
 from backend.database.crud.pipeline_core import (
@@ -149,14 +151,26 @@ def find_raw_bill_documents(raw_db: Session, bill_id: str) -> list[RawBillDocume
 
 
 def find_raw_bill_pages(
-    raw_db: Session, bill_id: str, step_id: str | int, file_id: str | int
+    raw_db: Session,
+    bill_id: str,
+    step_id: str | int,
+    file_id: str | int,
+    ocr_model: str = OcrModel.CHANDRA.value,
 ) -> list[RawBillPage]:
+    """Return the latest pages of a bill document for a single OCR model.
+
+    Since the ``feature/data_migration`` migration, ``raw_bill_pages`` is keyed
+    by ``ocr_model`` as well, so a document can hold one page row per model.
+    Filtering by ``ocr_model`` keeps the page sequence unambiguous; bills are
+    OCR'd with chandra2, hence the default.
+    """
     return (
         raw_db.query(RawBillPage)
         .filter(
             RawBillPage.bill_id == bill_id,
             RawBillPage.step_id == str(step_id),
             RawBillPage.file_id == str(file_id),
+            RawBillPage.ocr_model == ocr_model,
             RawBillPage.last_update.is_(True),
         )
         .order_by(RawBillPage.page_num)
@@ -188,5 +202,58 @@ def upsert_bill_text(
         return row
     for key, value in payload.items():
         setattr(existing, key, value)
+    db.flush()
+    return existing
+
+
+def get_billtext_for_step(
+    db: Session, bill_id: str, step_id: int
+) -> db_models.BillText | None:
+    """
+    Return the canonical BillText for a step.
+
+    A step may have multiple rows in ``bill_texts`` (different file_id /
+    version_id). The diff feature treats one step as one logical text;
+    pick the highest ``version_id`` for the lowest ``file_id`` so the
+    selection is stable across pipeline runs.
+    """
+    stmt = (
+        select(db_models.BillText)
+        .where(
+            db_models.BillText.bill_id == bill_id,
+            db_models.BillText.step_id == step_id,
+        )
+        .order_by(
+            db_models.BillText.file_id.asc(),
+            db_models.BillText.version_id.desc(),
+        )
+    )
+    return db.execute(stmt).scalars().first()
+
+
+def upsert_bill_difference(
+    db: Session,
+    *,
+    bill_id: str,
+    step_id: int,
+    prev_step_id: int | None,
+    difference_type: str,
+    difference_content: str | None,
+) -> db_models.BillDifference:
+    existing = db.get(db_models.BillDifference, (bill_id, step_id))
+    if existing is None:
+        row = db_models.BillDifference(
+            bill_id=bill_id,
+            step_id=step_id,
+            prev_step_id=prev_step_id,
+            difference_type=difference_type,
+            difference_content=difference_content,
+        )
+        db.add(row)
+        db.flush()
+        return row
+    existing.prev_step_id = prev_step_id
+    existing.difference_type = difference_type
+    existing.difference_content = difference_content
     db.flush()
     return existing

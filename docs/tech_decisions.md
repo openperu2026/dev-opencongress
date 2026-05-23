@@ -26,12 +26,12 @@ Each decision includes the context that motivated it, the alternatives considere
 
 ## Web Scraping
 
-#### Selenium and Playwright for dynamic pages
+#### Playwright for dynamic pages
 
-- **Decision**: Use both Selenium (`selenium>=4.33.0`) and Playwright (`playwright>=1.58.0`) for scraping dynamic web pages.
-- **Context**: The Congress website uses JavaScript-heavy pages that require browser automation to fully render content.
-- **Alternatives considered**: Using only one browser automation tool.
-- **Rationale**: Selenium was the original choice and remains in use for established scrapers. Playwright was adopted later for new scrapers due to its faster execution, better async support, and more reliable waiting mechanisms. Both coexist because rewriting existing Selenium scrapers offers no immediate value. New scrapers should prefer Playwright.
+- **Decision**: Use Playwright (`playwright>=1.58.0`) for dynamic Congress pages that require browser automation.
+- **Context**: The Congress website uses JavaScript-heavy pages, hidden select controls, and browser-rendered table updates that must complete before the raw HTML snapshot is useful.
+- **Alternatives considered**: Selenium (`selenium>=4.33.0`) and static HTTP parsing for every page.
+- **Rationale**: Selenium was the original implementation for several scrapers, but Playwright is the migration target for dynamic pages. Playwright gives more reliable selector and function waits, simpler interaction with hidden controls, less brittle page-load handling, cleaner browser cleanup, and easier mocking in scraper tests. Static HTTP parsing remains preferred for sources that do not need browser rendering. Any remaining Selenium usage during migration is transitional and should not be used as the pattern for new scraper work.
 
 #### httpx for static pages and API calls
 
@@ -65,6 +65,18 @@ Each decision includes the context that motivated it, the alternatives considere
 - **Alternatives considered**: BeautifulSoup (friendlier API but requires a separate parser backend and is slower), stdlib `html.parser` (tolerant of malformed HTML but slow and limited).
 - **Rationale**: lxml is the fastest Python HTML/XML parser with full XPath support. It handles malformed markup more reliably than the stdlib and integrates naturally with httpx response bytes.
 
+## Bill Differences
+
+#### Three-layer hybrid diff for bill text (structural → line → word)
+
+- **Decision**: Compute bill-text differences with a three-layer hybrid pipeline in `backend/process/diff/`: first parse each version into a flat list of structural nodes (TÍTULO, CAPÍTULO, Artículo, DISPOSICIONES) and align nodes across versions; then run a line diff within matched nodes; then render an inline word diff within each changed line block. The public entry point is `compute_bill_difference`; results are persisted as JSON to `bill_differences.difference_content` and consumed by the renderer per [`bill_difference_contract.md`](./bill_difference_contract.md).
+- **Context**: A bill's text evolves across legislative steps — articles are added, modified, renumbered, reordered, and occasionally replaced wholesale (e.g. a *dictamen* substitute text). The diff is rendered for human readers (citizens, journalists, researchers) on the bill-difference page, so the target is a diff that highlights *meaningful* edits at section granularity, not a flat stream of changed lines.
+- **Alternatives considered**:
+  - Plain `difflib.ndiff` or unified-line diff over the full document. Cheap and stdlib-only, but degrades sharply on legislative text: renumbering one article makes every downstream article appear deleted and re-inserted, reordering of sections produces giant unaligned hunks, and OCR noise from scanned PDFs creates a flood of false single-character changes that drown the real edits.
+  - Pure word-level diff over the full document. Avoids the "whole line is changed for a one-word edit" problem, but loses all structural context — a one-word change in Artículo 5 and a one-word change in Artículo 50 are visually indistinguishable in the rendered output, and the reader has no anchor for *where* in the bill the change happened.
+  - LLM-generated semantic diff. Conceptually appealing for summarizing intent, but non-deterministic, expensive per-comparison, and hard to verify; the same two inputs would not necessarily produce the same diff across pipeline runs, breaking cache invariants and review reproducibility.
+- **Rationale**: Legislative text is intrinsically structured, and that structure carries most of the alignment signal. Pinning the diff to structure first — matching Artículo 5 to Artículo 5 even when its position or numbering shifts — strips renumbering and reordering noise before any text comparison happens. The structural layer aligns by id, then by content fingerprint, then by Jaccard similarity on word sets, so a renumbered or lightly-edited article still pairs with its predecessor instead of surfacing as a delete + insert. Within each matched node, the line and word layers operate on a small, bounded text region, which keeps both fast and keeps their output readable. The result is a deterministic, JSON-serializable payload that the renderer can present at the granularity a human actually reads — "Artículo 5 changed *here*" — rather than "lines 312–847 differ."
+
 ## Database
 
 #### SQLAlchemy ORM
@@ -90,9 +102,9 @@ Each decision includes the context that motivated it, the alternatives considere
 
 #### Incremental processing flags on raw models
 
-- **Decision**: All raw models include `timestamp`, `last_update`, `changed`, and `processed` boolean columns, with a custom `RawBase.__eq__` that ignores these metadata fields.
+- **Decision**: All raw models include `timestamp`, `last_update`, `changed`, and `processed` boolean columns, with a custom `RawBase.__eq__` that ignores these metadata fields and auto-increment identifiers such as `id`.
 - **Context**: Scrapers run periodically. Most runs return identical data. The pipeline needs to efficiently detect and process only what changed.
-- **Rationale**: The `last_update` flag marks the most recent scrape per entity. The custom equality check compares only data columns, setting `changed=True` when content differs from the previous scrape. The `processed` flag tracks whether changed data has been propagated to the processed layer. This avoids full-table reprocessing on every scraper run.
+- **Rationale**: The `last_update` flag marks the most recent scrape per entity. The custom equality check compares only source data columns, setting `changed=True` when content differs from the previous scrape. Ignoring database-generated identifiers prevents append-only raw rows from being treated as changed solely because they were inserted as a new row. The `processed` flag tracks whether changed data has been propagated to the processed layer. This avoids full-table reprocessing on every scraper run.
 
 ## Validation
 

@@ -17,6 +17,7 @@ At its current stage, OpenPeru focuses on the legislative core of Congress and i
 - **Congress members (congresistas)**: identities, party affiliations, and memberships over time
 - **Political organizations**: parties, parliamentary groups, and committees
 - **Legislative processes**: structured representations of how initiatives evolve
+- **Bill text differences**: a per-step structural + line + word diff between consecutive bill versions, rendered as HTML at `/bills/<bill_id>/difference/<step_id>` (see `docs/bill_difference_contract.md`)
 
 All information is stored in relational databases designed for analysis, reuse, and future API access.
 
@@ -47,6 +48,34 @@ All information is stored in relational databases designed for analysis, reuse, 
     pre-commit install
     pre-commit install --hook-type pre-push
     ```
+
+## Scheduled ETL Jobs
+
+The repository includes a Docker Compose `cron` service for unattended ETL runs.
+The service uses the project Makefile targets as its public interface and writes
+job output to `/app/logs/cron.log` inside the container.
+
+```bash
+docker compose up cron
+```
+
+The cron schedule runs on `America/Lima` time:
+
+- `scrape-others`
+- `scrape-bills`
+- `scrape-motions`
+- `scrape-leyes`
+- `process`
+
+For local one-off runs, use the same Makefile targets directly:
+
+```bash
+make scrape-others
+make scrape-bills
+make scrape-motions
+make scrape-leyes
+make process
+```
 
 ## GitFlow Workflow
 We follow a GitFlow branching model. For detailed rules, go [here](https://github.com/openperu2026/dev-opencongress/blob/feature/repo-config/docs/git-flow.md).

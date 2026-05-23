@@ -29,18 +29,18 @@ def main() -> None:
 
     sqlite_conn = sqlite3.connect(sqlite_path)
     sqlite_conn.row_factory = sqlite3.Row
-    engine = create_engine(args.db_url, pool_pre_ping=True)
+    pg_engine = create_engine(args.db_url, pool_pre_ping=True)
 
     try:
         migrate(
             sqlite_conn,
-            engine,
+            pg_engine,
             validate_checksums=not args.skip_checksums,
             process_clean=not args.skip_clean_processing,
         )
     finally:
         sqlite_conn.close()
-        engine.dispose()
+        pg_engine.dispose()
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,15 +72,15 @@ def parse_args() -> argparse.Namespace:
 
 def migrate(
     sqlite_conn: sqlite3.Connection,
-    engine: Engine,
+    pg_engine: Engine,
     *,
     validate_checksums: bool = True,
     process_clean: bool = True,
 ) -> None:
-    enable_extensions(engine)
-    Base.metadata.create_all(engine)
+    enable_extensions(pg_engine)
+    Base.metadata.create_all(pg_engine)
 
-    with engine.begin() as pg_conn:
+    with pg_engine.begin() as pg_conn:
         assert_raw_tables_empty(pg_conn)
         import_direct_tables(sqlite_conn, pg_conn)
         import_document_tables(sqlite_conn, pg_conn)
@@ -88,16 +88,16 @@ def migrate(
         validate_import(sqlite_conn, pg_conn, validate_checksums=validate_checksums)
 
     if process_clean:
-        run_clean_processing(engine)
+        run_clean_processing(pg_engine)
 
 
-def run_clean_processing(engine: Engine, orchestrator_cls=None) -> None:
+def run_clean_processing(pg_engine: Engine, orchestrator_cls=None) -> None:
     if orchestrator_cls is None:
         from backend.database.orchestrator import OpenPeruOrchestrator
 
         orchestrator_cls = OpenPeruOrchestrator
 
-    db_url = engine.url.render_as_string(hide_password=False)
+    db_url = pg_engine.url.render_as_string(hide_password=False)
     orchestrator = orchestrator_cls(db_url=db_url)
     summary = orchestrator.run_processing(
         process_bills=True,

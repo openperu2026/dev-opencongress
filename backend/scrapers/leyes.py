@@ -34,7 +34,7 @@ class RawLeyesScraper:
         # Track previous versions that were marked as not last_update.
         self._tracking_updates = []
 
-    def scrape_ley(self, ley_number: str) -> None:
+    def scrape_ley(self, ley_number: int) -> None:
         """
         Scrape data from ley api request
         """
@@ -57,7 +57,7 @@ class RawLeyesScraper:
         else:
             return None
 
-    def create_raw_ley(self, ley_number: str, data: str) -> RawLey:
+    def create_raw_ley(self, ley_number: int, data: str) -> RawLey:
         # Initialize raw ley with id and timestamp
         raw_ley = RawLey(
             id=ley_number, timestamp=datetime.now(UTC), data=data, processed=False

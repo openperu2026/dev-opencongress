@@ -89,7 +89,7 @@ def test_get_bill_documents_raises_if_bill_not_found():
         scraper.get_bill_documents(bill_id="2021_999")
 
 
-def test_get_bill_documents_populates_documents_and_calls_render_pdf(monkeypatch):
+def test_get_bill_documents_populates_documents(monkeypatch):
     engine, SessionLocal = _setup_inmemory_db()
 
     scraper = RawBillDocumentScraper()
@@ -126,29 +126,17 @@ def test_get_bill_documents_populates_documents_and_calls_render_pdf(monkeypatch
         )
         session.commit()
 
-    # Patch render_pdf so we don't hit network/PDF
-    calls = []
-
-    def fake_render_pdf(url):
-        calls.append(url)
-        return {1: f"TEXT_FROM_{url}_page_1", 2: f"TEXT_FROM_{url}_page_2"}
-
-    monkeypatch.setattr("backend.scrapers.bills_documents.render_pdf", fake_render_pdf)
-
     scraper.get_bill_documents(bill_id=bill_id)
-    # Should have called render_pdf once
-    assert len(calls) == 1
-    # b64 of "111"
+
     expected_b64 = base64.b64encode(b"111").decode()
     expected_url = f"{BASE_URL}/archivo/{expected_b64}/pdf"
-    assert calls[0] == expected_url
 
     # Scraper should have one RawBillDocument object
     assert len(scraper.documents) == 1
     doc = scraper.documents[0]
     assert doc.bill_id == bill_id
-    assert doc.file_id == 111
-    assert doc.step_id == 10
+    assert doc.file_id == "111"
+    assert doc.step_id == "10"
     assert doc.url == expected_url
     # step_date parsed correctly
     assert isinstance(doc.step_date, datetime)
@@ -186,12 +174,6 @@ def test_get_bill_documents_respects_update_flag(monkeypatch):
             )
         )
         session.commit()
-
-    # Patch render_pdf to avoid network
-    monkeypatch.setattr(
-        "backend.scrapers.bills_documents.render_pdf",
-        lambda url: {1: f"TEXT_FROM_{url}_page_1", 2: f"TEXT_FROM_{url}_page_2"},
-    )
 
     # Case 1: update=False and filter_steps returns empty -> no URLs
     def fake_filter_steps(_steps, _bill_id):
@@ -322,10 +304,8 @@ def test_load_raw_documents_calls_add_and_clears(monkeypatch):
         return True
 
     monkeypatch.setattr(scraper, "add_documents_to_db", fake_add)
-    monkeypatch.setattr(scraper, "add_pages_to_db", fake_add)
 
     scraper.load_raw_documents()
 
     assert calls["added"] is True
     assert scraper.documents == []
-    assert scraper.pages == []

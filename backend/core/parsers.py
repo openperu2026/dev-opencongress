@@ -481,7 +481,6 @@ _BILL_STEP_PRIORITY: dict[TypeBillStep, int] = {
     TypeBillStep.ACUMULADO: 330,
     TypeBillStep.ACLARACION: 340,
     TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION: 350,
-    TypeBillStep.AUTOGRAFA: 360,
     TypeBillStep.RECONSIDERACION: 370,
     TypeBillStep.DEBATE_EN_EL_PLENO: 500,
     TypeBillStep.DEBATE_EN_LA_COMISION_PERMANENTE: 510,
@@ -490,8 +489,9 @@ _BILL_STEP_PRIORITY: dict[TypeBillStep, int] = {
     TypeBillStep.RECHAZADO: 540,
     TypeBillStep.ARCHIVADO: 550,
     TypeBillStep.RETIRADO: 560,
-    TypeBillStep.PROMULGADO: 570,
-    TypeBillStep.PUBLICADO: 580,
+    TypeBillStep.AUTOGRAFA: 570,
+    TypeBillStep.PROMULGADO: 590,
+    TypeBillStep.PUBLICADO: 600,
 }
 
 
