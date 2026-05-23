@@ -1,13 +1,14 @@
 from types import SimpleNamespace
 from flask import Blueprint, render_template, request
-from sqlalchemy import select, text
-from backend.database.models import Bill, BillStep
+from sqlalchemy import select
+from backend.database.models import Bill, BillStep, Congresista
 from .processed_session import SessionProcessed
 import json
 import os
 import sqlite3
 from .generate_seats import generate_seats
 from .build_bancada_bars import build_bancada_bars
+from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 
@@ -29,43 +30,53 @@ def load_voter_bancada_dict():
 def index():
     title_q = request.args.get("title_q", "").strip()
     author_q = request.args.get("author_q", "").strip()
-    params = {}
+    status = request.args.get("status", "all").strip()
+    _allowed_status = {"all", "approved", "not-approved"}
+    if status not in _allowed_status:
+        status = "all"
     filters = []
     author_display = None
     author_id_query = author_q.isdigit()
 
     if title_q:
-        filters.append("lower(bills.title) LIKE lower(:title_q)")
-        params["title_q"] = f"%{title_q}%"
+        filters.append(Bill.title.ilike(f"%{title_q}%"))
 
     if author_q:
         if author_id_query:
-            filters.append("CAST(bills.author_id AS TEXT) = :author_id")
-            params["author_id"] = author_q
-            with SessionProcessed() as db:
-                author_display = db.execute(
-                    text("SELECT full_name FROM congresistas WHERE id = :author_id"),
-                    {"author_id": author_q},
-                ).scalar_one_or_none()
+            # filter by numeric author id
+            try:
+                author_id_int = int(author_q)
+            except ValueError:
+                author_id_int = None
+
+            if author_id_int is not None:
+                filters.append(Bill.author_id == author_id_int)
+                with SessionProcessed() as db:
+                    author_row = db.get(Congresista, author_id_int)
+                    author_display = author_row.full_name if author_row else None
         else:
-            filters.append("lower(congresistas.full_name) LIKE lower(:author_q)")
-            params["author_q"] = f"%{author_q}%"
+            filters.append(Congresista.full_name.ilike(f"%{author_q}%"))
+
+    if status == "approved":
+        filters.append(Bill.bill_approved.is_(True))
+    elif status == "not-approved":
+        filters.append(Bill.bill_approved.is_(False))
 
     bills = []
-    if filters:
-        where_clause = " AND ".join(filters)
-        query = f"""
-            SELECT bills.*, congresistas.full_name as author_name
-            FROM bills
-            LEFT OUTER JOIN congresistas ON bills.author_id = congresistas.id
-            WHERE {where_clause}
-            LIMIT 50
-        """
-
+    if author_q or title_q:
         with SessionProcessed() as db:
-            rows = db.execute(text(query), params).mappings().all()
+            stmt = (
+                select(Bill.id, Bill.title, Congresista.full_name.label("author_name"))
+                .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
+                .where(*filters)
+                .limit(50)
+            )
+
+            rows = db.execute(stmt).mappings().all()
             if rows and author_q and not author_id_query:
                 author_display = author_q
+
+            # rows are flat mappings with keys: id, title, author_name
             bills = [SimpleNamespace(**row) for row in rows]
 
     return render_template(
@@ -74,6 +85,7 @@ def index():
         author_q=author_q,
         author_display=author_display,
         bills=bills,
+        radio_status=status,
     )
 
 
@@ -85,9 +97,22 @@ def bill_detail(bill_id):
             return "Not Found", 404
 
         all_steps, latest_step = extract_steps(db, bill_id)
+        bill_status = _("Not approved")
+        if bill.bill_approved:
+            bill_status = _("Approved")
+
+        author = ""
+        if bill.author_id:
+            author_table = db.get(Congresista, bill.author_id)
+            author = author_table.full_name
 
         return render_template(
-            "bills/detail.html", bill=bill, latest_step=latest_step, all_steps=all_steps
+            "bills/detail.html",
+            bill=bill,
+            latest_step=latest_step,
+            all_steps=all_steps,
+            bill_status=bill_status,
+            author=author,
         )
 
 

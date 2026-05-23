@@ -15,6 +15,22 @@
         <button type="submit" class="search-icon-button" aria-label="Search">
             <i class="fa-solid fa-magnifying-glass"></i>
         </button>
+
+        <div class="radio-container">
+            <label>
+                <input type="radio" name="status" value="all" {% if radio_status == "all" %}checked{% endif %}>{{_('All bills')}}
+            </label>
+
+            <label>
+                <input type="radio" name="status" value="approved" {% if radio_status == "approved" %}checked{% endif %}>{{_('Approved bills')}}
+            </label>
+
+            <label>
+                <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Not approved bils')}}
+            </label>
+        </div>
+
+        
     </div>
 </form>
 
