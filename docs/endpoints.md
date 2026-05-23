@@ -59,27 +59,15 @@
 
 | Property | Value |
 |----------|-------|
-| URL | `/bills/<id>/difference/<version_id>` |
+| URL | `/bills/<bill_id>/difference/<step_id>` |
 | Method | `GET` |
-| Parameters | `bill_id` and `version_id` |
-| Response | HTML page showing difference between versions |
+| Parameters | `bill_id` (string), `step_id` (int) — the *new* step |
+| Response | HTML page (200) or `304 Not Modified` (ETag match) |
+| Caching | `ETag` + `Cache-Control: public, max-age=300, stale-while-revalidate=86400` |
 
-**Template Context Variables:**
-
-```json
-
-  "bill_id": 123,
-  "bills_number": "N° 32014",
-  "bill_name": "Environmental Protection Act",
-  "summary": "An act which establishes a comprehensive legal framework to protect the environment",
-  "step": "modified_in_plenary_session",
-  "step_id": 4,
-  "old_version_text": "Old bill content...",
-  "new_version_text": "New bill content...",
-  "difference_type": "added",
-  "difference_content": "Added content..."
-
-```
+Full frontend contract (HTML structure, CSS classes, stability promise,
+sample fixtures, SPA integration notes): see
+[`bill_difference_contract.md`](bill_difference_contract.md).
 
 
 ## Votes Page
