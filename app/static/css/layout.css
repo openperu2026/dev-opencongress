@@ -372,6 +372,12 @@ font-weight: bold;
 font-size: 16px;
 }
 
+.pagination-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
+}
+
 /* votes page */
 .vote-results {
     margin-top: 2rem;

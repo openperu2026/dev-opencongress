@@ -26,7 +26,7 @@
             </label>
 
             <label>
-                <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Not approved bils')}}
+                <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Not approved bills')}}
             </label>
         </div>
 
@@ -44,17 +44,68 @@
         {% if author_display %}
             <span>{{_('Author')}}: {{author_display}}</span>
         {% endif %}
+        {% if radio_status != 'all' %}
+            <span>{{_('Status')}}: {{_('Approved bills') if radio_status == 'approved' else _('Not approved bills')}}</span>
+        {% endif %}
     </div>
 
-    <ul>
-        {% for bill in bills %}
-            <li>
-                <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">
-                    {{ bill.id }} - {{ bill.title }}
-                </a>
-            </li>
-        {% endfor %}
-    </ul>
+    {% if total_count_display is not none %}
+        <div class="search-results-summary">
+            <p>{{ _('Showing %(start)s-%(end)s of %(count)s bills', start=results_start, end=results_end, count=total_count_display) }}</p>
+        </div>
+    {% endif %}
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bill in bills %}
+            <tr>
+                <td>{{ results_start + loop.index0 }}</td>
+                <td>{{ bill.id }}</td>
+                <td>{{ bill.title }}</td>
+                <td>{{ bill.author_name }}</td>
+                <td>
+                    <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
+                        {{_('View details')}}
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if pagination_pages %}
+        <nav class="search-pagination" aria-label="{{ _('Search pages') }}">
+            
+            <div class="pagination-tabs">
+                {% for page_item in pagination_pages %}
+                    {% if page_item.current %}
+                        <span class="pagination-tab is-current">{{ page_item.number }}</span>
+                    {% else %}
+                        <a class="pagination-tab" href="{{ page_item.url }}">{{ page_item.number }}</a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+
+            <div class="pagination-controls">
+                {% if prev_page_url %}
+                    <a class="pagination-prev" href="{{ prev_page_url }}">←{{ _('Previous') }}</a>
+                {% endif %}
+
+                {% if next_page_url %}
+                    <a class="pagination-next" href="{{ next_page_url }}">{{ _('Next') }}→</a>
+                {% endif %}
+            </div>
+        </nav>
+    {% endif %}
 {% elif title_q or author_q %}
     <p>{{_('No matching bills found.')}}</p>
 {% endif %}

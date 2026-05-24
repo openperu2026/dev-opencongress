@@ -85,6 +85,50 @@ msgstr "Resumen"
 msgid "View details"
 msgstr "Ver detalles"
 
+#: templates/bills/difference.html:5
+msgid "Bill"
+msgstr "Proyecto de ley"
+
+#: templates/bills/difference.html:9
+msgid "Back to bill"
+msgstr "Volver al proyecto de ley"
+
+#: templates/bills/difference.html:14
+msgid "Version 1"
+msgstr "Versión 1"
+
+#: templates/bills/difference.html:19 templates/bills/difference.html:28
+msgid "No text available"
+msgstr "No hay texto disponible"
+
+#: templates/bills/difference.html:23
+msgid "Version 2"
+msgstr "Versión 2"
+
+#: templates/bills/difference.html:34
+msgid "Differences"
+msgstr "Diferencias"
+
+#: templates/bills/difference.html:37
+msgid "No changes between versions."
+msgstr "No hay cambios entre las versiones."
+
+#: templates/bills/difference.html:40
+msgid "This is the first version — no previous text to compare."
+msgstr "Esta es la primera versión — no hay texto previo para comparar."
+
+#: templates/bills/difference.html:44
+msgid "Versions differ in length by more than 10× — probably mismatched document types."
+msgstr "Las versiones difieren en longitud en más de 10× — probablemente son tipos de documento distintos."
+
+#: templates/bills/difference.html:48
+msgid "Text could not be extracted for comparison."
+msgstr "No se pudo extraer el texto para comparar."
+
+#: templates/bills/difference.html:54
+msgid "No difference data available."
+msgstr "No hay datos de diferencias disponibles."
+
 #: templates/bills/mock_votes.html:8
 msgid "Step"
 msgstr "Paso"
@@ -120,6 +164,22 @@ msgstr "Abstención"
 #: templates/bills/search.html:5
 msgid "Search the bill by:"
 msgstr "Busca el proyecto de ley por:"
+
+#: templates/bills/search.html:45
+msgid "Showing %(start)s-%(end)s of %(count)s bills"
+msgstr "Mostrando %(start)s-%(end)s de %(count)s proyectos de ley"
+
+#: templates/bills/search.html:80
+msgid "Search pages"
+msgstr "Páginas de búsqueda"
+
+#: templates/bills/search.html:82
+msgid "Previous"
+msgstr "Anterior"
+
+#: templates/bills/search.html:92
+msgid "Next"
+msgstr "Siguiente"
 
 #: templates/bills/search.html:21
 msgid "All bills"

@@ -1,10 +1,25 @@
 from hashlib import sha1
+from math import ceil
 from types import SimpleNamespace
-from flask import Blueprint, current_app, make_response, render_template, request
-from sqlalchemy import select
+from flask import (
+    Blueprint,
+    current_app,
+    make_response,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from sqlalchemy import func, select
 from app.diff_render import RENDERER_VERSION, render_payload_html
 from backend.database.crud.pipeline_bills import get_billtext_for_step
-from backend.database.models import Bill, BillDifference, BillStep, Congresista
+from backend.database.models import (
+    Bill,
+    BillDifference,
+    BillStep,
+    Congresista,
+    BillOrganization,
+)
 from .processed_session import SessionProcessed
 import json
 import os
@@ -34,6 +49,10 @@ def index():
     title_q = request.args.get("title_q", "").strip()
     author_q = request.args.get("author_q", "").strip()
     status = request.args.get("status", "all").strip()
+    page = request.args.get("page", 1, type=int)
+    page = page if page and page > 0 else 1
+    per_page = 50
+    max_search_results = 500
     _allowed_status = {"all", "approved", "not-approved"}
     if status not in _allowed_status:
         status = "all"
@@ -66,21 +85,107 @@ def index():
         filters.append(Bill.bill_approved.is_(False))
 
     bills = []
+    total_count = 0
+    total_count_display = None
+    results_start = 0
+    results_end = 0
+    pagination_pages = []
     if author_q or title_q:
         with SessionProcessed() as db:
-            stmt = (
-                select(Bill.id, Bill.title, Congresista.full_name.label("author_name"))
-                .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
-                .where(*filters)
-                .limit(50)
+            latest_bill_dates = (
+                select(
+                    BillOrganization.bill_id,
+                    func.max(BillOrganization.presentation_date).label(
+                        "latest_presentation_date"
+                    ),
+                )
+                .group_by(BillOrganization.bill_id)
+                .subquery()
             )
 
-            rows = db.execute(stmt).mappings().all()
+            stmt = (
+                select(
+                    Bill.id.label("id"),
+                    Bill.title.label("title"),
+                    Congresista.full_name.label("author_name"),
+                    latest_bill_dates.c.latest_presentation_date.label(
+                        "presentation_date"
+                    ),
+                )
+                .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
+                .outerjoin(latest_bill_dates, latest_bill_dates.c.bill_id == Bill.id)
+                .where(*filters)
+            )
+
+            count_stmt = select(func.count()).select_from(
+                stmt.order_by(None).limit(max_search_results + 1).subquery()
+            )
+            total_count = db.execute(count_stmt).scalar_one()
+            total_count_display = (
+                f"{max_search_results}+"
+                if total_count > max_search_results
+                else str(total_count)
+            )
+
+            visible_total = min(total_count, max_search_results)
+            total_pages = ceil(visible_total / per_page) if visible_total else 0
+            if total_pages and page > total_pages:
+                page = total_pages
+
+            if total_pages:
+                pagination_pages = [
+                    SimpleNamespace(
+                        number=page_number,
+                        current=page_number == page,
+                        url=url_for(
+                            "bills.index",
+                            title_q=title_q,
+                            author_q=author_q,
+                            status=status,
+                            page=page_number,
+                        ),
+                    )
+                    for page_number in range(1, total_pages + 1)
+                ]
+
+            result_stmt = (
+                stmt.order_by(
+                    latest_bill_dates.c.latest_presentation_date.desc(),
+                    Bill.title.asc(),
+                    Bill.id.asc(),
+                )
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+            )
+
+            rows = db.execute(result_stmt).mappings().all()
             if rows and author_q and not author_id_query:
                 author_display = author_q
+            if rows:
+                results_start = (page - 1) * per_page + 1
+                results_end = results_start + len(rows) - 1
 
-            # rows are flat mappings with keys: id, title, author_name
             bills = [SimpleNamespace(**row) for row in rows]
+
+    prev_page_url = None
+    next_page_url = None
+    if total_count_display is not None and pagination_pages:
+        if page > 1:
+            prev_page_url = url_for(
+                "bills.index",
+                title_q=title_q,
+                author_q=author_q,
+                status=status,
+                page=page - 1,
+            )
+        if page < len(pagination_pages):
+            next_page_url = url_for(
+                "bills.index",
+                title_q=title_q,
+                author_q=author_q,
+                status=status,
+                page=page + 1,
+            )
 
     return render_template(
         "bills/search.html",
@@ -89,6 +194,14 @@ def index():
         author_display=author_display,
         bills=bills,
         radio_status=status,
+        page=page,
+        per_page=per_page,
+        total_count_display=total_count_display,
+        results_start=results_start,
+        results_end=results_end,
+        pagination_pages=pagination_pages,
+        prev_page_url=prev_page_url,
+        next_page_url=next_page_url,
     )
 
 
@@ -245,7 +358,11 @@ def bill_difference(bill_id, step_id):
         # from ``unavailable``, which means we tried and the new text is
         # missing. The template's final ``else`` branch handles ``None``.
         difference_type = diff.difference_type if diff else None
-        etag = f"bd-{bill_id}-{step_id}-{difference_type}-{content_hash}-r{RENDERER_VERSION}"
+        locale = session.get("lang") or request.args.get("lang") or "en"
+        etag = (
+            f"bd-{bill_id}-{step_id}-{locale}-{difference_type}-{content_hash}"
+            f"-r{RENDERER_VERSION}"
+        )
 
         if request.if_none_match.contains(etag):
             return "", 304
@@ -287,6 +404,7 @@ def bill_difference(bill_id, step_id):
         )
         resp.set_etag(etag)
         resp.headers["Cache-Control"] = (
-            "public, max-age=300, stale-while-revalidate=86400"
+            "private, max-age=300, stale-while-revalidate=86400"
         )
+
         return resp

@@ -183,6 +183,7 @@ def test_200_sets_etag_and_cache_control(client, session_factory):
     resp = client.get("/bills/2021_1234/difference/1")
     assert resp.status_code == 200
     assert resp.headers.get("ETag")
+    assert "private" in resp.headers.get("Cache-Control", "")
     assert "max-age=300" in resp.headers.get("Cache-Control", "")
     assert "stale-while-revalidate" in resp.headers.get("Cache-Control", "")
 
@@ -200,6 +201,25 @@ def test_if_none_match_returns_304(client, session_factory):
     )
     assert second.status_code == 304
     assert second.data == b""
+
+
+def test_if_none_match_changes_when_language_changes(client, session_factory):
+    _seed_bill(session_factory)
+    _seed_step(session_factory)
+    _seed_difference(session_factory, difference_content=_modified_payload())
+
+    first = client.get("/bills/2021_1234/difference/1")
+
+    with client.session_transaction() as sess:
+        sess["lang"] = "es"
+
+    second = client.get(
+        "/bills/2021_1234/difference/1",
+        headers={"If-None-Match": first.headers["ETag"]},
+    )
+
+    assert second.status_code == 200
+    assert "Paso" in second.get_data(as_text=True)
 
 
 def test_etag_changes_when_content_changes(client, session_factory):
