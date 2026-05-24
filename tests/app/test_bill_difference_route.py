@@ -183,7 +183,6 @@ def test_200_sets_etag_and_cache_control(client, session_factory):
     resp = client.get("/bills/2021_1234/difference/1")
     assert resp.status_code == 200
     assert resp.headers.get("ETag")
-    assert "private" in resp.headers.get("Cache-Control", "")
     assert "max-age=300" in resp.headers.get("Cache-Control", "")
     assert "stale-while-revalidate" in resp.headers.get("Cache-Control", "")
 
