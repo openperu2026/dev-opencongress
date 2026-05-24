@@ -255,6 +255,13 @@ main {
     width: 100%;
 }
 
+.bill-search-form .radio-container {
+    flex-basis: 100%;
+    display: flex;
+    gap: 16px;
+    font-size: 20px;
+    align-items: center;}
+
 .form-actions {
     display: flex;
     align-items: center;
@@ -360,6 +367,10 @@ main {
 
 /* Bills */
 /* detail page */
+.bill-meta{
+  font-size: 20px;
+}
+
 .timeline-container {
     max-width: 600px;
     margin: 20px auto;
@@ -410,6 +421,12 @@ align-items: flex-start;
 flex: 1;
 font-weight: bold;
 font-size: 16px;
+}
+
+.pagination-controls {
+    display: flex;
+    gap: 10px;
+    margin-top: 10px;
 }
 
 /* votes page */

@@ -55,9 +55,11 @@
             </article>
         </div>
 
-        
-
-        
+        <p class="congress-action">
+            <a href="{{ url_for('bills.index', author_q=congresista.full_name) }}">
+                {{_('View all bills authored')}}
+            </a>
+        </p>
 
         <section class="congress-section congress-bills-preview">
             <h2>{{_('Recent Bills Authored (Last 5)')}}</h2>
