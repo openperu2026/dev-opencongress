@@ -20,6 +20,12 @@ from backend.database.models import (
     Congresista,
     BillOrganization,
 )
+from types import SimpleNamespace
+from flask import Blueprint, current_app, make_response, render_template, request
+from sqlalchemy import select, text
+from app.diff_render import RENDERER_VERSION, render_payload_html
+from backend.database.crud.pipeline_bills import get_billtext_for_step
+from backend.database.models import Bill, BillDifference, BillStep
 from .processed_session import SessionProcessed
 import json
 import os
@@ -404,7 +410,6 @@ def bill_difference(bill_id, step_id):
         )
         resp.set_etag(etag)
         resp.headers["Cache-Control"] = (
-            "private, max-age=300, stale-while-revalidate=86400"
+            "public, max-age=300, stale-while-revalidate=86400"
         )
-
         return resp
