@@ -6,9 +6,12 @@
   <h1>{{_('Title')}}: {{ bill.title }}</h1>
   <div class="bill-meta">
     {% if latest_step %}
-        <p><strong>{{_('Step')}}:</strong> {{ latest_step.step_type.value }}</p>
+        <p><strong>{{_('Current Step')}}:</strong> {{ latest_step.step_type.value }}</p>
     {% endif %}
-    <p><strong>{{_('Summary')}}:</strong> {{ bill.summary }}</p>
+    <p><strong>{{_('Bill Status')}}:</strong> {{ bill_status }}</p>
+    <p><strong>{{_('Author')}}:</strong> {{ author }}</p>
+    <p style = "margin-bottom:0;"><strong>{{_('Summary')}}:</strong></p>
+    <p style = "margin-top: 0;">{{ bill.summary_oc }}</p>
 
   </div>
 </div>

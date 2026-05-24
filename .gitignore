@@ -59,7 +59,7 @@ coverage.lcov
 cover/
 
 # Translations
-*.mo
+# *.mo
 *.pot
 
 # Django stuff:

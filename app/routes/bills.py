@@ -1,4 +1,25 @@
 from hashlib import sha1
+from math import ceil
+from types import SimpleNamespace
+from flask import (
+    Blueprint,
+    current_app,
+    make_response,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from sqlalchemy import func, select
+from app.diff_render import RENDERER_VERSION, render_payload_html
+from backend.database.crud.pipeline_bills import get_billtext_for_step
+from backend.database.models import (
+    Bill,
+    BillDifference,
+    BillStep,
+    Congresista,
+    BillOrganization,
+)
 from types import SimpleNamespace
 from flask import Blueprint, current_app, make_response, render_template, request
 from sqlalchemy import select, text
@@ -11,6 +32,7 @@ import os
 import sqlite3
 from .generate_seats import generate_seats
 from .build_bancada_bars import build_bancada_bars
+from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 
@@ -32,44 +54,144 @@ def load_voter_bancada_dict():
 def index():
     title_q = request.args.get("title_q", "").strip()
     author_q = request.args.get("author_q", "").strip()
-    params = {}
+    status = request.args.get("status", "all").strip()
+    page = request.args.get("page", 1, type=int)
+    page = page if page and page > 0 else 1
+    per_page = 50
+    max_search_results = 500
+    _allowed_status = {"all", "approved", "not-approved"}
+    if status not in _allowed_status:
+        status = "all"
     filters = []
     author_display = None
     author_id_query = author_q.isdigit()
 
     if title_q:
-        filters.append("lower(bills.title) LIKE lower(:title_q)")
-        params["title_q"] = f"%{title_q}%"
+        filters.append(Bill.title.ilike(f"%{title_q}%"))
 
     if author_q:
         if author_id_query:
-            filters.append("CAST(bills.author_id AS TEXT) = :author_id")
-            params["author_id"] = author_q
-            with SessionProcessed() as db:
-                author_display = db.execute(
-                    text("SELECT full_name FROM congresistas WHERE id = :author_id"),
-                    {"author_id": author_q},
-                ).scalar_one_or_none()
+            # filter by numeric author id
+            try:
+                author_id_int = int(author_q)
+            except ValueError:
+                author_id_int = None
+
+            if author_id_int is not None:
+                filters.append(Bill.author_id == author_id_int)
+                with SessionProcessed() as db:
+                    author_row = db.get(Congresista, author_id_int)
+                    author_display = author_row.full_name if author_row else None
         else:
-            filters.append("lower(congresistas.full_name) LIKE lower(:author_q)")
-            params["author_q"] = f"%{author_q}%"
+            filters.append(Congresista.full_name.ilike(f"%{author_q}%"))
+
+    if status == "approved":
+        filters.append(Bill.bill_approved.is_(True))
+    elif status == "not-approved":
+        filters.append(Bill.bill_approved.is_(False))
 
     bills = []
-    if filters:
-        where_clause = " AND ".join(filters)
-        query = f"""
-            SELECT bills.*, congresistas.full_name as author_name
-            FROM bills
-            LEFT OUTER JOIN congresistas ON bills.author_id = congresistas.id
-            WHERE {where_clause}
-            LIMIT 50
-        """
-
+    total_count = 0
+    total_count_display = None
+    results_start = 0
+    results_end = 0
+    pagination_pages = []
+    if author_q or title_q:
         with SessionProcessed() as db:
-            rows = db.execute(text(query), params).mappings().all()
+            latest_bill_dates = (
+                select(
+                    BillOrganization.bill_id,
+                    func.max(BillOrganization.presentation_date).label(
+                        "latest_presentation_date"
+                    ),
+                )
+                .group_by(BillOrganization.bill_id)
+                .subquery()
+            )
+
+            stmt = (
+                select(
+                    Bill.id.label("id"),
+                    Bill.title.label("title"),
+                    Congresista.full_name.label("author_name"),
+                    latest_bill_dates.c.latest_presentation_date.label(
+                        "presentation_date"
+                    ),
+                )
+                .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
+                .outerjoin(latest_bill_dates, latest_bill_dates.c.bill_id == Bill.id)
+                .where(*filters)
+            )
+
+            count_stmt = select(func.count()).select_from(
+                stmt.order_by(None).limit(max_search_results + 1).subquery()
+            )
+            total_count = db.execute(count_stmt).scalar_one()
+            total_count_display = (
+                f"{max_search_results}+"
+                if total_count > max_search_results
+                else str(total_count)
+            )
+
+            visible_total = min(total_count, max_search_results)
+            total_pages = ceil(visible_total / per_page) if visible_total else 0
+            if total_pages and page > total_pages:
+                page = total_pages
+
+            if total_pages:
+                pagination_pages = [
+                    SimpleNamespace(
+                        number=page_number,
+                        current=page_number == page,
+                        url=url_for(
+                            "bills.index",
+                            title_q=title_q,
+                            author_q=author_q,
+                            status=status,
+                            page=page_number,
+                        ),
+                    )
+                    for page_number in range(1, total_pages + 1)
+                ]
+
+            result_stmt = (
+                stmt.order_by(
+                    latest_bill_dates.c.latest_presentation_date.desc(),
+                    Bill.title.asc(),
+                    Bill.id.asc(),
+                )
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+            )
+
+            rows = db.execute(result_stmt).mappings().all()
             if rows and author_q and not author_id_query:
                 author_display = author_q
+            if rows:
+                results_start = (page - 1) * per_page + 1
+                results_end = results_start + len(rows) - 1
+
             bills = [SimpleNamespace(**row) for row in rows]
+
+    prev_page_url = None
+    next_page_url = None
+    if total_count_display is not None and pagination_pages:
+        if page > 1:
+            prev_page_url = url_for(
+                "bills.index",
+                title_q=title_q,
+                author_q=author_q,
+                status=status,
+                page=page - 1,
+            )
+        if page < len(pagination_pages):
+            next_page_url = url_for(
+                "bills.index",
+                title_q=title_q,
+                author_q=author_q,
+                status=status,
+                page=page + 1,
+            )
 
     return render_template(
         "bills/search.html",
@@ -77,6 +199,15 @@ def index():
         author_q=author_q,
         author_display=author_display,
         bills=bills,
+        radio_status=status,
+        page=page,
+        per_page=per_page,
+        total_count_display=total_count_display,
+        results_start=results_start,
+        results_end=results_end,
+        pagination_pages=pagination_pages,
+        prev_page_url=prev_page_url,
+        next_page_url=next_page_url,
     )
 
 
@@ -99,6 +230,14 @@ def bill_detail(bill_id):
                 )
             ).all()
         )
+        bill_status = _("Not approved")
+        if bill.bill_approved:
+            bill_status = _("Approved")
+
+        author = ""
+        if bill.author_id:
+            author_table = db.get(Congresista, bill.author_id)
+            author = author_table.full_name
 
         return render_template(
             "bills/detail.html",
@@ -106,6 +245,8 @@ def bill_detail(bill_id):
             latest_step=latest_step,
             all_steps=all_steps,
             diff_types=diff_types,
+            bill_status=bill_status,
+            author=author,
         )
 
 
@@ -223,7 +364,11 @@ def bill_difference(bill_id, step_id):
         # from ``unavailable``, which means we tried and the new text is
         # missing. The template's final ``else`` branch handles ``None``.
         difference_type = diff.difference_type if diff else None
-        etag = f"bd-{bill_id}-{step_id}-{difference_type}-{content_hash}-r{RENDERER_VERSION}"
+        locale = session.get("lang") or request.args.get("lang") or "en"
+        etag = (
+            f"bd-{bill_id}-{step_id}-{locale}-{difference_type}-{content_hash}"
+            f"-r{RENDERER_VERSION}"
+        )
 
         if request.if_none_match.contains(etag):
             return "", 304

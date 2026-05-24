@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-18 21:57-0500\n"
+"POT-Creation-Date: 2026-05-20 14:09-0500\n"
 "PO-Revision-Date: 2026-05-17 15:22-0500\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,22 +18,26 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: routes/landing.py:13 templates/base.html:31
-msgid "Bills"
-msgstr "Proyectos de ley"
+#: routes/bills.py:102
+msgid "Not approved"
+msgstr "No aprobado"
 
-#: routes/landing.py:14
-msgid "Congress Members"
-msgstr "Congresistas"
+#: routes/bills.py:104
+msgid "Approved"
+msgstr "Aprobado"
 
 #: templates/base.html:29
 msgid "Home"
-msgstr ""
+msgstr "Inicio"
 
 #: templates/base.html:30 templates/base.html:52
 #: templates/landing/index.html:30
 msgid "About"
 msgstr "Acerca de"
+
+#: templates/base.html:31
+msgid "Bills"
+msgstr "Proyectos de ley"
 
 #: templates/base.html:32
 msgid "Congressmen"
@@ -56,21 +60,78 @@ msgid "Contact"
 msgstr "Contacto"
 
 #: templates/bills/detail.html:6 templates/bills/mock_votes.html:5
-#: templates/bills/search.html:8 templates/bills/search.html:26
+#: templates/bills/search.html:8 templates/bills/search.html:42
 msgid "Title"
 msgstr "Título"
 
-#: templates/bills/detail.html:9 templates/bills/mock_votes.html:8
-msgid "Step"
-msgstr "Paso"
+#: templates/bills/detail.html:9
+msgid "Current Step"
+msgstr "Etapa actual"
 
 #: templates/bills/detail.html:11
+msgid "Bill Status"
+msgstr "Estado"
+
+#: templates/bills/detail.html:12 templates/bills/search.html:12
+#: templates/bills/search.html:45
+msgid "Author"
+msgstr "Autor"
+
+#: templates/bills/detail.html:13
 msgid "Summary"
 msgstr "Resumen"
 
-#: templates/bills/detail.html:25
+#: templates/bills/detail.html:28
 msgid "View details"
 msgstr "Ver detalles"
+
+#: templates/bills/difference.html:5
+msgid "Bill"
+msgstr "Proyecto de ley"
+
+#: templates/bills/difference.html:9
+msgid "Back to bill"
+msgstr "Volver al proyecto de ley"
+
+#: templates/bills/difference.html:14
+msgid "Version 1"
+msgstr "Versión 1"
+
+#: templates/bills/difference.html:19 templates/bills/difference.html:28
+msgid "No text available"
+msgstr "No hay texto disponible"
+
+#: templates/bills/difference.html:23
+msgid "Version 2"
+msgstr "Versión 2"
+
+#: templates/bills/difference.html:34
+msgid "Differences"
+msgstr "Diferencias"
+
+#: templates/bills/difference.html:37
+msgid "No changes between versions."
+msgstr "No hay cambios entre las versiones."
+
+#: templates/bills/difference.html:40
+msgid "This is the first version — no previous text to compare."
+msgstr "Esta es la primera versión — no hay texto previo para comparar."
+
+#: templates/bills/difference.html:44
+msgid "Versions differ in length by more than 10× — probably mismatched document types."
+msgstr "Las versiones difieren en longitud en más de 10× — probablemente son tipos de documento distintos."
+
+#: templates/bills/difference.html:48
+msgid "Text could not be extracted for comparison."
+msgstr "No se pudo extraer el texto para comparar."
+
+#: templates/bills/difference.html:54
+msgid "No difference data available."
+msgstr "No hay datos de diferencias disponibles."
+
+#: templates/bills/mock_votes.html:8
+msgid "Step"
+msgstr "Paso"
 
 #: templates/bills/mock_votes.html:14
 msgid "Voting Results"
@@ -104,15 +165,39 @@ msgstr "Abstención"
 msgid "Search the bill by:"
 msgstr "Busca el proyecto de ley por:"
 
-#: templates/bills/search.html:12 templates/bills/search.html:29
-msgid "Author"
-msgstr "Autor"
+#: templates/bills/search.html:45
+msgid "Showing %(start)s-%(end)s of %(count)s bills"
+msgstr "Mostrando %(start)s-%(end)s de %(count)s proyectos de ley"
 
-#: templates/bills/search.html:24 templates/congress/search.html:43
+#: templates/bills/search.html:80
+msgid "Search pages"
+msgstr "Páginas de búsqueda"
+
+#: templates/bills/search.html:82
+msgid "Previous"
+msgstr "Anterior"
+
+#: templates/bills/search.html:92
+msgid "Next"
+msgstr "Siguiente"
+
+#: templates/bills/search.html:21
+msgid "All bills"
+msgstr "Proyectos de ley"
+
+#: templates/bills/search.html:25
+msgid "Approved bills"
+msgstr "Proyectos de ley aprobados"
+
+#: templates/bills/search.html:29
+msgid "Not approved bils"
+msgstr "Proyectos de ley no aprobados"
+
+#: templates/bills/search.html:40 templates/congress/search.html:43
 msgid "Search Criteria"
 msgstr "Criterios de búsqueda"
 
-#: templates/bills/search.html:43
+#: templates/bills/search.html:59
 msgid "No matching bills found."
 msgstr "No se encontraron proyectos de ley."
 
@@ -180,13 +265,12 @@ msgstr "Busca al congresista por:"
 
 #: templates/congress/search.html:13 templates/congress/search.html:14
 #: templates/congress/search.html:45
-#, fuzzy
 msgid "Name"
 msgstr "Por nombre"
 
 #: templates/congress/search.html:33
 msgid "Clear"
-msgstr ""
+msgstr "Limpiar"
 
 #: templates/congress/search.html:65
 msgid "No matching congresspeople found."
@@ -231,8 +315,8 @@ msgstr ""
 #~ msgstr "Escribe el título de un proyecto de ley"
 
 #~ msgid "Write an author name"
-#~ msgstr "Escribe el nombre de un autor"
+#msgstr "Escribe el nombre de un autor"
 
 #~ msgid "Search"
-#~ msgstr "Buscar"
+#msgstr "Buscar"
 

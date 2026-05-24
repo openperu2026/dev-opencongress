@@ -49,7 +49,7 @@
         </div>
 
         <p class="congress-action">
-            <a href="{{ url_for('bills.index', author_q=congresista.id) }}">
+            <a href="{{ url_for('bills.index', author_q=congresista.full_name) }}">
                 {{_('View all bills authored')}}
             </a>
         </p>
