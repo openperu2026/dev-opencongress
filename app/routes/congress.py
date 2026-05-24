@@ -203,7 +203,6 @@ def congress_detail(congresista_id):
                     ),
                 )
                 .order_by(Membership.end_date.desc(), Membership.start_date.desc())
-                
             )
             .mappings()
             .all()
