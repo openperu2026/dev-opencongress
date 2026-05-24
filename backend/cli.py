@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Skip loading documents in processing stage",
     )
+    parser.add_argument(
+        "--scrape-votes",
+        action="store_true",
+        help="Scrape votes from PDFs and store raw output into Raw Bill Pages",
+    )
     return parser
 
 

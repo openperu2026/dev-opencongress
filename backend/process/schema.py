@@ -108,7 +108,7 @@ class VoteEvent(PrintableModel):
     bill_id: str | None
     motion_id: str | None
     event_date: date
-    result: VoteResult
+    result: VoteResult | None
     votes: list[Vote]
     attendance: list[Attendance]
 
