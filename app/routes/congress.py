@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-
+from datetime import date
 from flask import Blueprint, render_template, request
 from sqlalchemy import func, or_, select
 from backend.database.models import (
@@ -70,6 +70,7 @@ def index():
     name_q = request.args.get("name_q", "").strip()
     party_q = request.args.get("party_q", "").strip()
     region_q = request.args.get("region_q", "").strip()
+    commission_q = request.args.get("commission_q", "").strip()
 
     congresistas = []
     filters = []
@@ -90,10 +91,28 @@ def index():
         )
 
     if region_q:
-        filters.append(Congresista.full_name.ilike(f"%{region_q}%"))
+        filters.append(
+            Congresista.id.in_(
+                select(ChamberMembership.person_id).where(
+                    ChamberMembership.dist_electoral.ilike(f"%{region_q}%")
+                )
+            )
+        )
 
-    if filters:
-        with SessionProcessed() as db:
+    if commission_q:
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Organization.org_type == TypeOrganization.COMMITTEE,
+                    Organization.org_name.ilike(f"%{commission_q}%"),
+                )
+            )
+        )
+
+    with SessionProcessed() as db:
+        if filters:
             rows = db.execute(
                 select(Congresista)
                 .where(*filters)
@@ -107,6 +126,7 @@ def index():
         name_q=name_q,
         party_q=party_q,
         region_q=region_q,
+        commission_q=commission_q,
         congresistas=congresistas,
     )
 
@@ -175,13 +195,15 @@ def congress_detail(congresista_id):
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
                     Membership.person_id == congresista.id,
+                    Membership.end_date >= date(2026, 7, 26),
+                    func.lower(Membership.role) != "accesitario",
                     or_(
                         Membership.org_type == TypeOrganization.COMMITTEE,
                         Organization.org_type == TypeOrganization.COMMITTEE,
                     ),
                 )
                 .order_by(Membership.end_date.desc(), Membership.start_date.desc())
-                .limit(8)
+                
             )
             .mappings()
             .all()
