@@ -22,6 +22,7 @@ from backend.core.enums import (
     VoteOption,
     VoteResult,
     EmbeddingModel,
+    OcrModel,
     enum_values,
     sql_value_list,
 )
@@ -59,6 +60,7 @@ __all__ = [
     "TypeCommittee",
     "TypeAdmin",
     "EmbeddingModel",
+    "OcrModel",
     "parse_leg_period",
     "parse_legislature",
     "parse_role_bill",

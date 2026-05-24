@@ -209,3 +209,13 @@ class TypeCommittee(str, Enum):
 
 class EmbeddingModel(str, Enum):
     MULTILINGUAL_E5_BASE = "intfloat/multilingual-e5-base"
+
+
+class OcrModel(str, Enum):
+    """OCR engine used to extract text from a scanned document page.
+
+    Bills are OCR'd with chandra2; attendance and votes with Tesseract.
+    """
+
+    CHANDRA = "chandra2"
+    TESSERACT = "Tesseract"

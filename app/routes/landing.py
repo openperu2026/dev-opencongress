@@ -11,7 +11,7 @@ def index():
     """
     menu_items = [
         {"name": _("Bills"), "url": "/bills"},  # considering using url_for
-        {"name": _("Congress Members"), "url": "/congress"},
+        {"name": _("Congressmen"), "url": "/congress"},
         # {"name": _("Data"), "url": "/info"},
     ]
 
