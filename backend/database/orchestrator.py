@@ -436,18 +436,20 @@ class OpenPeruOrchestrator:
                 )
                 self._log_stage_summary("bill_summary", summary["bill_summary"])
 
-        if process_documents:
-            with log_manager.stage("process", "bill_text"):
-                console.info("Starting bill text processing")
-                summary["bill_text"] = self._process_bill_text(limit=bills_limit)
-                self._log_stage_summary("bill_text", summary["bill_text"])
+            if process_documents:
+                with log_manager.stage("process", "bill_text"):
+                    console.info("Starting bill text processing")
+                    summary["bill_text"] = self._process_bill_text(limit=bills_limit)
+                    self._log_stage_summary("bill_text", summary["bill_text"])
 
-            with log_manager.stage("process", "bill_differences"):
-                console.info("Starting bill differences processing")
-                summary["bill_differences"] = self._process_bill_differences(
-                    limit=bills_limit,
-                )
-                self._log_stage_summary("bill_differences", summary["bill_differences"])
+                with log_manager.stage("process", "bill_differences"):
+                    console.info("Starting bill differences processing")
+                    summary["bill_differences"] = self._process_bill_differences(
+                        limit=bills_limit,
+                    )
+                    self._log_stage_summary(
+                        "bill_differences", summary["bill_differences"]
+                    )
 
         if process_motions:
             with log_manager.stage("process", "motions"):

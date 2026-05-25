@@ -49,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--process-documents",
         action="store_true",
-        help="Skip loading documents in processing stage",
+        help="Enable document processing stage",
     )
     parser.add_argument(
         "--first-summary",
