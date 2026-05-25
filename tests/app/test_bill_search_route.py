@@ -35,12 +35,14 @@ def _register_unaccent(engine):
             dbapi_connection.create_function(
                 "unaccent",
                 1,
-                lambda value: None
-                if value is None
-                else "".join(
-                    character
-                    for character in unicodedata.normalize("NFKD", str(value))
-                    if not unicodedata.combining(character)
+                lambda value: (
+                    None
+                    if value is None
+                    else "".join(
+                        character
+                        for character in unicodedata.normalize("NFKD", str(value))
+                        if not unicodedata.combining(character)
+                    )
                 ),
             )
 
