@@ -35,6 +35,55 @@ from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 
+TOPIC_MAPPING = {
+    "Inclusión Social y Personas con Discapacidad": [
+        "Inclusión Social",
+        "Discapacidad",
+    ],
+    "Defensa del Consumidor y Organismos Reguladores de los Servicios Públicos": [
+        "Defensa del Consumidor",
+        "Regulación y Competencia",
+    ],
+    "Relaciones Exteriores": ["Relaciones Exteriores"],
+    "Defensa Nacional, Orden interno, Desarrollo alternativo y Lucha contra las Drogas": [
+        "Defensa Nacional",
+        "Orden Interno",
+        "Desarrollo alternativo y Lucha contra las Drogas",
+    ],
+    "Presupuesto y Cuenta General de la República": ["Presupuesto"],
+    "Pueblos Andinos, Amazónicos y Afroperuanos, Ambiente y Ecología": [
+        "Pueblos Andinos, Amazónicos y Afroperuanos",
+        "Ambiente y Ecología",
+    ],
+    "Mujer y Familia": ["Mujer y Familia"],
+    "Transportes y Comunicaciones": ["Transportes y Comunicaciones"],
+    "Energía y Minas": ["Energía y Minas"],
+    "Educación, Juventud y Deporte": ["Educación, Juventud y Deporte"],
+    "Descentralización, Regionalización, Gobiernos Locales y Modernización de la Gestión del Estado": [
+        "Descentralización",
+        "Modernización del Estado",
+    ],
+    "Fiscalización y Contraloría": ["Fiscalización y Contraloría"],
+    "Constitución y Reglamento": ["Constitución y Reglamento"],
+    "Justicia y Derechos Humanos": ["Justicia y Derechos Humanos"],
+    "Ciencia, Innovación y Tecnología": ["Ciencia, Innovación y Tecnología"],
+    "Trabajo y Seguridad Social": ["Trabajo y Seguridad Social"],
+    "Salud y Población": ["Salud y Población"],
+    "Cultura y Patrimonio Cultural": ["Cultura y Patrimonio Cultural"],
+    "Vivienda y Construcción": ["Vivienda y Construcción"],
+    "Agraria": ["Agraria"],
+    "Producción, Micro y Pequeña Empresa y Cooperativas": [
+        "Producción, Micro y Pequeña Empresa y Cooperativas"
+    ],
+    "Inteligencia": ["Inteligencia"],
+    "Comercio Exterior y Turismo": ["Comercio Exterior y Turismo"],
+    "Economía, Banca, Finanzas e Inteligencia Financiera": [
+        "Economía",
+        "Banca y Finanzas",
+        "Inteligencia Financiera",
+    ],
+}
+
 
 def get_author_with_party(
     db: Session,
@@ -277,6 +326,7 @@ def bill_detail(bill_id):
             )
         )
 
+        # Approved and time since presentation/time for approval
         bill_status = _("Not approved")
         if bill.bill_approved:
             bill_status = _("Approved")
@@ -293,6 +343,26 @@ def bill_detail(bill_id):
             today = datetime.now().date()
             days_since_presentation = (today - presentation_date).days
 
+        # Committes -> Topics
+        committees = db.scalars(
+            select(Organization.org_name)
+            .join(
+                BillOrganization,
+                BillOrganization.org_id == Organization.org_id,
+            )
+            .where(
+                Organization.org_type == "Comisión",
+                Organization.org_subtype == "Comisión Ordinaria",
+                BillOrganization.bill_id == bill_id,
+            )
+            .distinct()
+            .order_by(Organization.org_name)
+        ).all()
+
+        topics = []
+        for comm in committees:
+            topics.extend(TOPIC_MAPPING[comm])
+
         return render_template(
             "bills/detail.html",
             bill=bill,
@@ -304,6 +374,7 @@ def bill_detail(bill_id):
             party_name=org_name,
             presentation_date=presentation_date,
             days_since_presentation=days_since_presentation,
+            topics=topics,
         )
 
 

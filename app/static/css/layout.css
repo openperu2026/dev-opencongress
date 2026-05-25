@@ -453,6 +453,16 @@ main {
     font-weight: 800;
 }
 
+.bill-topic {
+    background-color: #c9d5e1;
+    color: #344452;
+    font-family: "Roboto", sans-serif;
+    font-size: 16px;
+    font-weight: 900;
+    padding: 8px 10px;
+    border-radius: 9px;
+}
+
 .bill-heading-meta {
     display: flex;
     flex-wrap: wrap;
@@ -460,6 +470,7 @@ main {
     color: #344452;
     font-family: "Roboto", sans-serif;
     font-size: 19px;
+    padding: 10px 0 0 0 ;
 }
 
 .bill-meta {

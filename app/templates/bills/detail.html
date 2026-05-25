@@ -18,6 +18,12 @@
         <h1 class="bill-heading">
           {{ bill.title }}
         </h1>
+        
+        <div class="bill-topics">
+          {% for topic in topics %}
+            <span class="bill-topic">{{ topic }}</span>
+          {% endfor %}          
+        </div>
 
         <div class="bill-heading-meta">
           <span> <strong>{{_('Presentation date')}}:</strong> {{ presentation_date.strftime('%d-%m-%Y') }}</span>
