@@ -1,4 +1,5 @@
 from types import SimpleNamespace
+from datetime import date
 from flask import Blueprint, render_template, request
 from sqlalchemy import func, or_, select
 from backend.database.models import (
@@ -69,6 +70,7 @@ def index():
     name_q = request.args.get("name_q", "").strip()
     party_q = request.args.get("party_q", "").strip()
     region_q = request.args.get("region_q", "").strip()
+    commission_q = request.args.get("commission_q", "").strip()
 
     congresistas = []
     filters = []
@@ -116,6 +118,7 @@ def index():
         name_q=name_q,
         party_q=party_q,
         region_q=region_q,
+        commission_q=commission_q,
         congresistas=congresistas,
     )
 
@@ -184,13 +187,14 @@ def congress_detail(congresista_id):
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
                     Membership.person_id == congresista.id,
+                    Membership.end_date >= date(2026, 7, 26),
+                    func.lower(Membership.role) != "accesitario",
                     or_(
                         Membership.org_type == TypeOrganization.COMMITTEE,
                         Organization.org_type == TypeOrganization.COMMITTEE,
                     ),
                 )
                 .order_by(Membership.end_date.desc(), Membership.start_date.desc())
-                .limit(8)
             )
             .mappings()
             .all()
