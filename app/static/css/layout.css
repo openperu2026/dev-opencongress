@@ -798,6 +798,13 @@ main {
 }
 
 /* votes page */
+.page-votes {
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 20px 36px 20px 36px ;
+}
+
+
 .vote-results {
     margin-top: 2rem;
   }
