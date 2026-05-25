@@ -1,3 +1,4 @@
+import sys
 from datetime import datetime
 from backend.config import settings
 from backend.core.enums import TypeBillStep
@@ -29,11 +30,14 @@ def get_approved_ids(
         return list(db.scalars(stmt))
 
 
-def get_approved_bill_documents(db_session_factory: sessionmaker):
+def get_approved_bill_documents(
+    db_session_factory: sessionmaker,
+    limit: int = 15,
+):
     """
     Get approved variables from raw_bill_documents
     """
-    approved_ids = get_approved_ids(db_session_factory, models.Bill)
+    approved_ids = get_approved_ids(db_session_factory, models.Bill, limit=limit)
     logger.info(approved_ids)
     if not approved_ids:
         return []
@@ -217,6 +221,13 @@ def write_raw_bill_pages(
 
 
 if __name__ == "__main__":
+    limit = 15
+    if len(sys.argv) > 1:
+        try:
+            limit = int(sys.argv[1])
+        except ValueError as exc:
+            raise ValueError("limit must be an integer") from exc
+
     db_engine = create_engine(settings.DB_URL, pool_pre_ping=True)
     db_session_factory = sessionmaker(
         bind=db_engine,
@@ -224,6 +235,6 @@ if __name__ == "__main__":
         autoflush=False,
     )
 
-    approved_docs = get_approved_bill_documents(db_session_factory)
+    approved_docs = get_approved_bill_documents(db_session_factory, limit=limit)
     logger.info(f"len approved docs {len(approved_docs)}")
     write_raw_bill_pages(db_session_factory, approved_docs, ocr_model="chandra2")
