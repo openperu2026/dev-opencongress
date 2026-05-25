@@ -2,9 +2,21 @@
 
 :root {
     --color-frame: #000000;
-    --color-background: #F1F7ED;
+    --color-background: #ffffff;
+
+    --dark-pink:#C0076F;
     --color-highlight: #B33951;
     --color-black: #2A0800;
+    --color-hero: #ffffff;
+    --red: #AE0F13;
+    --pink: #D63F9B;
+    --yellow: #D9AE08;
+    --green: #058710;
+    /*--light-green: #0CDE02;*/
+    --light-green: #48a65e;
+    --blue: #0077c8;
+    --light-blue: #0E9EFF;
+    --divider-white: #ffffff;
 }
 
 html,
@@ -30,17 +42,50 @@ main {
     position: sticky;
     top: 0;
     z-index: 1000;
-
-
     display: flex;
     align-items: center;
     justify-content: flex-start;
     gap: 20px;
     padding: 14px 24px;
-    background:  var(--color-frame);
+    background:  white;
     border-bottom: 1px solid var(--color-frame);
 
     font-size: 20px;
+}
+
+.header-divider {
+    width: 100%;
+    height: 12px;
+    flex: 0 0 auto;
+
+    /* Vertical stripe pattern.  */
+    background: repeating-linear-gradient(
+        90deg,
+        var(--pink) 0 7px,
+        var(--color-highlight) 7px 14px,
+        var(--pink) 14px 21px,
+        var(--yellow) 21px 28px,
+        var(--blue) 28px 35px,
+        var(--light-blue) 35px 42px,
+        var(--blue) 42px 49px,
+        var(--yellow) 49px 56px,
+        var(--green) 56px 63px,
+        var(--light-green) 63px 70px,
+        var(--green) 70px 77px
+    );
+   
+    /*
+    Horizontal stripe pattern
+
+    background: repeating-linear-gradient(
+        180deg,
+        var(--pink) 0 3px,
+        var(--green) 3px 5px,
+        var(--light-green) 5px 7px,
+        var(--green) 7px 9px,
+        var(--pink) 9px 12px
+    );
+     */
 }
 
 .nav-brand {
@@ -75,7 +120,7 @@ main {
 
 .nav-links a,
 .menu-toggle {
-    color: #ffffff;
+    color: #5a1a1a;
     text-decoration: none;
     font-weight: 600;
 }
@@ -117,7 +162,7 @@ main {
 .page-subtitle {
     /*format of the text of the subtitle*/
     font-size: 20px;
-    color: #666;
+    color: #000000;
     margin-bottom: 30px;
 }
 
@@ -141,6 +186,7 @@ main {
 }
 
 .searching-container input,
+.searching-container select,
 .searching-container select {
   width: 100%;
   min-width: 0;
@@ -174,7 +220,8 @@ main {
     max-width: 270px;
 }
 
-.congress-search-form .searching-container input {
+.congress-search-form .searching-container input,
+.congress-search-form .searching-container select {
     width: 100%;
 }
 
@@ -365,7 +412,7 @@ main {
 }
 
 .btn-group a {
-    color: #ffffff;
+    color: #5a1a1a;
     text-decoration: none;
     font-weight: 600;
 }
@@ -375,20 +422,24 @@ main {
     display: flex;
     flex-direction: row;
     justify-content: center;
+    align-self: center;
     gap: 15px;
     flex-wrap: wrap;
 }
 /*Format of the bottons*/
 .menu-card a {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 12px;
     flex: 1;
     /*this a gradeint pf colors*/
-    background: linear-gradient(90deg, var(--color-highlight), var(--color-highlight));
+    background: var(--dark-pink);
     color: white;
     text-decoration: none;
     border-radius: 8px;
     font-weight: 500;
+    text-align: center;
     transition: all 0.2s ease;
     width: 180px;
 }
@@ -743,22 +794,6 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 
-@media (max-width: 500px) {
-
-  .nav-links {
-    display: none;
-    flex-direction: column;
-    gap: 12px;
-  }
-
-  /* For showing when URL ends in #menu */
-  .nav-links:target {
-    display: flex;
-  }
-}
-
-
-
 .menu-toggle {
   display: none;
   font-size: 22px;
@@ -767,15 +802,28 @@ svg#seatsSvg circle { cursor: default; }
   cursor: pointer;
 }
 
+.nav-toggle {
+  display: none;
+}
+
 @media (max-width: 500px) {
 
   /* To show hamburger */
   .menu-toggle {
     display: block;
-    font-size: 26px;
-    color: #fff;
+    font-size: 0;
+    color: #5a1a1a;
     text-decoration: none;
     cursor: pointer;
+  }
+
+  label.menu-toggle::before {
+    content: "\2630";
+    font-size: 26px;
+  }
+
+  a.menu-toggle {
+    display: none;
   }
 
   /* to hide the navigation by default */
@@ -783,18 +831,29 @@ svg#seatsSvg circle { cursor: default; }
     display: none;
     flex-direction: column;
     width: 100%;
-    background: var(--color-frame);
+    background: #ffffff;
     padding: 20px;
     gap: 14px;
   }
+
+  .nav-toggle:checked ~ .nav-links {
+    display: flex;
+  }
  
   .menu-close {
+    display: block;
     text-align: right;
   }
-  .menu-close a {
-    color: #fff;
+
+  .menu-close label {
+    color: #5a1a1a;
     font-size: 20px;
     text-decoration: none;
+    cursor: pointer;
+  }
+
+  .menu-close a {
+    display: none;
   }
 }
 
@@ -808,14 +867,56 @@ svg#seatsSvg circle { cursor: default; }
     box-sizing: border-box;
     padding: 80px 20px;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 48px;
     text-align: center;
-    background-image: url("../images/hero1.jpg");
+    /*background-image: url("../images/hero1.jpg");*/
+    background-color: var(--color-hero);
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+
+}
+
+.hero-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    max-width: 560px;
+}
+
+.hero-text {
+    align-items: flex-start;
+    flex: 0 1 66%;
+    max-width: 760px;
+    text-align: left;
+}
+
+.hero-container:not(.hero-text) {
+    flex: 0 1 33%;
+}
+
+.hero-title {
+    margin: 0 0 24px;
+    color: var(--dark-pink);
+    font-size: 76px;
+    font-weight: 700;
+    line-height: 1.08;
+}
+
+.hero-description {
+    margin: 0 0 28px;
+    color: #111827;
+    font-size: 20px;
+    line-height: 1.55;
+}
+
+.hero-list {
+    margin: 0 0 28px;
+    padding-left: 22px;
+    text-align: left;
+    line-height: 1.6;
 }
 
 
@@ -824,15 +925,25 @@ svg#seatsSvg circle { cursor: default; }
   padding: 0 18px;
 }
 
-.hero h1 {
-  font-size: 100px;
-  margin: 0 0 16px 0;
-}
-
-.hero p {
+.hero .page-subtitle {
   font-size: 18px;
   line-height: 1.6;
   margin: 0 0 28px 0;
+}
+
+@media (max-width: 800px) {
+    .hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .hero-title {
+        font-size: 48px;
+    }
+
+    .hero-description {
+        font-size: 21px;
+    }
 }
 
 .about-section {
@@ -865,13 +976,43 @@ svg#seatsSvg circle { cursor: default; }
 
 /*Congressmember*/
 
+.congress-detail-page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 36px 24px 56px;
+}
 
+.congress-profile-header {
+    margin-bottom: 28px;
+}
+
+.congress-profile-header h1 {
+    margin: 0 0 8px;
+    color: #22364a;
+    font-size: 34px;
+    line-height: 1.15;
+}
+
+.congress-profile-header p {
+    margin: 0;
+    color: #5f6f7f;
+    font-size: 16px;
+    font-weight: 600;
+}
+
+.congress-section h2 {
+    margin: 0 0 16px;
+    color: #22364a;
+    font-size: 22px;
+    line-height: 1.2;
+}
 
 .congress-photo-wrap {
-    width: 180px;
-    aspect-ratio: 1 / 1;
+    width: 176px;
+    aspect-ratio: 3 / 4;
     overflow: hidden;
     background: #ffffff;
+    border: 1px solid #d8e0e8;
 }
 
 .congress-photo {
@@ -884,30 +1025,163 @@ svg#seatsSvg circle { cursor: default; }
 
 .congress-profile-summary {
     width: 100%;
-    height: 100%;
-    object-fit: cover;
-    display: flex;
-    gap: 24px;
+    display: grid;
+    grid-template-columns: 176px minmax(220px, 0.8fr) minmax(320px, 1.3fr);
+    align-items: start;
+    gap: 28px;
+    margin-bottom: 30px;
 }
 
-.congress-stats{
-
-  display: flex;
-  justify-content: space-between;
-  gap: 24px;
+.congress-info-panel,
+.congress-committee-panel {
+    min-width: 0;
 }
 
+.congress-info-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+}
+
+.congress-info-list div {
+    display: grid;
+    grid-template-columns: 120px 1fr;
+    gap: 16px;
+}
+
+.congress-info-list dt {
+    color: #667789;
+    font-weight: 700;
+}
+
+.congress-info-list dd {
+    margin: 0;
+    color: #15283b;
+}
+
+.committee-membership-list {
+    display: grid;
+    gap: 10px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.committee-membership-list li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #e3e9ef;
+}
+
+.committee-membership-list span {
+    min-width: 0;
+    color: #15283b;
+    line-height: 1.35;
+}
+
+.committee-membership-list strong {
+    color: #5a1a1a;
+    font-size: 13px;
+    text-transform: capitalize;
+    white-space: nowrap;
+}
+
+.congress-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+    margin: 22px 0 38px;
+}
 
 .congress-stats article {
-    flex: 1;
-    padding: 16px;
-    border-radius: 8px;
-    text-align: center;
+    padding: 18px 20px;
+    border-top: 4px solid var(--dark-pink);
+    background: #f8fafc;
+    text-align: left;
+}
+
+.congress-stats h2 {
+    margin: 0 0 14px;
+    color: #536678;
+    font-size: 15px;
+    text-transform: uppercase;
+}
+
+.congress-stats strong {
+    color: #15283b;
+    font-size: 28px;
+    line-height: 1;
+}
+
+.congress-bills-preview,
+.congress-votes-section {
+    margin-top: 34px;
+}
+
+.recent-bills-list {
+    display: grid;
+    gap: 12px;
+    margin: 0;
+    padding-left: 20px;
+}
+
+.recent-bills-list a {
+    color: #174ea6;
+    font-weight: 700;
+    line-height: 1.4;
 }
 
 .congress-action a {
     color: #2563eb;
     font-weight: 700;
+}
+
+.congress-vote {
+    padding: 14px 0;
+    border-bottom: 1px solid #e3e9ef;
+}
+
+.congress-vote strong {
+    color: #15283b;
+}
+
+.congress-vote p {
+    margin: 8px 0 0;
+    line-height: 1.5;
+}
+
+.congress-source {
+    margin-top: 26px;
+}
+
+@media (max-width: 900px) {
+    .congress-profile-summary {
+        grid-template-columns: 176px 1fr;
+    }
+
+    .congress-committee-panel {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 640px) {
+    .congress-detail-page {
+        padding: 28px 18px 44px;
+    }
+
+    .congress-profile-summary,
+    .congress-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .congress-info-list div,
+    .committee-membership-list li {
+        grid-template-columns: 1fr;
+        gap: 4px;
+    }
 }
 
 .congress-bills-page {

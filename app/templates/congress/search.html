@@ -27,6 +27,10 @@
             <input type="text" name="region_q" value="{{region_q or '' }}"  placeholder="{{_('Region')}}">
 
         </div>
+
+        <div class="searching-container">
+            <input type="text" name="commission_q" value="{{ commission_q or '' }}" placeholder="{{_('Commission')}}">
+        </div>
         <button type="submit" class="search-icon-button" aria-label="Search">
             <i class="fa-solid fa-magnifying-glass"></i>
         </button>
@@ -50,6 +54,9 @@
             {% if region_q %}
                 <span>{{_('Region')}}: {{region_q}}</span>
             {% endif %}
+            {% if commission_q %}
+                <span>{{_('Commission')}}: {{commission_q}}</span>
+            {% endif %}
         </div>
 
         <ul>
@@ -61,7 +68,7 @@
                 </li>
             {% endfor %}
         </ul>
-    {% elif name_q or party_q or region_q %}
+    {% elif name_q or party_q or region_q or commission_q %}
         <p>{{_('No matching congresspeople found.')}}</p>
     {% endif %}
 
