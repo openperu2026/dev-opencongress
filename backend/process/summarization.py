@@ -9,7 +9,6 @@ from backend import TypeBillStep
 from backend.config import settings
 from backend.database import models as db_models
 
-
 MONTHS_ES = {
     1: "enero",
     2: "febrero",

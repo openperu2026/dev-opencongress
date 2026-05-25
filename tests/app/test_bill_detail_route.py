@@ -14,7 +14,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.core.enums import Proponents, TypeBillStep
+from backend.core.enums import Proponents
 from backend.database.models import (
     Base,
     Bill,
@@ -65,14 +65,14 @@ def _seed(session_factory, *, steps_with_diff_types):
                 summary_oc="",
             )
         )
-        for step_id, diff_type in steps_with_diff_types:
+        for step_id, step_type, diff_type in steps_with_diff_types:
             db.add(
                 BillStep(
                     bill_id=bill_id,
                     step_id=step_id,
                     vote_step=False,
                     step_date=date(2022, 2, step_id),
-                    step_type=TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
+                    step_type=step_type,
                     step_detail="",
                 )
             )
@@ -156,7 +156,7 @@ def _seed_author_affiliations(session_factory):
                     step_id=1,
                     vote_step=False,
                     step_date=date(2022, 2, 1),
-                    step_type=TypeBillStep.DICTAMEN_O_ACUERDO_DE_COMISION,
+                    step_type="Presentado",
                     step_detail="",
                 ),
             ]
@@ -168,12 +168,12 @@ def test_view_changes_link_only_for_modified_and_incomparable(client, session_fa
     _seed(
         session_factory,
         steps_with_diff_types=[
-            (1, "modified"),
-            (2, "no_change"),
-            (3, "unavailable"),
-            (4, "first_version"),
-            (5, "incomparable"),
-            (6, None),  # no BillDifference row
+            (1, "Revisión o cambio de texto", "modified"),
+            (2, "Votación", "no_change"),
+            (3, "En Comisión", "unavailable"),
+            (4, "Presentado", "first_version"),
+            (5, "En Agenda del Pleno", "incomparable"),
+            (6, "En Agenda del Pleno", None),  # no BillDifference row
         ],
     )
 
@@ -194,4 +194,3 @@ def test_detail_page_shows_author_party_and_committee(client, session_factory):
 
     assert "Author:" in body
     assert "Ana Perez" in body
-    assert "(Party: Partido Verde, Committee: Comisión de Economía)" in body

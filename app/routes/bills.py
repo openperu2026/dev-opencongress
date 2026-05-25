@@ -3,6 +3,7 @@ from datetime import date
 from calendar import monthrange
 from math import ceil
 from types import SimpleNamespace
+from datetime import datetime
 from flask import (
     Blueprint,
     current_app,
@@ -12,14 +13,15 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, select, desc
+from sqlalchemy.orm import Session
 from app.diff_render import RENDERER_VERSION, render_payload_html
-from .congress import latest_org_name
 from backend.database.crud.pipeline_bills import get_billtext_for_step
 from backend.database.models import (
     Bill,
     BillDifference,
     BillStep,
+    BillCongresistas,
     Congresista,
     BillOrganization,
     Ley,
@@ -37,6 +39,81 @@ from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 DATE_YEAR_MIN = 1900
+
+TOPIC_MAPPING = {
+    "Inclusión Social y Personas con Discapacidad": [
+        "Inclusión Social",
+        "Discapacidad",
+    ],
+    "Defensa del Consumidor y Organismos Reguladores de los Servicios Públicos": [
+        "Defensa del Consumidor",
+        "Regulación y Competencia",
+    ],
+    "Relaciones Exteriores": ["Relaciones Exteriores"],
+    "Defensa Nacional, Orden interno, Desarrollo alternativo y Lucha contra las Drogas": [
+        "Defensa Nacional",
+        "Orden Interno",
+        "Desarrollo alternativo y Lucha contra las Drogas",
+    ],
+    "Presupuesto y Cuenta General de la República": ["Presupuesto"],
+    "Pueblos Andinos, Amazónicos y Afroperuanos, Ambiente y Ecología": [
+        "Pueblos Andinos, Amazónicos y Afroperuanos",
+        "Ambiente y Ecología",
+    ],
+    "Mujer y Familia": ["Mujer y Familia"],
+    "Transportes y Comunicaciones": ["Transportes y Comunicaciones"],
+    "Energía y Minas": ["Energía y Minas"],
+    "Educación, Juventud y Deporte": ["Educación, Juventud y Deporte"],
+    "Descentralización, Regionalización, Gobiernos Locales y Modernización de la Gestión del Estado": [
+        "Descentralización",
+        "Modernización del Estado",
+    ],
+    "Fiscalización y Contraloría": ["Fiscalización y Contraloría"],
+    "Constitución y Reglamento": ["Constitución y Reglamento"],
+    "Justicia y Derechos Humanos": ["Justicia y Derechos Humanos"],
+    "Ciencia, Innovación y Tecnología": ["Ciencia, Innovación y Tecnología"],
+    "Trabajo y Seguridad Social": ["Trabajo y Seguridad Social"],
+    "Salud y Población": ["Salud y Población"],
+    "Cultura y Patrimonio Cultural": ["Cultura y Patrimonio Cultural"],
+    "Vivienda y Construcción": ["Vivienda y Construcción"],
+    "Agraria": ["Agraria"],
+    "Producción, Micro y Pequeña Empresa y Cooperativas": [
+        "Producción, Micro y Pequeña Empresa y Cooperativas"
+    ],
+    "Inteligencia": ["Inteligencia"],
+    "Comercio Exterior y Turismo": ["Comercio Exterior y Turismo"],
+    "Economía, Banca, Finanzas e Inteligencia Financiera": [
+        "Economía",
+        "Banca y Finanzas",
+        "Inteligencia Financiera",
+    ],
+}
+
+
+def get_author_with_party(
+    db: Session,
+    author_id: str | None,
+) -> tuple[Congresista | None, str | None]:
+    if not author_id:
+        return None, None
+
+    stmt = (
+        select(Congresista, Organization.org_name)
+        .join(Membership, Membership.person_id == Congresista.id)
+        .join(Organization, Organization.org_id == Membership.org_id)
+        .where(
+            Congresista.id == author_id,
+            Membership.org_type == "Partido",
+        )
+    )
+
+    result = db.execute(stmt).first()
+
+    if result is None:
+        return None, None
+
+    author, org_name = result
+    return author, org_name
 
 
 def load_voter_bancada_dict():
@@ -473,23 +550,64 @@ def bill_detail(bill_id):
                 )
             ).all()
         )
+
+        author_id = bill.author_id
+
+        if not author_id:
+            author_id = db.scalar(
+                select(BillCongresistas.person_id)
+                .where(
+                    BillCongresistas.bill_id == bill_id,
+                    BillCongresistas.role_type == "Autor",
+                )
+                .limit(1)
+            )
+
+        author, org_name = get_author_with_party(db, author_id)
+
+        # Presentation date
+        presentation_date = db.scalar(
+            select(BillStep.step_date).where(
+                BillStep.bill_id == bill_id, BillStep.step_type == "Presentado"
+            )
+        )
+
+        # Approved and time since presentation/time for approval
         bill_status = _("Not approved")
         if bill.bill_approved:
             bill_status = _("Approved")
 
-        author = ""
-        author_party = None
-        author_committee = None
-        if bill.author_id:
-            author_table = db.get(Congresista, bill.author_id)
-            if author_table:
-                author = author_table.full_name
-                author_party = latest_org_name(
-                    db, bill.author_id, TypeOrganization.PARTY
-                )
-                author_committee = latest_org_name(
-                    db, bill.author_id, TypeOrganization.COMMITTEE
-                )
+            stmt = (
+                select(BillStep.step_date)
+                .where(BillStep.bill_id == bill_id, BillStep.step_type == "Votación")
+                .order_by(desc(BillStep.step_date))
+                .limit(1)
+            )
+            approval_date = db.scalar(stmt)
+            days_since_presentation = (approval_date - presentation_date).days
+        else:
+            today = datetime.now().date()
+            days_since_presentation = (today - presentation_date).days
+
+        # Committes -> Topics
+        committees = db.scalars(
+            select(Organization.org_name)
+            .join(
+                BillOrganization,
+                BillOrganization.org_id == Organization.org_id,
+            )
+            .where(
+                Organization.org_type == "Comisión",
+                Organization.org_subtype == "Comisión Ordinaria",
+                BillOrganization.bill_id == bill_id,
+            )
+            .distinct()
+            .order_by(Organization.org_name)
+        ).all()
+
+        topics = []
+        for comm in committees:
+            topics.extend(TOPIC_MAPPING[comm])
 
         return render_template(
             "bills/detail.html",
@@ -499,8 +617,10 @@ def bill_detail(bill_id):
             diff_types=diff_types,
             bill_status=bill_status,
             author=author,
-            author_party=author_party,
-            author_committee=author_committee,
+            party_name=org_name,
+            presentation_date=presentation_date,
+            days_since_presentation=days_since_presentation,
+            topics=topics,
         )
 
 

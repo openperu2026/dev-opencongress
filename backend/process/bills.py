@@ -1,6 +1,5 @@
 import json
 from datetime import date, datetime
-
 from backend import TypeBillStep
 from backend.core.parsers import classify_des_estado
 from backend.database.raw_models import RawBill, RawBillPage
@@ -12,7 +11,7 @@ from backend.process.schema import (
     BillText,
 )
 from backend.process.billtext import extract_bill_body
-from backend.process.utils import create_vote_ids, as_date
+from backend.process.utils import create_vote_ids, as_date, get_sentence_case
 
 
 def process_bill_text(bill_pages: list[RawBillPage]) -> BillText:
@@ -59,9 +58,9 @@ def process_bill(
 
     # Extracting information from general dictionary
     bill_id = raw_bill.id
-    title = general.get("titulo")
-    summary_congreso = general.get("sumilla")
-    observations = general.get("observaciones")
+    title = get_sentence_case(general.get("titulo"))
+    summary_congreso = get_sentence_case(general.get("sumilla"))
+    observations = get_sentence_case(general.get("observaciones"))
     status = classify_des_estado(general.get("desEstado"))
     proponent = general.get("desProponente")
     bancada_name = general.get("desGpar")
