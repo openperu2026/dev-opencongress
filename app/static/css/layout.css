@@ -73,17 +73,17 @@ main {
     /* Vertical stripe pattern.  */
     background: repeating-linear-gradient(
         90deg,
-        var(--color-magenta) 0 7px,
-        var(--color-crimson) 7px 14px,
-        var(--color-hot-pink) 14px 21px,
-        var(--color-deep-purple) 21px 28px,
-        var(--color-royal-blue) 28px 35px,
-        var(--color-andean-teal) 35px 42px,
-        var(--color-forest-green) 42px 49px,
-        var(--color-gold) 49px 56px,
-        var(--color-cream) 56px 63px,
+        var(--pink) 0 7px,
+        var(--color-highlight) 7px 14px,
+        var(--pink) 14px 21px,
+        var(--yellow) 21px 28px,
+        var(--blue) 28px 35px,
+        var(--light-blue) 35px 42px,
+        var(--blue) 42px 49px,
+        var(--yellow) 49px 56px,
+        var(--green) 56px 63px,
         var(--light-green) 63px 70px,
-        var(--color-near-black) 70px 77px
+        var(--green) 70px 77px
     );
 
     
