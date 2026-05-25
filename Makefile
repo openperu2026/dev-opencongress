@@ -21,3 +21,6 @@ process-first-summary:
 
 process:
 	uv run -m backend
+
+process-bill-documents:
+	uv run -m backend --only-bills --process-documents	

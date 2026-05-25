@@ -8,3 +8,4 @@ CRON_TZ=America/Lima
 0 4 * * * /app/docker/cron/run-job.sh scrape-leyes >> /app/logs/cron.log 2>&1
 0 4 * * * /app/docker/cron/run-job.sh scrape-documents >> /app/logs/cron.log 2>&1
 0 7 * * * /app/docker/cron/run-job.sh process >> /app/logs/cron.log 2>&1
+45 17 * * * /app/docker/cron/run-job.sh process-bill-documents >> /app/logs/cron.log 2>&1
