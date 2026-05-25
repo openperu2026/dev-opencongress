@@ -32,17 +32,15 @@
 }
 
 html,
-
-
 body {
-/*Format of the body*/
-    margin: 0;
-    background-color: var(--color-background);
-    color: #344452;
-    font-family: "Roboto", sans-serif;
-    display: flex;
-    flex-direction: column;
-    min-height: 100vh;
+  /*Format of the body*/
+  margin: 0;
+  background-color: var(--color-background);
+  color: #344452;
+  font-family: "Roboto", sans-serif;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
 main {
@@ -207,14 +205,20 @@ main {
     background-color:  var(--color-highlight);
     font-size: 24px;
     cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .searching-container input,
+.searching-container select,
 .searching-container select {
-    height: 68px;
-    padding: 24px 24px;
+  width: 100%;
+  min-width: 0;
+  height: 68px;
+  padding: 0 18px;
     border: 2px solid #b7b7b7;
-    font-size: 18px;
+  font-size: 17px;
     box-sizing: border-box;
     background-color: var(--color-background);
 }
@@ -261,31 +265,117 @@ main {
 }
 
 .bill-search-form .search-title {
-    margin: 0 0 18px;
+  margin: 0 0 18px;
+  text-align: left;
 }
 
 .bill-search-form .bar-search {
-    display: flex;
-    align-items: stretch;
-    gap: 16px;
-    flex-wrap: wrap;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.bill-search-form .search-row {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.bill-search-form .search-row--primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 92px;
+  align-items: stretch;
+  margin-bottom: 40px;
+}
+
+.bill-search-form .search-row--secondary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .bill-search-form .searching-container {
-    flex: 1 1 220px;
-    max-width: 270px;
+    display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 
-.bill-search-form .searching-container input {
-    width: 100%;
+.bill-search-form .search-date-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  margin-top: -10px;
+}
+
+.bill-search-form .search-date-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.bill-search-form .search-date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 50px;
+  width: 100%;
+  margin-top: -10px;
+}
+
+.bill-search-form .search-date-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bill-search-form .search-date-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #333333;
+}
+
+.bill-search-form .search-date-selects {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.search-date-selects select{
+  width: 100%;
+  min-width: 0;
+  height: 34px;
+  padding: 0 9px;
+    border: 2px solid #b7b7b7;
+  font-size: 10px;
+    box-sizing: border-box;
+  background-color: var(--color-background)
 }
 
 .bill-search-form .radio-container {
-    flex-basis: 100%;
-    display: flex;
-    gap: 16px;
-    font-size: 20px;
-    align-items: center;}
+  flex-basis: 100%;
+  display: flex;
+  gap: 20px;
+  font-size: 18px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.bill-search-form .radio-container label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bill-search-form .radio-container input[type="radio"] {
+  margin: 0;
+}
+
+.bill-search-form .search-section-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #333333;
+  text-align: left;
+  margin-top: -2px;
+}
 
 .form-actions {
     display: flex;
@@ -327,6 +417,19 @@ main {
 
 .bar-search {
     display: flex;
+}
+
+@media (max-width: 500px) {
+  .bill-search-form .search-row--primary,
+  .bill-search-form .search-row--secondary,
+  .bill-search-form .search-date-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bill-search-form .search-icon-button {
+    width: 100%;
+    min-height: 68px;
+  }
 }
 
 .btn-group {

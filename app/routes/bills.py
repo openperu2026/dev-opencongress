@@ -1,4 +1,6 @@
 from hashlib import sha1
+from datetime import date
+from calendar import monthrange
 from math import ceil
 from types import SimpleNamespace
 from datetime import datetime
@@ -22,9 +24,11 @@ from backend.database.models import (
     BillCongresistas,
     Congresista,
     BillOrganization,
+    Ley,
     Membership,
     Organization,
 )
+from backend.core.enums import TypeOrganization
 from .processed_session import SessionProcessed
 import json
 import os
@@ -34,6 +38,7 @@ from .build_bancada_bars import build_bancada_bars
 from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
+DATE_YEAR_MIN = 1900
 
 TOPIC_MAPPING = {
     "Inclusión Social y Personas con Discapacidad": [
@@ -124,11 +129,59 @@ def load_voter_bancada_dict():
     return voter_bancada_map
 
 
+def _parse_int_arg(value, default):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _build_date_picker(prefix, args, today):
+    raw_year = args.get(f"{prefix}_year")
+    raw_month = args.get(f"{prefix}_month")
+    raw_day = args.get(f"{prefix}_day")
+
+    provided = any(value not in (None, "") for value in (raw_year, raw_month, raw_day))
+    year = _parse_int_arg(raw_year, None)
+    month = _parse_int_arg(raw_month, None)
+    day = _parse_int_arg(raw_day, None)
+
+    if year is not None:
+        year = max(DATE_YEAR_MIN, min(year, today.year))
+    if month is not None:
+        month = max(1, min(month, 12))
+
+    selected_date = None
+    day_options = []
+    if year is not None and month is not None:
+        last_day = monthrange(year, month)[1]
+        day_options = list(range(1, last_day + 1))
+        if day is not None:
+            day = max(1, min(day, last_day))
+            selected_date = date(year, month, day)
+
+    return {
+        "provided": provided,
+        "selected_date": selected_date,
+        "year_value": year,
+        "month_value": month,
+        "day_value": day,
+        "year_options": list(range(today.year, DATE_YEAR_MIN - 1, -1)),
+        "month_options": list(range(1, 13)),
+        "day_options": day_options,
+    }
+
+
 @bills_bp.route("/bills")
 def index():
     title_q = request.args.get("title_q", "").strip()
     author_q = request.args.get("author_q", "").strip()
+    author_party_q = request.args.get("author_party_q", "").strip()
     status = request.args.get("status", "all").strip()
+    bill_id_q = request.args.get("bill_id_q", "").strip()
+    law_id_q = request.args.get("law_id_q", "").strip()
+    current_step_q = request.args.get("current_step_q", "").strip()
+    organization_name_q = request.args.get("organization_name_q", "").strip()
     page = request.args.get("page", 1, type=int)
     page = page if page and page > 0 else 1
     per_page = 50
@@ -139,9 +192,86 @@ def index():
     filters = []
     author_display = None
     author_id_query = author_q.isdigit()
+    author_id_int = None
+    today = date.today()
+    presentation_date_from_picker = _build_date_picker(
+        "presentation_date_from", request.args, today
+    )
+    presentation_date_to_picker = _build_date_picker(
+        "presentation_date_to", request.args, today
+    )
+    presentation_date_from = presentation_date_from_picker["selected_date"]
+    presentation_date_to = presentation_date_to_picker["selected_date"]
+    search_requested = any(
+        [
+            title_q,
+            author_q,
+            author_party_q,
+            bill_id_q,
+            law_id_q,
+            current_step_q,
+            presentation_date_from is not None,
+            presentation_date_to is not None,
+            organization_name_q,
+        ]
+    )
+
+    search_params = dict(
+        title_q=title_q,
+        author_q=author_q,
+        author_party_q=author_party_q,
+        status=status,
+        bill_id_q=bill_id_q,
+        law_id_q=law_id_q,
+        current_step_q=current_step_q,
+        organization_name_q=organization_name_q,
+    )
+    if presentation_date_from_picker["provided"]:
+        search_params.update(
+            {
+                key: value
+                for key, value in {
+                    "presentation_date_from_year": presentation_date_from_picker[
+                        "year_value"
+                    ],
+                    "presentation_date_from_month": presentation_date_from_picker[
+                        "month_value"
+                    ],
+                    "presentation_date_from_day": presentation_date_from_picker[
+                        "day_value"
+                    ],
+                }.items()
+                if value is not None
+            }
+        )
+    if presentation_date_to_picker["provided"]:
+        search_params.update(
+            {
+                key: value
+                for key, value in {
+                    "presentation_date_to_year": presentation_date_to_picker[
+                        "year_value"
+                    ],
+                    "presentation_date_to_month": presentation_date_to_picker[
+                        "month_value"
+                    ],
+                    "presentation_date_to_day": presentation_date_to_picker[
+                        "day_value"
+                    ],
+                }.items()
+                if value is not None
+            }
+        )
 
     if title_q:
-        filters.append(Bill.title.ilike(f"%{title_q}%"))
+        filters.append(
+            func.unaccent(func.lower(Bill.title)).like(
+                func.unaccent(func.lower(f"%{title_q}%"))
+            )
+        )
+
+    if bill_id_q:
+        filters.append(Bill.id.ilike(f"%{bill_id_q}%"))
 
     if author_q:
         if author_id_query:
@@ -153,11 +283,67 @@ def index():
 
             if author_id_int is not None:
                 filters.append(Bill.author_id == author_id_int)
-                with SessionProcessed() as db:
-                    author_row = db.get(Congresista, author_id_int)
-                    author_display = author_row.full_name if author_row else None
         else:
-            filters.append(Congresista.full_name.ilike(f"%{author_q}%"))
+            filters.append(
+                func.unaccent(func.lower(Congresista.full_name)).like(
+                    func.unaccent(func.lower(f"%{author_q}%"))
+                )
+            )
+
+    if author_party_q:
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.org_type == TypeOrganization.PARTY,
+                    Organization.org_name == author_party_q,
+                )
+            )
+        )
+
+    if law_id_q:
+        filters.append(
+            select(Ley.id)
+            .where(Ley.bill_id == Bill.id, Ley.id.ilike(f"%{law_id_q}%"))
+            .exists()
+        )
+
+    if current_step_q:
+        latest_step_type_expr = (
+            select(BillStep.step_type)
+            .where(BillStep.bill_id == Bill.id)
+            .order_by(BillStep.step_date.desc(), BillStep.step_id.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        filters.append(latest_step_type_expr == current_step_q)
+
+    if presentation_date_from or presentation_date_to:
+        presentation_filters = [BillOrganization.bill_id == Bill.id]
+        if presentation_date_from:
+            presentation_filters.append(
+                BillOrganization.presentation_date >= presentation_date_from
+            )
+        if presentation_date_to:
+            presentation_filters.append(
+                BillOrganization.presentation_date <= presentation_date_to
+            )
+        filters.append(
+            select(BillOrganization.bill_id).where(*presentation_filters).exists()
+        )
+
+    if organization_name_q:
+        filters.append(
+            select(Organization.org_id)
+            .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+            .where(
+                BillOrganization.bill_id == Bill.id,
+                Organization.org_type == TypeOrganization.COMMITTEE,
+                Organization.org_name == organization_name_q,
+            )
+            .exists()
+        )
 
     if status == "approved":
         filters.append(Bill.bill_approved.is_(True))
@@ -170,8 +356,49 @@ def index():
     results_start = 0
     results_end = 0
     pagination_pages = []
-    if author_q or title_q:
-        with SessionProcessed() as db:
+    current_step_options = []
+    author_party_options = []
+    organization_name_options = []
+
+    with SessionProcessed() as db:
+        if author_id_int is not None:
+            author_row = db.get(Congresista, author_id_int)
+            author_display = author_row.full_name if author_row else None
+
+        current_step_options = [
+            step.value if hasattr(step, "value") else str(step)
+            for step in db.execute(
+                select(BillStep.step_type).distinct().order_by(BillStep.step_type)
+            )
+            .scalars()
+            .all()
+        ]
+        author_party_options = [
+            party_name
+            for party_name in db.execute(
+                select(Organization.org_name)
+                .join(Membership, Membership.org_id == Organization.org_id)
+                .where(Membership.org_type == TypeOrganization.PARTY)
+                .distinct()
+                .order_by(Organization.org_name.asc())
+            )
+            .scalars()
+            .all()
+        ]
+        organization_name_options = [
+            org_name
+            for org_name in db.execute(
+                select(Organization.org_name)
+                .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+                .where(Organization.org_type == TypeOrganization.COMMITTEE)
+                .distinct()
+                .order_by(Organization.org_name.asc())
+            )
+            .scalars()
+            .all()
+        ]
+
+        if search_requested:
             latest_bill_dates = (
                 select(
                     BillOrganization.bill_id,
@@ -217,13 +444,7 @@ def index():
                     SimpleNamespace(
                         number=page_number,
                         current=page_number == page,
-                        url=url_for(
-                            "bills.index",
-                            title_q=title_q,
-                            author_q=author_q,
-                            status=status,
-                            page=page_number,
-                        ),
+                        url=url_for("bills.index", page=page_number, **search_params),
                     )
                     for page_number in range(1, total_pages + 1)
                 ]
@@ -253,25 +474,36 @@ def index():
         if page > 1:
             prev_page_url = url_for(
                 "bills.index",
-                title_q=title_q,
-                author_q=author_q,
-                status=status,
                 page=page - 1,
+                **search_params,
             )
         if page < len(pagination_pages):
             next_page_url = url_for(
                 "bills.index",
-                title_q=title_q,
-                author_q=author_q,
-                status=status,
                 page=page + 1,
+                **search_params,
             )
 
     return render_template(
         "bills/search.html",
         title_q=title_q,
         author_q=author_q,
+        author_party_q=author_party_q,
         author_display=author_display,
+        bill_id_q=bill_id_q,
+        law_id_q=law_id_q,
+        current_step_q=current_step_q,
+        presentation_date_from=presentation_date_from,
+        presentation_date_to=presentation_date_to,
+        presentation_date_from_provided=presentation_date_from_picker["provided"],
+        presentation_date_to_provided=presentation_date_to_picker["provided"],
+        presentation_date_from_year=presentation_date_from_picker["year_value"],
+        presentation_date_from_month=presentation_date_from_picker["month_value"],
+        presentation_date_from_day=presentation_date_from_picker["day_value"],
+        presentation_date_to_year=presentation_date_to_picker["year_value"],
+        presentation_date_to_month=presentation_date_to_picker["month_value"],
+        presentation_date_to_day=presentation_date_to_picker["day_value"],
+        organization_name_q=organization_name_q,
         bills=bills,
         radio_status=status,
         page=page,
@@ -282,6 +514,20 @@ def index():
         pagination_pages=pagination_pages,
         prev_page_url=prev_page_url,
         next_page_url=next_page_url,
+        current_step_options=current_step_options,
+        author_party_options=author_party_options,
+        presentation_date_from_year_options=presentation_date_from_picker[
+            "year_options"
+        ],
+        presentation_date_from_month_options=presentation_date_from_picker[
+            "month_options"
+        ],
+        presentation_date_from_day_options=presentation_date_from_picker["day_options"],
+        presentation_date_to_year_options=presentation_date_to_picker["year_options"],
+        presentation_date_to_month_options=presentation_date_to_picker["month_options"],
+        presentation_date_to_day_options=presentation_date_to_picker["day_options"],
+        organization_name_options=organization_name_options,
+        search_requested=search_requested,
     )
 
 

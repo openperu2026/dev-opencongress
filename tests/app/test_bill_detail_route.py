@@ -20,7 +20,12 @@ from backend.database.models import (
     Bill,
     BillDifference,
     BillStep,
+    CommitteeMembership,
+    Congresista,
+    Organization,
+    PartyMembership,
 )
+from backend.core.enums import TypeOrganization
 
 
 @pytest.fixture()
@@ -84,6 +89,81 @@ def _seed(session_factory, *, steps_with_diff_types):
         db.commit()
 
 
+def _seed_author_affiliations(session_factory):
+    bill_id = "2021_1234"
+    with session_factory() as db:
+        db.add_all(
+            [
+                Bill(
+                    id=bill_id,
+                    title="Test bill",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=1,
+                    bill_approved=False,
+                    summary_oc="",
+                ),
+                Congresista(
+                    id=1,
+                    full_name="Ana Perez",
+                    first_name="Ana",
+                    last_name="Perez",
+                    dni="00000001",
+                    gender="F",
+                    photo_url="",
+                    website="",
+                ),
+                Organization(
+                    org_id=10,
+                    org_name="Partido Verde",
+                    org_type=TypeOrganization.PARTY,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=11,
+                    org_name="Comisión de Economía",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                PartyMembership(
+                    person_id=1,
+                    org_id=10,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=date(2021, 1, 1),
+                    end_date=date(2026, 12, 31),
+                ),
+                CommitteeMembership(
+                    person_id=1,
+                    org_id=11,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=date(2021, 1, 1),
+                    end_date=date(2026, 12, 31),
+                ),
+                BillStep(
+                    bill_id=bill_id,
+                    step_id=1,
+                    vote_step=False,
+                    step_date=date(2022, 2, 1),
+                    step_type="Presentado",
+                    step_detail="",
+                ),
+            ]
+        )
+        db.commit()
+
+
 def test_view_changes_link_only_for_modified_and_incomparable(client, session_factory):
     _seed(
         session_factory,
@@ -105,3 +185,12 @@ def test_view_changes_link_only_for_modified_and_incomparable(client, session_fa
     assert "/bills/2021_1234/difference/3" not in body  # unavailable → hidden
     assert "/bills/2021_1234/difference/4" not in body  # first_version → hidden
     assert "/bills/2021_1234/difference/6" not in body  # missing row → hidden
+
+
+def test_detail_page_shows_author_party_and_committee(client, session_factory):
+    _seed_author_affiliations(session_factory)
+
+    body = client.get("/bills/2021_1234").get_data(as_text=True)
+
+    assert "Author:" in body
+    assert "Ana Perez" in body
