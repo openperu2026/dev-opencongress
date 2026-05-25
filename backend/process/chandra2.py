@@ -1,10 +1,11 @@
-from datetime import datetime, timezone
+from datetime import datetime
 from backend.config import settings
 from backend.core.enums import TypeBillStep
 from backend.database import models, raw_models
 from backend.scrapers.utils import get_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import String, cast, create_engine, select
+from zoneinfo import ZoneInfo
 
 _VLLM_MANAGER = None
 
@@ -152,7 +153,7 @@ def write_raw_bill_pages(
         print("No raw bill documents provided.")
         return 0
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(ZoneInfo("America/Lima"))
     created = 0
 
     with db_session() as db:
