@@ -5,7 +5,7 @@ from datetime import datetime, timezone, date
 from sqlalchemy.orm import Session
 from operator import attrgetter
 
-from backend import PARTY_ALIASES
+from backend import PARTY_ALIASES, LEGAL_TERMS
 from backend.config import directories
 from backend.database.raw_models import RawBill, RawMotion
 from backend.process.schema import (
@@ -230,3 +230,33 @@ def replace_www(url: str | None) -> str:
         lambda m: (m.group(1) or "") + "www3.",
         url,
     )
+
+
+def get_sentence_case(source: str) -> str:
+    output = ""
+    is_first_word = True
+
+    for c in source:
+        if is_first_word and not c.isspace():
+            c = c.upper()
+            is_first_word = False
+        elif not is_first_word and c in ".!?":
+            is_first_word = True
+        else:
+            c = c.lower()
+
+        output += c
+
+    # Fix legal terms that should keep title capitalization
+    for pattern, replacement in LEGAL_TERMS.items():
+        output = re.sub(pattern, replacement, output, flags=re.IGNORECASE)
+
+    # Fix N° only when it appears before a number
+    output = re.sub(
+        r"(?<!\w)n\s*(?:°|º|\.º)?(?=\s*\d)",
+        "N°",
+        output,
+        flags=re.IGNORECASE,
+    )
+
+    return output

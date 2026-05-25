@@ -7,6 +7,7 @@
     --dark-pink:#C0076F;
     --color-highlight: #B33951;
     --color-black: #2A0800;
+    --color-black-transparency: #2A080030;
     --color-hero: #ffffff;
     --red: #AE0F13;
     --pink: #D63F9B;
@@ -16,7 +17,18 @@
     --light-green: #48a65e;
     --blue: #0077c8;
     --light-blue: #0E9EFF;
-    --divider-white: #ffffff;
+    --divider-white: #ffd9d9;
+
+    --color-magenta:     #8B1A5E;
+    --color-crimson:     #C0154A;
+    --color-hot-pink:    #E8295B;
+    --color-deep-purple: #3B1F6E;
+    --color-royal-blue:  #1A4FA0;
+    --color-andean-teal: #2BA89C;
+    --color-forest-green:#1E7A3C;
+    --color-gold:        #E8A020;
+    --color-cream:       #F5F0E8;
+    --color-near-black:  #1A1018;    
 }
 
 html,
@@ -63,29 +75,42 @@ main {
     /* Vertical stripe pattern.  */
     background: repeating-linear-gradient(
         90deg,
-        var(--pink) 0 7px,
-        var(--color-highlight) 7px 14px,
-        var(--pink) 14px 21px,
-        var(--yellow) 21px 28px,
-        var(--blue) 28px 35px,
-        var(--light-blue) 35px 42px,
-        var(--blue) 42px 49px,
-        var(--yellow) 49px 56px,
-        var(--green) 56px 63px,
+        var(--color-magenta) 0 7px,
+        var(--color-crimson) 7px 14px,
+        var(--color-hot-pink) 14px 21px,
+        var(--color-deep-purple) 21px 28px,
+        var(--color-royal-blue) 28px 35px,
+        var(--color-andean-teal) 35px 42px,
+        var(--color-forest-green) 42px 49px,
+        var(--color-gold) 49px 56px,
+        var(--color-cream) 56px 63px,
         var(--light-green) 63px 70px,
-        var(--green) 70px 77px
+        var(--color-near-black) 70px 77px
     );
-   
+
+    
     /*
     Horizontal stripe pattern
 
     background: repeating-linear-gradient(
         180deg,
-        var(--pink) 0 3px,
-        var(--green) 3px 5px,
-        var(--light-green) 5px 7px,
-        var(--green) 7px 9px,
-        var(--pink) 9px 12px
+        var(--color-magenta) 0 7px,
+        var(--color-crimson) 7px 14px,
+        var(--color-hot-pink) 14px 21px,
+        var(--color-deep-purple) 21px 28px,
+        var(--color-royal-blue) 28px 35px,
+        var(--color-andean-teal) 35px 42px,
+        var(--color-forest-green) 42px 49px,
+        var(--color-gold) 49px 56px,
+        var(--color-cream) 56px 63px,
+        var(--light-green) 63px 70px,
+        var(--color-near-black) 70px 77px
+
+
+    var(--color-forest-green);
+    var(--);
+    var(--);
+    var(--);  
     );
      */
 }
@@ -367,60 +392,290 @@ main {
 
 /* Bills */
 /* detail page */
-.bill-meta{
+.bill-details {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
+  grid-template-areas:
+    "hero timeline"
+    "meta timeline";
+  max-width: 1500px;
+  margin: 0 auto;
+  padding: 20px 36px 20px 36px ;
+}
+
+.bill-hero {
+  grid-area: hero;
+  background-color: #fbf7ef;
+  padding: 0 36px 0 36px ;
+  border-left: 5px solid var(--dark-pink);
+}
+
+.bill-topline {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.bill-code {
+    color: #5a1a1a;
+    font-family: "Roboto", sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    letter-spacing: 1px;
+}
+
+.bill-status {
+    background-color: #bdf3cf;
+    color: #043f2e;
+    font-family: "Roboto", sans-serif;
+    font-size: 16px;
+    font-weight: 900;
+    padding: 8px 18px;
+    border-radius: 500px;
+}
+
+.bill-status.not-approved {
+  background-color: #f3bfbd;
+  color: #3f0404;
+  border-radius: 999px;
+}
+
+.bill-heading {
+    max-width: 950px;
+    margin: 0 0 14px;
+
+    color: #000;
+    font-family: "Roboto", sans-serif;
+    font-size: clamp(27px, 3vw, 30px);
+    line-height: 1.12;
+    font-weight: 800;
+}
+
+.bill-heading-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    color: #344452;
+    font-family: "Roboto", sans-serif;
+    font-size: 19px;
+}
+
+.bill-meta {
+  grid-area: meta;
+  background: #ffffff;
+  padding: 0 36px 0 36px ;
   font-size: 20px;
+  line-height: 1.55;
+}
+
+.bill-meta p {
+  margin: 0 0 18px;
+}
+
+.bill-meta p:last-child {
+  margin-bottom: 0;
+}
+
+.bill-meta a {
+  color: inherit;
+}
+
+.summary-label {
+  margin-bottom: 6px;
+}
+
+.summary-text {
+  max-width: 900px;
+  margin-top: 0;
+}
+
+.timeline-shell {
+  grid-area: timeline;
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  background: #ffffff;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
 }
 
 .timeline-container {
-    max-width: 600px;
-    margin: 20px auto;
-    position: relative;
-  }
-  
+  max-height: 650px;
+  padding: 48px 28px 90px;
+  overflow-y: auto;
+  background: #ffffff;
+  box-sizing: border-box;
+
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 42px,
+    black calc(100% - 42px),
+    transparent 100%
+  );
+
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black 42px,
+    black calc(100% - 42px),
+    transparent 100%
+  );
+
+  scrollbar-width: thin;
+  scrollbar-color: #9ca3af #f3f4f6;
+}
+
+.timeline-shell::before,
+.timeline-shell::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 10px;
+  height: 52px;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.timeline-shell::before {
+  top: 0;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.85) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.timeline-shell::after {
+  bottom: 0;
+  background: linear-gradient(
+    to top,
+    rgba(255, 255, 255, 1) 0%,
+    rgba(255, 255, 255, 0.85) 45%,
+    rgba(255, 255, 255, 0) 100%
+  );
+}
+
+.timeline-container::-webkit-scrollbar {
+  width: 10px;
+}
+
+.timeline-container::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 999px;
+}
+
+.timeline-container::-webkit-scrollbar-thumb {
+  background: #9ca3af;
+  border-radius: 999px;
+  border: 2px solid #f3f4f6;
+}
+
+.timeline-container::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
+}
+
 .timeline {
-position: relative;
-padding: 20px 0;
+  position: relative;
+  padding-left: 28px;
 }
 
 .timeline::before {
-content: '';
-position: absolute;
-left: 17.5px;
-top: 0;
-bottom: 0;
-width: 2px;
-background-color: #ccc;
+  content: "";
+  position: absolute;
+  left: 8px;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #d1d5db;
+  border-radius: 999px;
 }
 
 .timeline-item {
-margin-bottom: 30px;
-position: relative;
-padding-left: 70px;
+  margin-bottom: 22px;
+  position: relative;
 }
 
 .timeline-dot {
-position: absolute;
-left: 8px;
-top: 10px;
-width: 16px;
-height: 16px;
-background-color: #666;
-border: 3px solid #666;
-border-radius: 50%;
-z-index: 1;
+  position: absolute;
+  left: -26px;
+  top: 8px;
+  width: 16px;
+  height: 16px;
+  background: var(--color-black);
+  border: 3px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px var(--color-black-transparency);
+  z-index: 2;
 }
 
 .timeline-content {
-padding: 12px 15px;
-display: flex;
-justify-content: space-between;
-align-items: flex-start;
+  padding: 14px 16px;
+  background: #fcfcfd;
+  border: 1px solid var(--divider-white);
+  border-radius: 14px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.timeline-content:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
 }
 
 .timeline-type {
-flex: 1;
-font-weight: bold;
-font-size: 16px;
+  font-weight: 700;
+  font-size: 15px;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.step-detail {
+  margin-top: 0;
+}
+
+.timeline-content a {
+  display: inline-block;
+  margin-right: 12px;
+  margin-top: 6px;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  background: var(--color-black);
+  text-decoration: none;
+  border-radius: 8px;
+}
+
+.timeline-content a:hover {
+  background-color: var(--dark-pink);
+  text-decoration: underline;
+}
+
+@media (max-width: 900px) {
+  .bill-details {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "hero"
+      "meta"
+      "timeline";
+  }
+
+  .bill-heading {
+    font-size: 40px;
+  }
+
+  .bill-topline {
+    flex-wrap: wrap;
+  }
+
+  .bill-heading-meta {
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 
 .pagination-controls {

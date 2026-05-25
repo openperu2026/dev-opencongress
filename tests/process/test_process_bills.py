@@ -80,7 +80,7 @@ def test_process_bill_with_firmantes_sets_author_and_cong_list():
     bill, congs, steps = mod.process_bill(rb)
 
     assert bill.id == "PL_999"
-    assert bill.title == "Proyecto de Ley X"
+    assert bill.title == "Proyecto de Ley x"
     assert bill.summary_congreso == "Resumen"
     assert bill.status == "En Comisión"
     assert bill.proponent == "Ministerio Público"

@@ -1,6 +1,7 @@
 from hashlib import sha1
 from math import ceil
 from types import SimpleNamespace
+from datetime import datetime
 from flask import (
     Blueprint,
     current_app,
@@ -10,13 +11,14 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, select, desc
 from app.diff_render import RENDERER_VERSION, render_payload_html
 from backend.database.crud.pipeline_bills import get_billtext_for_step
 from backend.database.models import (
     Bill,
     BillDifference,
     BillStep,
+    BillCongresistas,
     Congresista,
     BillOrganization,
 )
@@ -224,14 +226,41 @@ def bill_detail(bill_id):
                 )
             ).all()
         )
+
+        author_table = None
+        if bill.author_id:
+            author_table = db.get(Congresista, bill.author_id)
+        else:
+            stmt = select(BillCongresistas.person_id).where(
+                BillCongresistas.bill_id == bill_id,
+                BillCongresistas.role_type == "Autor",
+            )
+            author_id = db.execute(stmt).first()
+            if author_id:
+                author_table = db.get(Congresista, author_id)
+
+        # Presentation date
+        presentation_date = db.scalar(
+            select(BillStep.step_date).where(
+                BillStep.bill_id == bill_id, BillStep.step_type == "Presentado"
+            )
+        )
+
         bill_status = _("Not approved")
         if bill.bill_approved:
             bill_status = _("Approved")
 
-        author = ""
-        if bill.author_id:
-            author_table = db.get(Congresista, bill.author_id)
-            author = author_table.full_name
+            stmt = (
+                select(BillStep.step_date)
+                .where(BillStep.bill_id == bill_id, BillStep.step_type == "Votación")
+                .order_by(desc(BillStep.step_date))
+                .limit(1)
+            )
+            approval_date = db.scalar(stmt)
+            days_since_presentation = (approval_date - presentation_date).days
+        else:
+            today = datetime.now().date()
+            days_since_presentation = (today - presentation_date).days
 
         return render_template(
             "bills/detail.html",
@@ -240,7 +269,9 @@ def bill_detail(bill_id):
             all_steps=all_steps,
             diff_types=diff_types,
             bill_status=bill_status,
-            author=author,
+            author=author_table,
+            presentation_date=presentation_date,
+            days_since_presentation=days_since_presentation,
         )
 
 

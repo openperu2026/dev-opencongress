@@ -112,3 +112,13 @@ LEGISLATURE_ALIASES = {
 
 
 BILL_ROLE_MAPS = {1: "author", 2: "coauthor", 3: "adherente"}
+
+LEGAL_TERMS = {
+    r"\bdecreto\s+legislativo\b": "Decreto Legislativo",
+    r"\bdecreto\s+supremo\b": "Decreto Supremo",
+    r"\bdecreto\s+de\s+urgencia\b": "Decreto de Urgencia",
+    r"\bresoluci[oó]n\s+ministerial\b": "Resolución Ministerial",
+    r"\bresoluci[oó]n\s+legislativa\b": "Resolución Legislativa",
+    r"\bley\b": "Ley",
+    r"\bproyecto\s+de\s+ley\b": "Proyecto de Ley",
+}
