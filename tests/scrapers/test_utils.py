@@ -1,4 +1,5 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import httpx
@@ -303,7 +304,7 @@ def test_render_pdf_uses_extract_text_from_page(monkeypatch):
     def fake_fitz_open(stream=None, filetype=None):
         return FakeDoc()
 
-    monkeypatch.setattr(u.fitz, "open", fake_fitz_open)
+    monkeypatch.setattr(u, "fitz", SimpleNamespace(open=fake_fitz_open))
 
     # Make extract_text_from_page return deterministic text
     calls = []
