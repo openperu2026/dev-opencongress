@@ -2,42 +2,44 @@
 
 {% block content %}
 
-<div class="bill-details">
-  <section class="bill-hero">
-    <div class="bill-content">
-      <div class="bill-topline">
-        <span class="bill-code">PL 07324/2023-CR</span>
-        {% if bill_status == 'Approved' %}
-          <span class="bill-status">{{ bill_status }}</span>
-        {% else %}
-          <span class="bill-status not-approved">{{ bill_status }}</span>
-        {% endif %}
-      </div>
+<div class="page-details">
+  <div class="bill-details">
+    <section class="bill-hero">
+      <div class="bill-content">
+        <div class="bill-topline">
+          <span class="bill-code">PL 07324/2023-CR</span>
+          {% if bill_status == 'Approved' %}
+            <span class="bill-status">{{ bill_status }}</span>
+          {% else %}
+            <span class="bill-status not-approved">{{ bill_status }}</span>
+          {% endif %}
+        </div>
 
-      <h1 class="bill-heading">
-        {{ bill.title }}
-      </h1>
+        <h1 class="bill-heading">
+          {{ bill.title }}
+        </h1>
 
-      <div class="bill-heading-meta">
-        <span> <strong>{{_('Presentation date')}}:</strong> {{ presentation_date.strftime('%d-%m-%Y') }}</span>
-        {% if bill_status == 'Approved' %}
-          <span class="time-approval"> <strong>{{_('Time to approval')}}:</strong> {{ days_since_presentation }} {{_('days')}}</span>
-        {% else %}
-          <span class="time-presented"><strong>{{_('Time since presentation')}}:</strong> {{ days_since_presentation }} {{_('days')}}</span>
-        {% endif %}
+        <div class="bill-heading-meta">
+          <span> <strong>{{_('Presentation date')}}:</strong> {{ presentation_date.strftime('%d-%m-%Y') }}</span>
+          {% if bill_status == 'Approved' %}
+            <span class="time-approval"> <strong>{{_('Time to approval')}}:</strong> {{ days_since_presentation }} {{_('days')}}</span>
+          {% else %}
+            <span class="time-presented"><strong>{{_('Time since presentation')}}:</strong> {{ days_since_presentation }} {{_('days')}}</span>
+          {% endif %}
+        </div>
       </div>
+    </section>
+    <div class="bill-meta">
+      {% if latest_step %}
+          <p><strong>{{_('Current Step')}}:</strong> {{ latest_step.step_type.value }}</p>
+      {% endif %}
+      <p><strong>{{_('Author')}}:</strong> <a href=" /congress/{{author.id}} ">{{ author.full_name }}</a></p>
+      <p><strong>{{_('Party')}}:</strong> {{ party_name }}</p>
+      <p class="summary-label"><strong>{{_('Summary')}}:</strong></p>
+      <p class="summary-text">{{ bill.summary_oc }}</p>
+
     </div>
-  </section>
-  <div class="bill-meta">
-    {% if latest_step %}
-        <p><strong>{{_('Current Step')}}:</strong> {{ latest_step.step_type.value }}</p>
-    {% endif %}
-    <p><strong>{{_('Author')}}:</strong> <a href=" /congress/{{author.id}} ">{{ author.full_name }}</a></p>
-    <p class="summary-label"><strong>{{_('Summary')}}:</strong></p>
-    <p class="summary-text">{{ bill.summary_oc }}</p>
-
   </div>
-
   <div class="timeline-shell">
     <div class="timeline-container">
       <div class="timeline">

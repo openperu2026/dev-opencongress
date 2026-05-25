@@ -12,6 +12,7 @@ from flask import (
     url_for,
 )
 from sqlalchemy import func, select, desc
+from sqlalchemy.orm import Session
 from app.diff_render import RENDERER_VERSION, render_payload_html
 from backend.database.crud.pipeline_bills import get_billtext_for_step
 from backend.database.models import (
@@ -21,6 +22,8 @@ from backend.database.models import (
     BillCongresistas,
     Congresista,
     BillOrganization,
+    Membership,
+    Organization,
 )
 from .processed_session import SessionProcessed
 import json
@@ -31,6 +34,32 @@ from .build_bancada_bars import build_bancada_bars
 from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
+
+
+def get_author_with_party(
+    db: Session,
+    author_id: str | None,
+) -> tuple[Congresista | None, str | None]:
+    if not author_id:
+        return None, None
+
+    stmt = (
+        select(Congresista, Organization.org_name)
+        .join(Membership, Membership.person_id == Congresista.id)
+        .join(Organization, Organization.org_id == Membership.org_id)
+        .where(
+            Congresista.id == author_id,
+            Membership.org_type == "Partido",
+        )
+    )
+
+    result = db.execute(stmt).first()
+
+    if result is None:
+        return None, None
+
+    author, org_name = result
+    return author, org_name
 
 
 def load_voter_bancada_dict():
@@ -227,17 +256,19 @@ def bill_detail(bill_id):
             ).all()
         )
 
-        author_table = None
-        if bill.author_id:
-            author_table = db.get(Congresista, bill.author_id)
-        else:
-            stmt = select(BillCongresistas.person_id).where(
-                BillCongresistas.bill_id == bill_id,
-                BillCongresistas.role_type == "Autor",
+        author_id = bill.author_id
+
+        if not author_id:
+            author_id = db.scalar(
+                select(BillCongresistas.person_id)
+                .where(
+                    BillCongresistas.bill_id == bill_id,
+                    BillCongresistas.role_type == "Autor",
+                )
+                .limit(1)
             )
-            author_id = db.execute(stmt).first()
-            if author_id:
-                author_table = db.get(Congresista, author_id)
+
+        author, org_name = get_author_with_party(db, author_id)
 
         # Presentation date
         presentation_date = db.scalar(
@@ -269,7 +300,8 @@ def bill_detail(bill_id):
             all_steps=all_steps,
             diff_types=diff_types,
             bill_status=bill_status,
-            author=author_table,
+            author=author,
+            party_name=org_name,
             presentation_date=presentation_date,
             days_since_presentation=days_since_presentation,
         )
