@@ -12,9 +12,77 @@
             <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="{{_('Author')}}">
         </div>
 
-        <button type="submit" class="search-icon-button" aria-label="Search">
-            <i class="fa-solid fa-magnifying-glass"></i>
-        </button>
+        <div class="searching-container">
+            <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="Bill ID">
+        </div>
+
+        <div class="searching-container">
+            <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="Law ID">
+        </div>
+
+        <div class="searching-container">
+            <select name="current_step_q">
+                <option value="">{{ _('Current Step') }}</option>
+                {% for step_option in current_step_options or [] %}
+                    <option value="{{ step_option }}" {% if current_step_q == step_option %}selected{% endif %}>{{ step_option }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="searching-container">
+            <span>{{ _('Presentation date from') }}</span>
+            <select name="presentation_date_from_year">
+                <option value="" {% if presentation_date_from_year is none %}selected{% endif %}>{{ _('Year') }}</option>
+                {% for year_option in presentation_date_from_year_options or [] %}
+                    <option value="{{ year_option }}" {% if presentation_date_from_year == year_option %}selected{% endif %}>{{ year_option }}</option>
+                {% endfor %}
+            </select>
+            <select name="presentation_date_from_month">
+                <option value="" {% if presentation_date_from_month is none %}selected{% endif %}>{{ _('Month') }}</option>
+                {% for month_option in presentation_date_from_month_options or [] %}
+                    <option value="{{ month_option }}" {% if presentation_date_from_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
+                {% endfor %}
+            </select>
+            <select name="presentation_date_from_day" data-selected-day="{{ presentation_date_from_day or '' }}">
+                <option value="" {% if presentation_date_from_day is none %}selected{% endif %}>{{ _('Day') }}</option>
+                {% for day_option in presentation_date_from_day_options or [] %}
+                    <option value="{{ day_option }}" {% if presentation_date_from_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="searching-container">
+            <span>{{ _('Presentation date to') }}</span>
+            <select name="presentation_date_to_year">
+                <option value="" {% if presentation_date_to_year is none %}selected{% endif %}>{{ _('Year') }}</option>
+                {% for year_option in presentation_date_to_year_options or [] %}
+                    <option value="{{ year_option }}" {% if presentation_date_to_year == year_option %}selected{% endif %}>{{ year_option }}</option>
+                {% endfor %}
+            </select>
+            <select name="presentation_date_to_month">
+                <option value="" {% if presentation_date_to_month is none %}selected{% endif %}>{{ _('Month') }}</option>
+                {% for month_option in presentation_date_to_month_options or [] %}
+                    <option value="{{ month_option }}" {% if presentation_date_to_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
+                {% endfor %}
+            </select>
+            <select name="presentation_date_to_day" data-selected-day="{{ presentation_date_to_day or '' }}">
+                <option value="" {% if presentation_date_to_day is none %}selected{% endif %}>{{ _('Day') }}</option>
+                {% for day_option in presentation_date_to_day_options or [] %}
+                    <option value="{{ day_option }}" {% if presentation_date_to_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="searching-container">
+            <select name="organization_name_q">
+                <option value="">{{ _('Organization') }}</option>
+                {% for organization_option in organization_name_options or [] %}
+                    <option value="{{ organization_option }}" {% if organization_name_q == organization_option %}selected{% endif %}>{{ organization_option }}</option>
+                {% endfor %}
+            </select>
+        </div>
+
+        
 
         <div class="radio-container">
             <label>
@@ -30,6 +98,10 @@
             </label>
         </div>
 
+        <button type="submit" class="search-icon-button" aria-label="Search">
+            <i class="fa-solid fa-magnifying-glass"></i>
+        </button>
+
         
     </div>
 </form>
@@ -43,6 +115,23 @@
         {% endif %}
         {% if author_display %}
             <span>{{_('Author')}}: {{author_display}}</span>
+        {% elif author_q %}
+            <span>{{_('Author')}}: {{author_q}}</span>
+        {% endif %}
+        {% if bill_id_q %}
+            <span>Bill ID: {{bill_id_q}}</span>
+        {% endif %}
+        {% if law_id_q %}
+            <span>Law ID: {{law_id_q}}</span>
+        {% endif %}
+        {% if current_step_q %}
+            <span>{{_('Current Step')}}: {{current_step_q}}</span>
+        {% endif %}
+        {% if presentation_date_from and presentation_date_to %}
+            <span>{{_('Presentation Date')}}: {{ '%04d-%02d-%02d'|format(presentation_date_from_year, presentation_date_from_month, presentation_date_from_day) }} - {{ '%04d-%02d-%02d'|format(presentation_date_to_year, presentation_date_to_month, presentation_date_to_day) }}</span>
+        {% endif %}
+        {% if organization_name_q %}
+            <span>{{_('Organization')}}: {{organization_name_q}}</span>
         {% endif %}
         {% if radio_status != 'all' %}
             <span>{{_('Status')}}: {{_('Approved bills') if radio_status == 'approved' else _('Not approved bills')}}</span>
@@ -106,9 +195,53 @@
             </div>
         </nav>
     {% endif %}
-{% elif title_q or author_q %}
+{% elif search_requested %}
     <p>{{_('No matching bills found.')}}</p>
 {% endif %}
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const configureDatePicker = (prefix) => {
+        const yearSelect = document.querySelector(`[name="${prefix}_year"]`);
+        const monthSelect = document.querySelector(`[name="${prefix}_month"]`);
+        const daySelect = document.querySelector(`[name="${prefix}_day"]`);
+
+        if (!yearSelect || !monthSelect || !daySelect) {
+            return;
+        }
+
+        const selectedDay = daySelect.dataset.selectedDay || '';
+
+        const refreshDays = () => {
+            const selectedYear = Number(yearSelect.value);
+            const selectedMonth = Number(monthSelect.value);
+            daySelect.innerHTML = `<option value="">{{ _('Day') }}</option>`;
+
+            if (!selectedYear || !selectedMonth) {
+                return;
+            }
+
+            const lastDay = new Date(selectedYear, selectedMonth, 0).getDate();
+            for (let day = 1; day <= lastDay; day += 1) {
+                const option = document.createElement('option');
+                option.value = String(day);
+                option.textContent = String(day).padStart(2, '0');
+                if (String(day) === selectedDay) {
+                    option.selected = true;
+                }
+                daySelect.appendChild(option);
+            }
+        };
+
+        yearSelect.addEventListener('change', refreshDays);
+        monthSelect.addEventListener('change', refreshDays);
+        refreshDays();
+    };
+
+    configureDatePicker('presentation_date_from');
+    configureDatePicker('presentation_date_to');
+});
+</script>
 
 {% endblock %}
 

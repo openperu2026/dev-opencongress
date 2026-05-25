@@ -1,11 +1,27 @@
 from __future__ import annotations
 
+from datetime import date as real_date
+
 from backend.core.enums import Proponents
-from backend.database.models import Base, Bill
+from backend.core.enums import TypeBillStep, TypeOrganization
+from backend.database.models import (
+    Base,
+    Bill,
+    BillOrganization,
+    BillStep,
+    Ley,
+    Organization,
+)
 
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+
+
+class FixedDate(real_date):
+    @classmethod
+    def today(cls):
+        return cls(2026, 5, 24)
 
 
 @pytest.fixture()
@@ -24,6 +40,7 @@ def client(monkeypatch, session_factory):
     from app.app import create_app
 
     monkeypatch.setattr(bills_module, "SessionProcessed", session_factory)
+    monkeypatch.setattr(bills_module, "date", FixedDate)
     flask_app = create_app()
     flask_app.testing = True
     return flask_app.test_client()
@@ -44,6 +61,98 @@ def _seed_bills(session_factory, count: int) -> None:
                     summary_oc="",
                 )
             )
+        db.commit()
+
+
+def _seed_bill_search_data(session_factory) -> None:
+    with session_factory() as db:
+        db.add_all(
+            [
+                Bill(
+                    id="2021_0001",
+                    title="Bill 0001",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    bill_approved=False,
+                    summary_oc="",
+                ),
+                Bill(
+                    id="2021_0002",
+                    title="Bill 0002",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    bill_approved=False,
+                    summary_oc="",
+                ),
+                Organization(
+                    org_id=1,
+                    org_name="Comisión de Economía",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=2,
+                    org_name="Comisión de Justicia",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                BillStep(
+                    bill_id="2021_0001",
+                    step_id=1,
+                    step_type=TypeBillStep.PRESENTADO,
+                    vote_step=False,
+                    vote_event_id=None,
+                    step_date=real_date(2024, 1, 1),
+                    step_detail="",
+                ),
+                BillStep(
+                    bill_id="2021_0001",
+                    step_id=2,
+                    step_type=TypeBillStep.VOTACION,
+                    vote_step=False,
+                    vote_event_id=None,
+                    step_date=real_date(2024, 1, 15),
+                    step_detail="",
+                ),
+                BillStep(
+                    bill_id="2021_0002",
+                    step_id=1,
+                    step_type=TypeBillStep.ARCHIVADO,
+                    vote_step=False,
+                    vote_event_id=None,
+                    step_date=real_date(2024, 2, 1),
+                    step_detail="",
+                ),
+                BillOrganization(
+                    bill_id="2021_0001",
+                    org_id=1,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 1, 10),
+                    decision_date=None,
+                ),
+                BillOrganization(
+                    bill_id="2021_0002",
+                    org_id=2,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 2, 10),
+                    decision_date=None,
+                ),
+                Ley(id="L-001", title="Ley 1", bill_id="2021_0001"),
+                Ley(id="L-002", title="Ley 2", bill_id="2021_0002"),
+            ]
+        )
         db.commit()
 
 
@@ -79,3 +188,75 @@ def test_search_results_cap_at_500_plus(client, session_factory):
     assert "Showing 1-50 of 500+ bills" in body
     assert "page=10" in body
     assert "page=11" not in body
+
+
+def test_search_form_includes_new_filters(client):
+    response = client.get("/bills")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'name="bill_id_q"' in body
+    assert 'name="law_id_q"' in body
+    assert 'name="current_step_q"' in body
+    assert 'name="presentation_date_from_year"' in body
+    assert 'name="presentation_date_from_month"' in body
+    assert 'name="presentation_date_from_day"' in body
+    assert 'name="presentation_date_to_year"' in body
+    assert 'name="presentation_date_to_month"' in body
+    assert 'name="presentation_date_to_day"' in body
+    assert 'name="organization_name_q"' in body
+    assert "Presentation date from" in body
+    assert "Presentation date to" in body
+    assert 'name="presentation_date_from_year"' in body and 'value="" selected' in body
+    assert 'name="presentation_date_from_month"' in body and 'value="" selected' in body
+    assert 'name="presentation_date_from_day"' in body and 'value="" selected' in body
+    assert 'name="presentation_date_to_year"' in body and 'value="" selected' in body
+    assert 'name="presentation_date_to_month"' in body and 'value="" selected' in body
+    assert 'name="presentation_date_to_day"' in body and 'value="" selected' in body
+
+
+def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_factory):
+    _seed_bill_search_data(session_factory)
+
+    response = client.get(
+        "/bills",
+        query_string={
+            "bill_id_q": "2021_0001",
+            "law_id_q": "L-001",
+            "current_step_q": TypeBillStep.VOTACION.value,
+            "presentation_date_from_year": 2024,
+            "presentation_date_from_month": 1,
+            "presentation_date_from_day": 1,
+            "presentation_date_to_year": 2024,
+            "presentation_date_to_month": 1,
+            "presentation_date_to_day": 31,
+            "organization_name_q": "Comisión de Economía",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Showing 1-1 of 1 bills" in body
+    assert "2021_0001" in body
+    assert "2021_0002" not in body
+    assert "Law ID: L-001" in body
+    assert "Current Step: Votación" in body
+    assert "2024-01-01 - 2024-01-31" in body
+
+
+def test_date_picker_builds_valid_february_days_for_leap_year():
+    import app.routes.bills as bills_module
+
+    picker = bills_module._build_date_picker(
+        "presentation_date_from",
+        {
+            "presentation_date_from_year": "2024",
+            "presentation_date_from_month": "2",
+            "presentation_date_from_day": "29",
+        },
+        FixedDate.today(),
+    )
+
+    assert picker["selected_date"] == real_date(2024, 2, 29)
+    assert len(picker["day_options"]) == 29
+    assert picker["day_options"][-1] == 29
