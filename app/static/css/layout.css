@@ -2,13 +2,13 @@
 
 :root {
     --color-frame: #000000;
-    --color-background: #ffffff;
-
+    --color-background: #f9f3f3fa;
+    --dark-orange: #5a1a1a;
     --dark-pink:#C0076F;
     --color-highlight: #B33951;
     --color-black: #2A0800;
     --color-black-transparency: #2A080030;
-    --color-hero: #ffffff;
+    --color-hero: #f9f3f3fa;
     --red: #AE0F13;
     --pink: #D63F9B;
     --yellow: #D9AE08;
@@ -48,7 +48,7 @@ main {
 }
 
 
-.navbar {
+.site-navbar {
 
   /*To stay in screen*/
     position: sticky;
@@ -59,10 +59,27 @@ main {
     justify-content: flex-start;
     gap: 20px;
     padding: 14px 24px;
-    background:  white;
+    background:  var(--color-hero);
     border-bottom: 1px solid var(--color-frame);
 
     font-size: 20px;
+}
+
+.language-links {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-left: auto;
+}
+
+.language-links a {
+    color: #5a1a1a;
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.language-links a:hover {
+    text-decoration: underline;
 }
 
 .header-divider {
@@ -116,7 +133,7 @@ main {
 .nav-brand {
     font-size: 18px;
     font-weight: 700;
-    color: #ffffff;
+    color: var(--color-hero);
 }
 
 .nav-logo {
@@ -419,6 +436,22 @@ main {
     display: flex;
 }
 
+.search-criteria,
+.search-results-summary {
+    width: calc(100% - 72px);
+    margin: 0 auto 16px;
+}
+
+.search-results-table {
+    width: calc(100% - 72px);
+    margin: 0 auto 28px;
+}
+
+.search-results-table > :not(caption) > * > * {
+    padding: 14px 16px;
+    vertical-align: middle;
+}
+
 @media (max-width: 500px) {
   .bill-search-form .search-row--primary,
   .bill-search-form .search-row--secondary,
@@ -429,6 +462,12 @@ main {
   .bill-search-form .search-icon-button {
     width: 100%;
     min-height: 68px;
+  }
+
+  .search-criteria,
+  .search-results-summary,
+  .search-results-table {
+    width: calc(100% - 32px);
   }
 }
 
@@ -577,7 +616,7 @@ main {
 }
 
 .bill-meta {
-  background: #ffffff;
+  background: var(--color-background);
   padding: 10px 36px 0 36px ;
   font-size: 20px;
   line-height: 1.55;
@@ -1022,7 +1061,7 @@ svg#seatsSvg circle { cursor: default; }
 }
 @media (max-width: 500px) {
     /* NAVBAR */
-  .navbar {
+  .site-navbar {
     flex-direction: column;
     align-items: flex-start;
     height: auto;
@@ -1096,7 +1135,7 @@ svg#seatsSvg circle { cursor: default; }
     display: none;
     flex-direction: column;
     width: 100%;
-    background: #ffffff;
+    background: var(--color-hero);
     padding: 20px;
     gap: 14px;
   }
@@ -1164,7 +1203,7 @@ svg#seatsSvg circle { cursor: default; }
 
 .hero-title {
     margin: 0 0 24px;
-    color: var(--dark-pink);
+    color: var(--dark-orange);
     font-size: 76px;
     font-weight: 700;
     line-height: 1.08;
@@ -1650,7 +1689,7 @@ source-list{*/
 }
 .diff-node-inserted { border-left: 4px solid #4a8c4a; }
 .diff-node-deleted  { border-left: 4px solid #c25656; }
-.diff-node-matched  { border-left: 4px solid var(--color-frame); }
+.diff-node-matched  { border-left: 4px solid var(--blue); }
 
 .diff-node-header {
     display: flex;

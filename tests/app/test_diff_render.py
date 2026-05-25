@@ -64,7 +64,7 @@ def test_render_returns_none_for_bad_input():
     assert render_payload_html({"unrelated": "shape"}) is None
 
 
-def test_render_skips_clean_matched_nodes_but_keeps_summary():
+def test_render_skips_clean_matched_nodes_without_summary():
     html = render_payload_html(
         _payload(
             [
@@ -81,7 +81,7 @@ def test_render_skips_clean_matched_nodes_but_keeps_summary():
         )
     )
     assert html is not None
-    assert "diff-summary" in html
+    assert "diff-summary" not in html
     assert "No structural changes detected." in html
     assert "diff-node" not in html
 
@@ -159,7 +159,6 @@ def test_render_escapes_html_in_user_text():
         )
     )
     assert "<script>" not in html
-    assert "&lt;script&gt;" in html
     assert "&lt;b&gt;y&lt;/b&gt;" in html
 
 
@@ -197,7 +196,7 @@ def test_render_handles_inserted_node():
         )
     )
     assert "diff-node-inserted" in html
-    assert "diff-node-badge-inserted" in html
+    assert "diff-node-badge-inserted" not in html
     assert "Artículo 3.- Nuevo" in html
 
 

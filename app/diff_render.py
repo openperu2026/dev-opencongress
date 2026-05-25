@@ -173,29 +173,10 @@ def _render_hunk(hunk: dict) -> str:
 
 def _render_node(node: dict) -> str:
     status = node.get("status", "matched")
-    node_id = node["node_id"]
-    label = node.get("b_label") or node.get("a_label") or node_id
-    strategy = node.get("match_strategy", "")
-
-    strategy_html = ""
-    if strategy and strategy not in ("id", "inserted", "deleted"):
-        strategy_html = (
-            f'<span class="diff-node-strategy" title="alignment strategy">'
-            f"via {escape(strategy)}</span>"
-        )
-
     hunks_html = "".join(_render_hunk(h) for h in node.get("hunks") or [])
 
     return (
-        f'<section class="diff-node diff-node-{escape(status)}">'
-        f'<header class="diff-node-header">'
-        f'<span class="diff-node-badge diff-node-badge-{escape(status)}">{escape(status)}</span>'
-        f'<span class="diff-node-id">{escape(node_id)}</span>'
-        f'<span class="diff-node-label">{escape(label)}</span>'
-        f"{strategy_html}"
-        f"</header>"
-        f"{hunks_html}"
-        f"</section>"
+        f'<section class="diff-node diff-node-{escape(status)}">{hunks_html}</section>'
     )
 
 
@@ -239,8 +220,6 @@ def render_payload_html(payload: dict | None) -> str | None:
     if not isinstance(payload, dict) or "nodes" not in payload:
         return None
 
-    summary_html = _render_summary(payload.get("summary", {}))
-
     rendered_nodes = []
     for node in payload.get("nodes", []):
         hunks = node.get("hunks") or []
@@ -256,6 +235,6 @@ def render_payload_html(payload: dict | None) -> str | None:
 
     return (
         f'<div class="diff-rendered" data-renderer-version="{RENDERER_VERSION}">'
-        f"{summary_html}{body}"
+        f"{body}"
         f"</div>"
     )
