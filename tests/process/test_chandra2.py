@@ -105,7 +105,6 @@ def test_write_raw_bill_pages_uses_mock_ocr(monkeypatch):
     from backend.process import chandra2 as mod
 
     dummy_session = _DummySession()
-    monkeypatch.setattr(mod, "db_session", _DummySessionFactory(dummy_session))
     monkeypatch.setattr(mod, "chandra2_vllm", mock_chandra2_vllm)
 
     doc = SimpleNamespace(
@@ -115,7 +114,11 @@ def test_write_raw_bill_pages_uses_mock_ocr(monkeypatch):
         url="https://example.com/doc.pdf",
     )
 
-    created = mod.write_raw_bill_pages([doc], ocr_model="chandra2")
+    created = mod.write_raw_bill_pages(
+        _DummySessionFactory(dummy_session),
+        [doc],
+        ocr_model="chandra2",
+    )
 
     assert created == 1
     assert dummy_session.committed is True

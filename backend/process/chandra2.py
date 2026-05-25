@@ -6,32 +6,35 @@ from backend.scrapers.utils import get_url
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import String, cast, create_engine, select
 from zoneinfo import ZoneInfo
+from loguru import logger
 
 _VLLM_MANAGER = None
 
 
-db_engine = create_engine(settings.DB_URL, pool_pre_ping=True)
-db_session = sessionmaker(
-    bind=db_engine,
-    autocommit=False,
-    autoflush=False,
-)
-
-
-def get_approved_ids(model: type) -> list[str]:
+def get_approved_ids(
+    db_session_factory: sessionmaker,
+    model: type,
+    limit: int = 15,
+) -> list[str]:
     """
     Get all approved bill_id
     """
-    with db_session() as db:
-        return list(db.scalars(select(model.id).where(model.bill_approved.is_(True))))
+    with db_session_factory() as db:
+        stmt = (
+            select(model.id)
+            .where(model.bill_approved.is_(True))
+            .order_by(model.id.desc())
+            .limit(limit)
+        )
+        return list(db.scalars(stmt))
 
 
-def get_approved_bill_documents(limit: int = 25):
+def get_approved_bill_documents(db_session_factory: sessionmaker):
     """
     Get approved variables from raw_bill_documents
     """
-    approved_ids = get_approved_ids(models.Bill)[:limit]
-    print(approved_ids)
+    approved_ids = get_approved_ids(db_session_factory, models.Bill)
+    logger.info(approved_ids)
     if not approved_ids:
         return []
 
@@ -54,7 +57,7 @@ def get_approved_bill_documents(limit: int = 25):
         .subquery()
     )
 
-    with db_session() as db:
+    with db_session_factory() as db:
         return list(
             db.scalars(
                 select(raw_models.RawBillDocument)
@@ -73,9 +76,9 @@ def _get_vllm_manager():
     if _VLLM_MANAGER is None:
         from chandra.model import InferenceManager
 
-        print("Loading Chandra OCR 2 model...")
+        logger.info("Loading Chandra OCR 2 model...")
         _VLLM_MANAGER = InferenceManager(method="vllm")
-        print("Model loaded successfully.")
+        logger.info("Model loaded successfully.")
     return _VLLM_MANAGER
 
 
@@ -111,7 +114,7 @@ def _get_images_from_pdf(pdf_source: str | bytes):
             pil_image = Image.frombytes("RGB", [img_width, img_height], img_data)
             input_images.append(pil_image)
 
-    print(f"Converted {len(input_images)} page(s) from {source_label} to images.")
+    logger.info(f"Converted {len(input_images)} page(s) from {source_label} to images.")
     return input_images
 
 
@@ -146,50 +149,47 @@ def chandra2_vllm(url: str):
 
 
 def write_raw_bill_pages(
+    db_session_factory: sessionmaker,
     raw_docs: list[raw_models.RawBillDocument],
     ocr_model: str = "chandra2",
 ) -> int:
     if not raw_docs:
-        print("No raw bill documents provided.")
+        logger.info("No raw bill documents provided.")
         return 0
 
     now = datetime.now(ZoneInfo("America/Lima"))
     created = 0
 
-    with db_session() as db:
+    with db_session_factory() as db:
         for doc in raw_docs:
             if ocr_model != "chandra2":
                 raise RuntimeError(
                     f"Unsupported OCR model: {ocr_model}. Expected 'chandra2'."
                 )
-            pages = chandra2_vllm(doc.url)  # replace to mock when in local
+            existing_page = db.scalar(
+                select(raw_models.RawBillPage.page_num)
+                .where(
+                    raw_models.RawBillPage.bill_id == doc.bill_id,
+                    raw_models.RawBillPage.step_id == doc.step_id,
+                    raw_models.RawBillPage.file_id == doc.file_id,
+                    raw_models.RawBillPage.ocr_model == ocr_model,
+                )
+                .limit(1)
+            )
+            if existing_page is not None:
+                raw_doc = db.get(
+                    raw_models.RawBillDocument,
+                    (doc.bill_id, doc.step_id, doc.file_id),
+                )
+                if raw_doc:
+                    raw_doc.processed = True
+                    db.commit()  # commmit if the document existed
+                continue
+
+            pages = chandra2_vllm(doc.url)
             for page in pages:
                 page_num = page["page_num"]
                 text = page["text"]
-
-                existing = db.scalar(
-                    select(raw_models.RawBillPage).where(
-                        raw_models.RawBillPage.bill_id == doc.bill_id,
-                        raw_models.RawBillPage.step_id == doc.step_id,
-                        raw_models.RawBillPage.file_id == doc.file_id,
-                        raw_models.RawBillPage.page_num == page_num,
-                        raw_models.RawBillPage.ocr_model == ocr_model,
-                    )
-                )
-
-                if existing:
-                    existing.text = text
-                    existing.timestamp = now
-                    existing.last_update = True
-                    existing.changed = False
-                    existing.processed = False
-                    raw_doc = db.get(
-                        raw_models.RawBillDocument,
-                        (doc.bill_id, doc.step_id, doc.file_id),
-                    )
-                    if raw_doc:
-                        raw_doc.processed = True
-                    continue
 
                 db.add(
                     raw_models.RawBillPage(
@@ -212,12 +212,18 @@ def write_raw_bill_pages(
                 if raw_doc:
                     raw_doc.processed = True
                 created += 1
-
-        db.commit()
+            db.commit()  # commmit after every document
     return created
 
 
 if __name__ == "__main__":
-    approved_docs = get_approved_bill_documents()
-    print("len approved docs", len(approved_docs))
-    write_raw_bill_pages(approved_docs, ocr_model="chandra2")
+    db_engine = create_engine(settings.DB_URL, pool_pre_ping=True)
+    db_session_factory = sessionmaker(
+        bind=db_engine,
+        autocommit=False,
+        autoflush=False,
+    )
+
+    approved_docs = get_approved_bill_documents(db_session_factory)
+    logger.info(f"len approved docs {len(approved_docs)}")
+    write_raw_bill_pages(db_session_factory, approved_docs, ocr_model="chandra2")
