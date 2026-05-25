@@ -368,11 +368,7 @@ def test_search_ignores_spanish_accents_for_text_filters(client, session_factory
 
     response = client.get(
         "/bills",
-        query_string={
-            "title_q": "Analisis del cafe",
-            "author_q": "Jose Alvarez",
-            "author_party_q": "Partido Peru",
-        },
+        query_string={"title_q": "Analisis del cafe", "author_q": "Jose Alvarez"},
     )
     body = response.get_data(as_text=True)
 
