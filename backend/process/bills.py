@@ -14,8 +14,7 @@ from backend.process.billtext import extract_bill_body
 from backend.process.utils import create_vote_ids, as_date, get_sentence_case
 
 
-def process_bill_text(bill_pages: list[RawBillPage]) -> BillText:
-    # TODO: Connect with final version of the bill_text and difference pipeline.
+def process_bill_text(bill_pages: list[RawBillPage], version_id: int) -> BillText:
     if not bill_pages:
         raise ValueError("No raw pages provided for bill text extraction")
     ocr_models = {page.ocr_model for page in bill_pages}
@@ -23,16 +22,22 @@ def process_bill_text(bill_pages: list[RawBillPage]) -> BillText:
         raise ValueError(
             f"Bill pages mix OCR models {sorted(ocr_models)}; expected a single model"
         )
+    elif "chandra2" not in ocr_models:
+        raise ValueError(
+            "Bill text currently only allows chandra 2 OCR extraction. Try again later."
+        )
     ordered_pages = sorted(bill_pages, key=lambda page: page.page_num)
     first_page = ordered_pages[0]
     final_text = extract_bill_body("\n".join(page.text for page in ordered_pages))
+
     if final_text is None:
+        print("\n".join(page.text for page in ordered_pages))
         raise ValueError("Bill body could not be extracted from raw pages")
     return BillText(
         bill_id=first_page.bill_id,
         step_id=int(first_page.step_id),
         file_id=int(first_page.file_id),
-        version_id=1,
+        version_id=version_id,
         text=final_text,
     )
 

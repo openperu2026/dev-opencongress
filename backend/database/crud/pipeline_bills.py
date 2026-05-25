@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from sqlalchemy import select
+from collections import defaultdict
+
+from sqlalchemy import select, desc
 from sqlalchemy.orm import Session
 
 from backend import OcrModel
@@ -146,36 +148,92 @@ def find_raw_bill_documents(raw_db: Session, bill_id: str) -> list[RawBillDocume
             RawBillDocument.last_update.is_(True),
             RawBillDocument.processed.is_(False),
         )
+        .order_by(RawBillDocument.step_date)
         .all()
     )
 
 
-def find_raw_bill_pages(
-    raw_db: Session,
+def find_bills_with_pending_pages(
+    db: Session,
+    ocr_model: str = OcrModel.CHANDRA.value,
+) -> dict[tuple[str, str, str], list[RawBillPage]]:
+    """
+    Return pending bills grouped with their pending pages.
+    """
+    stmt = (
+        select(RawBillPage)
+        .where(
+            RawBillPage.ocr_model == ocr_model,
+            RawBillPage.processed.is_(False),
+        )
+        .order_by(
+            RawBillPage.bill_id,
+            RawBillPage.step_id,
+            RawBillPage.file_id,
+            RawBillPage.page_num,
+        )
+    )
+
+    pages = db.scalars(stmt).all()
+
+    pending_by_bill: dict[tuple[str, str, str], list[RawBillPage]] = defaultdict(list)
+
+    for page in pages:
+        pending_by_bill[(page.bill_id, page.step_id, page.file_id)].append(page)
+
+    return dict(pending_by_bill)
+
+
+def get_bill_text_last_version(
+    db: Session,
     bill_id: str,
-    step_id: str | int,
-    file_id: str | int,
+) -> int | None:
+    stmt = (
+        select(db_models.BillText.version_id)
+        .where(db_models.BillText.bill_id == bill_id)
+        .order_by(desc(db_models.BillText.version_id))
+        .limit(1)
+    )
+
+    return db.scalar(stmt)
+
+
+def get_next_bill_text_version(
+    db: Session,
+    bill_id: str,
+) -> int:
+    last_version = get_bill_text_last_version(db, bill_id)
+
+    if last_version is None:
+        return 1
+
+    return last_version + 1
+
+
+def find_pending_pages(
+    db: Session,
+    bill_id: str,
     ocr_model: str = OcrModel.CHANDRA.value,
 ) -> list[RawBillPage]:
-    """Return the latest pages of a bill document for a single OCR model.
-
-    Since the ``feature/data_migration`` migration, ``raw_bill_pages`` is keyed
-    by ``ocr_model`` as well, so a document can hold one page row per model.
-    Filtering by ``ocr_model`` keeps the page sequence unambiguous; bills are
-    OCR'd with chandra2, hence the default.
     """
-    return (
-        raw_db.query(RawBillPage)
-        .filter(
+    Return the pending documents for a specific OCR model.
+    """
+    stmt = (
+        select(RawBillPage)
+        .where(
             RawBillPage.bill_id == bill_id,
-            RawBillPage.step_id == str(step_id),
-            RawBillPage.file_id == str(file_id),
             RawBillPage.ocr_model == ocr_model,
-            RawBillPage.last_update.is_(True),
+            RawBillPage.processed.is_(False),
         )
-        .order_by(RawBillPage.page_num)
-        .all()
+        .order_by(
+            RawBillPage.bill_id,
+            RawBillPage.step_id,
+            RawBillPage.file_id,
+            RawBillPage.page_num,
+        )
     )
+
+    return db.execute(stmt).scalars().all()
 
 
 def upsert_bill_text(

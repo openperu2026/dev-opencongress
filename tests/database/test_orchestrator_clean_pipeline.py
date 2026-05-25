@@ -47,7 +47,7 @@ def test_run_processing_loads_reference_definitions_before_memberships(monkeypat
         process_motions=False,
         process_leyes=False,
         process_others=True,
-        process_bill_differences=False,
+        process_documents=False,
     )
 
     assert calls == ["orgs", "bancadas", "congresistas", "admin_ms", "bancada_ms"]
@@ -94,7 +94,7 @@ def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrat
         )
         db.commit()
 
-    stats = orchestrator._process_bills(include_documents=False, limit=None)
+    stats = orchestrator._process_bills(limit=None)
 
     with orchestrator.DBSession() as db:
         bill = db.get(db_models.Bill, "2026_1")
@@ -189,7 +189,8 @@ def test_process_bills_marks_raw_pages_processed_when_bill_text_extracted(
         )
         db.commit()
 
-    stats = orchestrator._process_bills(include_documents=True, limit=None)
+    stats = orchestrator._process_bills(limit=None)
+    stats_bill_text = orchestrator._process_bill_text(limit=None)
 
     with orchestrator.DBSession() as db:
         raw_doc = db.get(RawBillDocument, (bill_id, step_id, file_id))
@@ -207,6 +208,8 @@ def test_process_bills_marks_raw_pages_processed_when_bill_text_extracted(
 
         assert stats.processed == 1
         assert stats.errors == 0
+        assert stats_bill_text.processed == 2
+        assert stats_bill_text.errors == 0
         assert bill_text is not None
         assert raw_doc.processed is True
         assert len(pages) == 2

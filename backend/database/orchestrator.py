@@ -38,6 +38,7 @@ from backend.database.raw_models import (
     RawLey,
     RawMotion,
     RawOrganization,
+    RawBillDocument,
 )
 from backend.process.bancadas import process_bancada
 from backend.process.bills import (
@@ -383,13 +384,11 @@ class OpenPeruOrchestrator:
         process_motions: bool = True,
         process_leyes: bool = True,
         process_others: bool = True,
-        process_bill_differences: bool = True,
-        include_documents: bool = True,
+        process_documents: bool = True,
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
         first_load: bool = False,
-        bill_differences_limit: int | None = None,
     ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
@@ -426,7 +425,6 @@ class OpenPeruOrchestrator:
             with log_manager.stage("process", "bills"):
                 console.info("Starting bills processing")
                 summary["bills"] = self._process_bills(
-                    include_documents=include_documents,
                     limit=bills_limit,
                 )
                 self._log_stage_summary("bills", summary["bills"])
@@ -438,11 +436,16 @@ class OpenPeruOrchestrator:
                 )
                 self._log_stage_summary("bill_summary", summary["bill_summary"])
 
-        if process_bill_differences:
+        if process_documents:
+            with log_manager.stage("process", "bill_text"):
+                console.info("Starting bill text processing")
+                summary["bill_text"] = self._process_bill_text(limit=bills_limit)
+                self._log_stage_summary("bill_text", summary["bill_text"])
+
             with log_manager.stage("process", "bill_differences"):
                 console.info("Starting bill differences processing")
                 summary["bill_differences"] = self._process_bill_differences(
-                    limit=bill_differences_limit,
+                    limit=bills_limit,
                 )
                 self._log_stage_summary("bill_differences", summary["bill_differences"])
 
@@ -450,7 +453,7 @@ class OpenPeruOrchestrator:
             with log_manager.stage("process", "motions"):
                 console.info("Starting motions processing")
                 summary["motions"] = self._process_motions(
-                    include_documents=include_documents,
+                    include_documents=False,
                     limit=motions_limit,
                 )
                 self._log_stage_summary("motions", summary["motions"])
@@ -662,9 +665,9 @@ class OpenPeruOrchestrator:
         CONG_JSON = directories.PROCESSED_DATA / "cong_info_2021_2026.json"
 
         dict_cong_data = get_cong_data(CONG_JSON)
-        with self.DBSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as db:
             rows = (
-                raw_db.query(RawCongresista)
+                db.query(RawCongresista)
                 .filter(
                     RawCongresista.last_update.is_(True),
                     RawCongresista.processed.is_(False),
@@ -732,7 +735,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[congresistas] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
@@ -743,7 +745,7 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.DBSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as db:
             for org_schema in process_chambers():
                 _, inserted = self._upsert_organization_with_count(db, org_schema)
                 if inserted:
@@ -753,7 +755,7 @@ class OpenPeruOrchestrator:
 
             # Committees
             committees = (
-                raw_db.query(RawCommittee)
+                db.query(RawCommittee)
                 .filter(
                     RawCommittee.last_update.is_(True),
                     RawCommittee.processed.is_(False),
@@ -788,7 +790,7 @@ class OpenPeruOrchestrator:
             # Administrative organization definitions. RawOrganization is marked
             # processed only after its memberships are loaded.
             organizations = (
-                raw_db.query(RawOrganization)
+                db.query(RawOrganization)
                 .filter(
                     RawOrganization.last_update.is_(True),
                     RawOrganization.processed.is_(False),
@@ -817,7 +819,6 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[organization_definitions] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
@@ -826,9 +827,9 @@ class OpenPeruOrchestrator:
     def _process_admin_memberships(self) -> ProcessStats:
         """Link congresistas to admin organizations; marks RawOrganization processed only if all members resolved."""
         stats = ProcessStats()
-        with self.DBSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as db:
             organizations = (
-                raw_db.query(RawOrganization)
+                db.query(RawOrganization)
                 .filter(
                     RawOrganization.last_update.is_(True),
                     RawOrganization.processed.is_(False),
@@ -870,7 +871,6 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[admin_memberships] raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
         )
@@ -881,9 +881,9 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.DBSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as db:
             rows = (
-                raw_db.query(RawBancada)
+                db.query(RawBancada)
                 .filter(
                     RawBancada.last_update.is_(True), RawBancada.processed.is_(False)
                 )
@@ -917,7 +917,6 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[bancada_definitions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
@@ -926,9 +925,9 @@ class OpenPeruOrchestrator:
     def _process_bancada_memberships(self) -> ProcessStats:
         """Link congresistas to bancada organizations; only marks raw processed when every member resolves."""
         stats = ProcessStats()
-        with self.DBSession() as raw_db, self.DBSession() as db:
+        with self.DBSession() as db:
             rows = (
-                raw_db.query(RawBancada)
+                db.query(RawBancada)
                 .filter(
                     RawBancada.last_update.is_(True), RawBancada.processed.is_(False)
                 )
@@ -980,21 +979,18 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[bancada_memberships] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
         )
         return stats
 
-    def _process_bills(
-        self, *, include_documents: bool, limit: int | None
-    ) -> ProcessStats:
+    def _process_bills(self, *, limit: int | None) -> ProcessStats:
         """Process unprocessed RawBill rows into Bill + steps + org/cong relations + (optionally) text and diffs."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.DBSession() as raw_db, self.DBSession() as db:
-            query = raw_db.query(RawBill).filter(
+        with self.DBSession() as db:
+            query = db.query(RawBill).filter(
                 RawBill.last_update.is_(True), RawBill.processed.is_(False)
             )
             if limit is not None:
@@ -1078,36 +1074,6 @@ class OpenPeruOrchestrator:
                             else cong_rel.role_type,
                         )
 
-                    if include_documents:
-                        for raw_doc in crud_bills.find_raw_bill_documents(
-                            raw_db, bill.id
-                        ):
-                            pages = crud_bills.find_raw_bill_pages(
-                                raw_db, bill.id, raw_doc.step_id, raw_doc.file_id
-                            )
-                            if not pages:
-                                stats.skipped += 1
-                                continue
-                            try:
-                                text_schema = process_bill_text(pages)
-                            except ValueError:
-                                stats.skipped += 1
-                                logger.error(
-                                    f"Error extracting Bill Text for bill_id {bill.id}, step_id: {raw_doc.step_id}, file_id: {raw_doc.file_id}"
-                                )
-                                continue
-                            crud_bills.upsert_bill_text(
-                                db,
-                                bill_id=text_schema.bill_id,
-                                step_id=text_schema.step_id,
-                                file_id=text_schema.file_id,
-                                version_id=text_schema.version_id,
-                                text=text_schema.text,
-                            )
-                            for page in pages:
-                                page.processed = True
-                            raw_doc.processed = True
-
                     raw_bill.processed = True
                     stats.processed += 1
                 except Exception as exc:
@@ -1118,7 +1084,6 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[bills] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
@@ -1196,6 +1161,73 @@ class OpenPeruOrchestrator:
             f"clean_updated={clean_updated}"
         )
 
+        return stats
+
+    def _process_bill_text(self, *, limit: int | None) -> ProcessStats:
+        stats = ProcessStats()
+
+        with self.DBSession() as db:
+            bill_pages = crud_bills.find_bills_with_pending_pages(db)
+
+            for idx, ((bill_id, step_id, file_id), pending_pages) in enumerate(
+                bill_pages.items()
+            ):
+                if limit is not None and idx >= limit:
+                    break
+
+                next_version = crud_bills.get_next_bill_text_version(db, bill_id)
+                try:
+                    text_schema = process_bill_text(pending_pages, next_version)
+                except ValueError as exc:
+                    stats.errors += 1
+                    logger.error(
+                        f"Error extracting Bill Text for bill_id {bill_id}, "
+                        f"step_id: {step_id}, file_id: {file_id}: {exc}"
+                    )
+                    continue
+
+                try:
+                    crud_bills.upsert_bill_text(
+                        db,
+                        bill_id=text_schema.bill_id,
+                        step_id=text_schema.step_id,
+                        file_id=text_schema.file_id,
+                        version_id=text_schema.version_id,
+                        text=text_schema.text,
+                    )
+
+                    raw_doc = db.get(RawBillDocument, (bill_id, step_id, file_id))
+
+                    if raw_doc is None:
+                        stats.errors += 1
+                        logger.error(
+                            f"RawBillDocument not found for bill_id {bill_id}, "
+                            f"step_id: {step_id}, file_id: {file_id}"
+                        )
+                        db.rollback()
+                        continue
+
+                    for page in pending_pages:
+                        page.processed = True
+
+                    raw_doc.processed = True
+
+                    db.commit()
+
+                    stats.processed += len(pending_pages)
+
+                except SQLAlchemyError as exc:
+                    stats.errors += 1
+                    logger.error(
+                        f"Error loading Bill Text for bill_id {bill_id}, "
+                        f"step_id: {step_id}, file_id: {file_id}: {exc}"
+                    )
+                    db.rollback()
+                    continue
+
+        logger.info(
+            f"[bill_text] n_bills={len(bill_pages)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
+        )
         return stats
 
     def _process_bill_differences(self, *, limit: int | None) -> ProcessStats:
@@ -1293,8 +1325,8 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.DBSession() as raw_db, self.DBSession() as db:
-            query = raw_db.query(RawMotion).filter(
+        with self.DBSession() as db:
+            query = db.query(RawMotion).filter(
                 RawMotion.last_update.is_(True), RawMotion.processed.is_(False)
             )
             if limit is not None:
@@ -1381,10 +1413,10 @@ class OpenPeruOrchestrator:
 
                     if include_documents:
                         for raw_doc in crud_motions.find_raw_motion_documents(
-                            raw_db, motion.id
+                            db, motion.id
                         ):
                             pages = crud_motions.find_raw_motion_pages(
-                                raw_db, motion.id, raw_doc.step_id, raw_doc.file_id
+                                db, motion.id, raw_doc.step_id, raw_doc.file_id
                             )
                             if not pages:
                                 stats.skipped += 1
@@ -1414,7 +1446,6 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[motions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
@@ -1425,8 +1456,8 @@ class OpenPeruOrchestrator:
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
-        with self.DBSession() as raw_db, self.DBSession() as db:
-            query = raw_db.query(RawLey).filter(
+        with self.DBSession() as db:
+            query = db.query(RawLey).filter(
                 RawLey.last_update.is_(True), RawLey.processed.is_(False)
             )
             if limit is not None:
@@ -1465,7 +1496,6 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
 
             db.commit()
-            raw_db.commit()
         logger.info(
             f"[leyes] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
