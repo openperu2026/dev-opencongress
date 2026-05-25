@@ -1,5 +1,4 @@
 from types import SimpleNamespace
-
 from flask import Blueprint, render_template, request
 from sqlalchemy import func, or_, select
 from backend.database.models import (
@@ -19,7 +18,7 @@ congress_bp = Blueprint("congress", __name__, template_folder="../templates")
 
 
 # get the latest organizations names
-def _latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | None:
+def latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | None:
     return db.execute(
         select(Organization.org_name)
         .join(Membership, Membership.org_id == Organization.org_id)
@@ -34,7 +33,7 @@ def _latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | No
 
 # Get the main information of the Congressmember
 def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
-    party_name = _latest_org_name(db, congresista.id, TypeOrganization.PARTY)
+    party_name = latest_org_name(db, congresista.id, TypeOrganization.PARTY)
     chamber_membership = db.execute(
         select(ChamberMembership)
         .where(
@@ -75,7 +74,11 @@ def index():
     filters = []
 
     if name_q:
-        filters.append(Congresista.full_name.ilike(f"%{name_q}%"))
+        filters.append(
+            func.unaccent(func.lower(Congresista.full_name)).like(
+                func.unaccent(func.lower(f"%{name_q}%"))
+            )
+        )
 
     if party_q:
         filters.append(
@@ -84,13 +87,19 @@ def index():
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
                     Membership.org_type.in_([TypeOrganization.PARTY]),
-                    Organization.org_name.ilike(f"%{party_q}%"),
+                    func.unaccent(func.lower(Organization.org_name)).like(
+                        func.unaccent(func.lower(f"%{party_q}%"))
+                    ),
                 )
             )
         )
 
     if region_q:
-        filters.append(Congresista.full_name.ilike(f"%{region_q}%"))
+        filters.append(
+            func.unaccent(func.lower(Congresista.full_name)).like(
+                func.unaccent(func.lower(f"%{region_q}%"))
+            )
+        )
 
     if filters:
         with SessionProcessed() as db:

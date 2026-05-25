@@ -14,6 +14,7 @@ from flask import (
 )
 from sqlalchemy import func, select
 from app.diff_render import RENDERER_VERSION, render_payload_html
+from .congress import latest_org_name
 from backend.database.crud.pipeline_bills import get_billtext_for_step
 from backend.database.models import (
     Bill,
@@ -22,6 +23,7 @@ from backend.database.models import (
     Congresista,
     BillOrganization,
     Ley,
+    Membership,
     Organization,
 )
 from backend.core.enums import TypeOrganization
@@ -87,7 +89,7 @@ def _build_date_picker(prefix, args, today):
         "year_value": year,
         "month_value": month,
         "day_value": day,
-        "year_options": list(range(DATE_YEAR_MIN, today.year + 1)),
+        "year_options": list(range(today.year, DATE_YEAR_MIN - 1, -1)),
         "month_options": list(range(1, 13)),
         "day_options": day_options,
     }
@@ -97,6 +99,7 @@ def _build_date_picker(prefix, args, today):
 def index():
     title_q = request.args.get("title_q", "").strip()
     author_q = request.args.get("author_q", "").strip()
+    author_party_q = request.args.get("author_party_q", "").strip()
     status = request.args.get("status", "all").strip()
     bill_id_q = request.args.get("bill_id_q", "").strip()
     law_id_q = request.args.get("law_id_q", "").strip()
@@ -126,6 +129,7 @@ def index():
         [
             title_q,
             author_q,
+            author_party_q,
             bill_id_q,
             law_id_q,
             current_step_q,
@@ -138,6 +142,7 @@ def index():
     search_params = dict(
         title_q=title_q,
         author_q=author_q,
+        author_party_q=author_party_q,
         status=status,
         bill_id_q=bill_id_q,
         law_id_q=law_id_q,
@@ -182,7 +187,11 @@ def index():
         )
 
     if title_q:
-        filters.append(Bill.title.ilike(f"%{title_q}%"))
+        filters.append(
+            func.unaccent(func.lower(Bill.title)).like(
+                func.unaccent(func.lower(f"%{title_q}%"))
+            )
+        )
 
     if bill_id_q:
         filters.append(Bill.id.ilike(f"%{bill_id_q}%"))
@@ -198,7 +207,23 @@ def index():
             if author_id_int is not None:
                 filters.append(Bill.author_id == author_id_int)
         else:
-            filters.append(Congresista.full_name.ilike(f"%{author_q}%"))
+            filters.append(
+                func.unaccent(func.lower(Congresista.full_name)).like(
+                    func.unaccent(func.lower(f"%{author_q}%"))
+                )
+            )
+
+    if author_party_q:
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.org_type == TypeOrganization.PARTY,
+                    Organization.org_name == author_party_q,
+                )
+            )
+        )
 
     if law_id_q:
         filters.append(
@@ -255,6 +280,7 @@ def index():
     results_end = 0
     pagination_pages = []
     current_step_options = []
+    author_party_options = []
     organization_name_options = []
 
     with SessionProcessed() as db:
@@ -266,6 +292,18 @@ def index():
             step.value if hasattr(step, "value") else str(step)
             for step in db.execute(
                 select(BillStep.step_type).distinct().order_by(BillStep.step_type)
+            )
+            .scalars()
+            .all()
+        ]
+        author_party_options = [
+            party_name
+            for party_name in db.execute(
+                select(Organization.org_name)
+                .join(Membership, Membership.org_id == Organization.org_id)
+                .where(Membership.org_type == TypeOrganization.PARTY)
+                .distinct()
+                .order_by(Organization.org_name.asc())
             )
             .scalars()
             .all()
@@ -373,6 +411,7 @@ def index():
         "bills/search.html",
         title_q=title_q,
         author_q=author_q,
+        author_party_q=author_party_q,
         author_display=author_display,
         bill_id_q=bill_id_q,
         law_id_q=law_id_q,
@@ -399,6 +438,7 @@ def index():
         prev_page_url=prev_page_url,
         next_page_url=next_page_url,
         current_step_options=current_step_options,
+        author_party_options=author_party_options,
         presentation_date_from_year_options=presentation_date_from_picker[
             "year_options"
         ],
@@ -438,9 +478,18 @@ def bill_detail(bill_id):
             bill_status = _("Approved")
 
         author = ""
+        author_party = None
+        author_committee = None
         if bill.author_id:
             author_table = db.get(Congresista, bill.author_id)
-            author = author_table.full_name
+            if author_table:
+                author = author_table.full_name
+                author_party = latest_org_name(
+                    db, bill.author_id, TypeOrganization.PARTY
+                )
+                author_committee = latest_org_name(
+                    db, bill.author_id, TypeOrganization.COMMITTEE
+                )
 
         return render_template(
             "bills/detail.html",
@@ -450,6 +499,8 @@ def bill_detail(bill_id):
             diff_types=diff_types,
             bill_status=bill_status,
             author=author,
+            author_party=author_party,
+            author_committee=author_committee,
         )
 
 

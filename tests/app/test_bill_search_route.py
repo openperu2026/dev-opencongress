@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date as real_date
+import unicodedata
 
 from backend.core.enums import Proponents
 from backend.core.enums import TypeBillStep, TypeOrganization
@@ -9,12 +10,15 @@ from backend.database.models import (
     Bill,
     BillOrganization,
     BillStep,
+    CommitteeMembership,
+    Congresista,
     Ley,
+    PartyMembership,
     Organization,
 )
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 
@@ -24,10 +28,28 @@ class FixedDate(real_date):
         return cls(2026, 5, 24)
 
 
+def _register_unaccent(engine):
+    @event.listens_for(engine, "connect")
+    def _unaccent_on_connect(dbapi_connection, connection_record):
+        if dbapi_connection.__class__.__module__.startswith("sqlite3"):
+            dbapi_connection.create_function(
+                "unaccent",
+                1,
+                lambda value: None
+                if value is None
+                else "".join(
+                    character
+                    for character in unicodedata.normalize("NFKD", str(value))
+                    if not unicodedata.combining(character)
+                ),
+            )
+
+
 @pytest.fixture()
 def session_factory(tmp_path):
     db_path = tmp_path / "processed_test.db"
     engine = create_engine(f"sqlite:///{db_path}")
+    _register_unaccent(engine)
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     yield Session
@@ -75,6 +97,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     observations="",
                     status="presentado",
                     proponent=Proponents.CONGRESO,
+                    author_id=1,
                     bill_approved=False,
                     summary_oc="",
                 ),
@@ -85,8 +108,29 @@ def _seed_bill_search_data(session_factory) -> None:
                     observations="",
                     status="presentado",
                     proponent=Proponents.CONGRESO,
+                    author_id=2,
                     bill_approved=False,
                     summary_oc="",
+                ),
+                Congresista(
+                    id=1,
+                    full_name="Ana Perez",
+                    first_name="Ana",
+                    last_name="Perez",
+                    dni="00000001",
+                    gender="F",
+                    photo_url="",
+                    website="",
+                ),
+                Congresista(
+                    id=2,
+                    full_name="Beatriz Gomez",
+                    first_name="Beatriz",
+                    last_name="Gomez",
+                    dni="00000002",
+                    gender="F",
+                    photo_url="",
+                    website="",
                 ),
                 Organization(
                     org_id=1,
@@ -107,6 +151,32 @@ def _seed_bill_search_data(session_factory) -> None:
                     parent_org_id=None,
                     date_founding=None,
                     date_dissolution=None,
+                ),
+                Organization(
+                    org_id=3,
+                    org_name="Partido Verde",
+                    org_type=TypeOrganization.PARTY,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                PartyMembership(
+                    person_id=1,
+                    org_id=3,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=real_date(2021, 1, 1),
+                    end_date=real_date(2026, 12, 31),
+                ),
+                CommitteeMembership(
+                    person_id=1,
+                    org_id=1,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=real_date(2021, 1, 1),
+                    end_date=real_date(2026, 12, 31),
                 ),
                 BillStep(
                     bill_id="2021_0001",
@@ -204,9 +274,12 @@ def test_search_form_includes_new_filters(client):
     assert 'name="presentation_date_to_year"' in body
     assert 'name="presentation_date_to_month"' in body
     assert 'name="presentation_date_to_day"' in body
+    assert 'name="author_party_q"' in body
     assert 'name="organization_name_q"' in body
-    assert "Presentation date from" in body
-    assert "Presentation date to" in body
+    assert "Presentation date" in body
+    assert "From" in body
+    assert "To" in body
+    assert "Author party" in body
     assert 'name="presentation_date_from_year"' in body and 'value="" selected' in body
     assert 'name="presentation_date_from_month"' in body and 'value="" selected' in body
     assert 'name="presentation_date_from_day"' in body and 'value="" selected' in body
@@ -224,6 +297,7 @@ def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_f
             "bill_id_q": "2021_0001",
             "law_id_q": "L-001",
             "current_step_q": TypeBillStep.VOTACION.value,
+            "author_party_q": "Partido Verde",
             "presentation_date_from_year": 2024,
             "presentation_date_from_month": 1,
             "presentation_date_from_day": 1,
@@ -241,7 +315,71 @@ def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_f
     assert "2021_0002" not in body
     assert "Law ID: L-001" in body
     assert "Current Step: Votación" in body
+    assert "Author party: Partido Verde" in body
     assert "2024-01-01 - 2024-01-31" in body
+
+
+def test_search_ignores_spanish_accents_for_text_filters(client, session_factory):
+    with session_factory() as db:
+        db.add_all(
+            [
+                Congresista(
+                    id=10,
+                    full_name="José Álvarez",
+                    first_name="José",
+                    last_name="Álvarez",
+                    dni="00000010",
+                    gender="M",
+                    photo_url="",
+                    website="",
+                ),
+                Organization(
+                    org_id=20,
+                    org_name="Partido Perú",
+                    org_type=TypeOrganization.PARTY,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Bill(
+                    id="2021_0099",
+                    title="Análisis del café",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=10,
+                    bill_approved=False,
+                    summary_oc="",
+                ),
+                PartyMembership(
+                    person_id=10,
+                    org_id=20,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=real_date(2021, 1, 1),
+                    end_date=real_date(2026, 12, 31),
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get(
+        "/bills",
+        query_string={
+            "title_q": "Analisis del cafe",
+            "author_q": "Jose Alvarez",
+            "author_party_q": "Partido Peru",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "2021_0099" in body
+    assert "Análisis del café" in body
+    assert "José Álvarez" in body
 
 
 def test_date_picker_builds_valid_february_days_for_leap_year():

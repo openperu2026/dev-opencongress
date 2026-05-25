@@ -5,11 +5,17 @@
 <div class="bill-header">
   <h1>{{_('Title')}}: {{ bill.title }}</h1>
   <div class="bill-meta">
+    <p>
+      <strong>{{_('Author')}}:</strong>
+      {{ author }}
+      {% if author_party or author_committee %}
+        (Party: {{ author_party or 'N/A' }}, Committee: {{ author_committee or 'N/A' }})
+      {% endif %}
+    </p>
     {% if latest_step %}
         <p><strong>{{_('Current Step')}}:</strong> {{ latest_step.step_type.value }}</p>
     {% endif %}
     <p><strong>{{_('Bill Status')}}:</strong> {{ bill_status }}</p>
-    <p><strong>{{_('Author')}}:</strong> {{ author }}</p>
     <p style = "margin-bottom:0;"><strong>{{_('Summary')}}:</strong></p>
     <p style = "margin-top: 0;">{{ bill.summary_oc }}</p>
 
