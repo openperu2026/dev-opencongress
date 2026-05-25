@@ -4,26 +4,45 @@
 
 
 <div class="hero">
-    
-    <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="Open Congress logo">
+    <div class="hero-container hero-text">
+        <h1 class="hero-title">Welcome to Open Congress</h1>
 
-    <p class="page-subtitle">
-        {{_('Select the information about the peruvian congress that you want to explore')}}
-    </p>
-        
-    <div class="menu-landing">
-        {% for item in menu_items %}
-            <div class="menu-card">
-                 <a href="{{ item.url }}">
-                 {{ item.name }}
+        <p class="hero-description">
+            Open Congress brings together public information from the Peruvian
+            Congress in one place. Explore bills from the 2021-2026 congressional
+            period, review who authored them, see how congress members voted, and
+            compare changes between different versions of each bill.
+            Click bellow for start to explore:
+            <br><br>
+
+        </p>
+
+        <div class="menu-landing">
+            {% for item in menu_items %}
+                <div class="menu-card">
+                    <a href="{{ item.url }}">
+                        {{ item.name }}
                     </a>
-            </div>
-        {% endfor %}
+                </div>
+            {% endfor %}
+        </div>
+
+       
     </div>
+
+    <div class="hero-container">
+        <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="Open Congress logo">
+         <p class="page-subtitle">
+            {{_('Transparency and accountability for a stronger democracy')}}
+        </p>
+
+        
 
     </div>
 
 </div>
+
+
 
 <section id="about" class="about-section">
     <div class="about-content">
