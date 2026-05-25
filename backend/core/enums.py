@@ -214,8 +214,8 @@ class EmbeddingModel(str, Enum):
 class OcrModel(str, Enum):
     """OCR engine used to extract text from a scanned document page.
 
-    Bills are OCR'd with chandraOCR; attendance and votes with Tesseract.
+    Bills are OCR'd with chandra2; attendance and votes with Tesseract.
     """
 
-    CHANDRA = "chandraOCR"
+    CHANDRA = "chandra2"
     TESSERACT = "Tesseract"

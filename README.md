@@ -17,6 +17,7 @@ At its current stage, OpenPeru focuses on the legislative core of Congress and i
 - **Congress members (congresistas)**: identities, party affiliations, and memberships over time
 - **Political organizations**: parties, parliamentary groups, and committees
 - **Legislative processes**: structured representations of how initiatives evolve
+- **Bill text differences**: a per-step structural + line + word diff between consecutive bill versions, rendered as HTML at `/bills/<bill_id>/difference/<step_id>` (see `docs/bill_difference_contract.md`)
 
 All information is stored in relational databases designed for analysis, reuse, and future API access.
 

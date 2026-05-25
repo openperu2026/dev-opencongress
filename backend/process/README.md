@@ -11,6 +11,7 @@ This module transforms raw SQLAlchemy rows into validated, normalized Pydantic s
 - `votes.py`: vote-related parsing helpers.
 - `utils.py`: shared processing utilities.
 - `chandra2.py`: OCR runner for bill documents using Chandra vLLM.
+- `diff/`: three-layer hybrid bill-text diff (structural → line → word). Public surface is `compute_bill_difference` in `diff/__init__.py`; renderer contract in [`docs/bill_difference_contract.md`](../../docs/bill_difference_contract.md).
 
 ## Role in pipeline
 

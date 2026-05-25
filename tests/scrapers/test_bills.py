@@ -25,7 +25,7 @@ def test_create_raw_bill_sets_id_and_sections():
         "seguimientos": [{"evento": "derivado"}],
     }
 
-    raw_bill = scraper.create_raw_bill(year, bill_number, data)
+    raw_bill = scraper.create_raw_bill(year, bill_number, data, "www.example.org")
 
     assert isinstance(raw_bill, RawBill)
     assert raw_bill.id == f"{year}_{bill_number}"
@@ -38,6 +38,7 @@ def test_create_raw_bill_sets_id_and_sections():
 
     # Missing section in data => attribute should remain None
     assert raw_bill.committees is None
+    assert raw_bill.api_url == "www.example.org"
 
 
 # ---------- add_bills_to_db ----------
@@ -137,6 +138,12 @@ def test_scrape_bill_appends_raw_bill(monkeypatch, session):
         lambda bill_url: f"{API_URL}2021/1234",
     )
 
+    monkeypatch.setattr(
+        scraper,
+        "_RawBillScraper__get_existing_api_url",
+        lambda bill_url: f"{API_URL}2021/1234",
+    )
+
     # Fake JSON response from get_url_text
     def fake_get_url_text(url: str):
         # Make sure URL is what we expect
@@ -154,7 +161,7 @@ def test_scrape_bill_appends_raw_bill(monkeypatch, session):
 
     # Patch get_url_text in the scraper module
     monkeypatch.setattr("backend.scrapers.bills.get_url_text", fake_get_url_text)
-    monkeypatch.setattr(scraper, "update_tracking", lambda bill: bill)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bill: [bill])
 
     scraper.scrape_bill("2021", "1234")
 
