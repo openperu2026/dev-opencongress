@@ -615,5 +615,4 @@ def bill_difference(bill_id, step_id):
         resp.headers["Cache-Control"] = (
             "public, max-age=300, stale-while-revalidate=86400"
         )
-
         return resp
