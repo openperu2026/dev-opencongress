@@ -13,6 +13,7 @@ from backend.database.models import (
 )
 
 
+from .bills import create_party_option, create_committee_option
 from .processed_session import SessionProcessed
 
 congress_bp = Blueprint("congress", __name__, template_folder="../templates")
@@ -74,6 +75,9 @@ def index():
 
     congresistas = []
     filters = []
+    party_options = []
+    region_options = []
+    committee_options = []
 
     if name_q:
         filters.append(
@@ -88,23 +92,39 @@ def index():
                 select(Membership.person_id)
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
-                    Membership.org_type.in_([TypeOrganization.PARTY]),
-                    func.unaccent(func.lower(Organization.org_name)).like(
-                        func.unaccent(func.lower(f"%{party_q}%"))
-                    ),
+                    Membership.org_type == TypeOrganization.PARTY,
+                    Organization.org_name == party_q,
                 )
             )
         )
 
     if region_q:
         filters.append(
-            func.unaccent(func.lower(Congresista.full_name)).like(
-                func.unaccent(func.lower(f"%{region_q}%"))
+            Congresista.id.in_(
+                select(ChamberMembership.person_id)
+                .where(ChamberMembership.dist_electoral == region_q)
+                .distinct()
             )
         )
 
-    if filters:
-        with SessionProcessed() as db:
+    if commission_q:
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.org_type == TypeOrganization.COMMITTEE,
+                    Organization.org_name == commission_q,
+                )
+            )
+        )
+
+    with SessionProcessed() as db:
+        party_options = create_party_option(db)
+        region_options = create_region_option(db)
+        committee_options = create_committee_option(db)
+
+        if filters:
             rows = db.execute(
                 select(Congresista)
                 .where(*filters)
@@ -120,7 +140,24 @@ def index():
         region_q=region_q,
         commission_q=commission_q,
         congresistas=congresistas,
+        party_options=party_options,
+        region_options=region_options,
+        committee_options=committee_options,
     )
+
+
+def create_region_option(db):
+    return [
+        dist_electoral
+        for dist_electoral in db.execute(
+            select(ChamberMembership.dist_electoral)
+            .where(ChamberMembership.dist_electoral.is_not(None))
+            .distinct()
+            .order_by(ChamberMembership.dist_electoral.asc())
+        )
+        .scalars()
+        .all()
+    ]
 
 
 @congress_bp.route("/congress/<congresista_id>")

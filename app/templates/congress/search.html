@@ -15,29 +15,37 @@
                 
         </div>
 
+            <div class="searching-container">
+                <select name="party_q">
+                    <option value="">{{ _('Party') }}</option>
+                    {% for party_option in party_options or [] %}
+                        <option value="{{ party_option }}" {% if party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
         <div class="searching-container">
-            <!--    <h3>{{_('Party')}}</h3>-->
-            <input type="text" name="party_q" value="{{party_q or '' }}"  placeholder="{{_('Party')}}">
-
-        </div>    
-
-
-        <div class="searching-container">
-            <!-- <h3>{{_('Region')}}</h3>-->
-            <input type="text" name="region_q" value="{{region_q or '' }}"  placeholder="{{_('Region')}}">
-
+            <select name="region_q">
+                <option value="">{{ _('Region') }}</option>
+                {% for region_option in region_options or [] %}
+                    <option value="{{ region_option }}" {% if region_q == region_option %}selected{% endif %}>{{ region_option }}</option>
+                {% endfor %}
+            </select>
         </div>
 
         <div class="searching-container">
-            <input type="text" name="commission_q" value="{{ commission_q or '' }}" placeholder="{{_('Commission')}}">
+            <select name="commission_q">
+                <option value="">{{ _('Commission') }}</option>
+                {% for committee_option in committee_options or [] %}
+                    <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
+                {% endfor %}
+            </select>
         </div>
+
         <button type="submit" class="search-icon-button" aria-label="Search">
             <i class="fa-solid fa-magnifying-glass"></i>
         </button>
-        <!-- <a class="clear-button" href="{{ url_for('congress.index') }}">{{_('Clear')}}</a>-->
-
     </div>
-
 </form>
 
 

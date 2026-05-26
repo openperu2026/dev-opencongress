@@ -396,30 +396,8 @@ def index():
             .scalars()
             .all()
         ]
-        author_party_options = [
-            party_name
-            for party_name in db.execute(
-                select(Organization.org_name)
-                .join(Membership, Membership.org_id == Organization.org_id)
-                .where(Membership.org_type == TypeOrganization.PARTY)
-                .distinct()
-                .order_by(Organization.org_name.asc())
-            )
-            .scalars()
-            .all()
-        ]
-        organization_name_options = [
-            org_name
-            for org_name in db.execute(
-                select(Organization.org_name)
-                .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
-                .where(Organization.org_type == TypeOrganization.COMMITTEE)
-                .distinct()
-                .order_by(Organization.org_name.asc())
-            )
-            .scalars()
-            .all()
-        ]
+        author_party_options = create_party_option(db)
+        organization_name_options = create_committee_option(db)
 
         if search_requested:
             latest_bill_dates = (
@@ -552,6 +530,36 @@ def index():
         organization_name_options=organization_name_options,
         search_requested=search_requested,
     )
+
+
+def create_party_option(db):
+    return [
+        party_name
+        for party_name in db.execute(
+            select(Organization.org_name)
+            .join(Membership, Membership.org_id == Organization.org_id)
+            .where(Membership.org_type == TypeOrganization.PARTY)
+            .distinct()
+            .order_by(Organization.org_name.asc())
+        )
+        .scalars()
+        .all()
+    ]
+
+
+def create_committee_option(db):
+    return [
+        org_name
+        for org_name in db.execute(
+            select(Organization.org_name)
+            .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+            .where(Organization.org_type == TypeOrganization.COMMITTEE)
+            .distinct()
+            .order_by(Organization.org_name.asc())
+        )
+        .scalars()
+        .all()
+    ]
 
 
 @bills_bp.route("/bills/<bill_id>")

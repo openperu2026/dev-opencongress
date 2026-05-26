@@ -251,10 +251,10 @@ main {
 }
 
 .congress-search-form .bar-search {
-    display: flex;
-    align-items: stretch;
-    gap: 16px;
-    flex-wrap: wrap;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) 92px;
+  align-items: stretch;
+  margin-bottom: 40px;
+  gap: 10px;
 }
 
 .congress-search-form .searching-container {
@@ -265,13 +265,6 @@ main {
 .congress-search-form .searching-container input,
 .congress-search-form .searching-container select {
     width: 100%;
-}
-
-.congress-search-form .clear-button {
-    height: 68px;
-    min-width: 110px;
-    padding: 0 22px;
-    box-sizing: border-box;
 }
 
 
@@ -287,7 +280,6 @@ main {
 }
 
 .bill-search-form .bar-search {
-  display: flex;
   flex-direction: column;
   gap: 22px;
 }
