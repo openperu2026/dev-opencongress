@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Open Congress</title>
+    <title>{{ _('Open Congress') }}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB" crossorigin="anonymous">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/layout.css') }}">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
@@ -38,9 +38,9 @@
          </ul>
 
 
-        <div class="language-links" role="group" aria-label="Language">
-            <a href="{{ url_for('i18n.set_lang', lang='en') }}">English</a>
-            <a href="{{ url_for('i18n.set_lang', lang='es') }}">Español</a>
+        <div class="language-links" role="group" aria-label="{{ _('Language') }}">
+            <a href="{{ url_for('i18n.set_lang', lang='en') }}">{{ _('English') }}</a>
+            <a href="{{ url_for('i18n.set_lang', lang='es') }}">{{ _('Spanish') }}</a>
         </div>
          
     </nav>
