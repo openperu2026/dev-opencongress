@@ -10,7 +10,7 @@ This module transforms raw SQLAlchemy rows into validated, normalized Pydantic s
 - `congresistas.py`, `organizations.py`, `bancadas.py`: process reference entities and memberships.
 - `votes.py`: vote-related parsing helpers.
 - `utils.py`: shared processing utilities.
-- `chandra2.py`: OCR runner for bill documents using Chandra vLLM.
+- `chandra2.py`: OCR runner for bill documents using Chandra vLLM with 6 workers threads.
 - `diff/`: three-layer hybrid bill-text diff (structural → line → word). Public surface is `compute_bill_difference` in `diff/__init__.py`; renderer contract in [`docs/bill_difference_contract.md`](../../docs/bill_difference_contract.md).
 
 ## Role in pipeline
@@ -41,4 +41,5 @@ Run steps:
 3. cd dev-opencongress
 4. uv sync
 5. uv run chandra_vllm
-6. In a different terminal: uv run python -m backend.process.chandra2
+6. In a different terminal: uv run python -m backend.process.chandra2 [limit]
+	- Default limit is 15 if not provided and is in a descending order of the bill_id

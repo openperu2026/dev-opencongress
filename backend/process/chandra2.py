@@ -1,4 +1,6 @@
 import sys
+from threading import Lock
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from backend.config import settings
 from backend.core.enums import TypeBillStep
@@ -10,6 +12,7 @@ from zoneinfo import ZoneInfo
 from loguru import logger
 
 _VLLM_MANAGER = None
+_VLLM_MANAGER_LOCK = Lock()
 
 
 def get_approved_ids(
@@ -38,7 +41,6 @@ def get_approved_bill_documents(
     Get approved variables from raw_bill_documents
     """
     approved_ids = get_approved_ids(db_session_factory, models.Bill, limit=limit)
-    logger.info(approved_ids)
     if not approved_ids:
         return []
 
@@ -77,12 +79,13 @@ def get_approved_bill_documents(
 
 def _get_vllm_manager():
     global _VLLM_MANAGER
-    if _VLLM_MANAGER is None:
-        from chandra.model import InferenceManager
+    with _VLLM_MANAGER_LOCK:
+        if _VLLM_MANAGER is None:
+            from chandra.model import InferenceManager
 
-        logger.info("Loading Chandra OCR 2 model...")
-        _VLLM_MANAGER = InferenceManager(method="vllm")
-        logger.info("Model loaded successfully.")
+            logger.info("Loading Chandra OCR 2 model...")
+            _VLLM_MANAGER = InferenceManager(method="vllm")
+            logger.info("Model loaded successfully.")
     return _VLLM_MANAGER
 
 
@@ -161,63 +164,90 @@ def write_raw_bill_pages(
         logger.info("No raw bill documents provided.")
         return 0
 
-    now = datetime.now(ZoneInfo("America/Lima"))
-    created = 0
+    if ocr_model != "chandra2":
+        raise RuntimeError(f"Unsupported OCR model: {ocr_model}. Expected 'chandra2'.")
 
-    with db_session_factory() as db:
-        for doc in raw_docs:
-            if ocr_model != "chandra2":
-                raise RuntimeError(
-                    f"Unsupported OCR model: {ocr_model}. Expected 'chandra2'."
-                )
-            existing_page = db.scalar(
-                select(raw_models.RawBillPage.page_num)
-                .where(
-                    raw_models.RawBillPage.bill_id == doc.bill_id,
-                    raw_models.RawBillPage.step_id == doc.step_id,
-                    raw_models.RawBillPage.file_id == doc.file_id,
-                    raw_models.RawBillPage.ocr_model == ocr_model,
-                )
-                .limit(1)
-            )
-            if existing_page is not None:
-                raw_doc = db.get(
-                    raw_models.RawBillDocument,
-                    (doc.bill_id, doc.step_id, doc.file_id),
-                )
-                if raw_doc:
-                    raw_doc.processed = True
-                    db.commit()  # commmit if the document existed
-                continue
-
-            pages = chandra2_vllm(doc.url)
-            for page in pages:
-                page_num = page["page_num"]
-                text = page["text"]
-
-                db.add(
-                    raw_models.RawBillPage(
-                        bill_id=doc.bill_id,
-                        step_id=doc.step_id,
-                        file_id=doc.file_id,
-                        page_num=page_num,
-                        text=text,
-                        ocr_model=ocr_model,
-                        timestamp=now,
-                        last_update=True,
-                        changed=False,
-                        processed=False,
+    def _process_doc(doc: raw_models.RawBillDocument) -> int:
+        now = datetime.now(ZoneInfo("America/Lima"))
+        created = 0
+        try:
+            with db_session_factory() as db:
+                existing_page = db.scalar(
+                    select(raw_models.RawBillPage.page_num)
+                    .where(
+                        raw_models.RawBillPage.bill_id == doc.bill_id,
+                        raw_models.RawBillPage.step_id == doc.step_id,
+                        raw_models.RawBillPage.file_id == doc.file_id,
+                        raw_models.RawBillPage.ocr_model == ocr_model,
                     )
+                    .limit(1)
                 )
+                if existing_page is not None:
+                    raw_doc = db.get(
+                        raw_models.RawBillDocument,
+                        (doc.bill_id, doc.step_id, doc.file_id),
+                    )
+                    if raw_doc:
+                        raw_doc.processed = True
+                        db.commit()  # commmit if the document existed
+                    return 0
+
+                pages = chandra2_vllm(doc.url)
+                for page in pages:
+                    page_num = page["page_num"]
+                    text = page["text"]
+
+                    db.add(
+                        raw_models.RawBillPage(
+                            bill_id=doc.bill_id,
+                            step_id=doc.step_id,
+                            file_id=doc.file_id,
+                            page_num=page_num,
+                            text=text,
+                            ocr_model=ocr_model,
+                            timestamp=now,
+                            last_update=True,
+                            changed=False,
+                            processed=False,
+                        )
+                    )
+                    created += 1
+
                 raw_doc = db.get(
                     raw_models.RawBillDocument,
                     (doc.bill_id, doc.step_id, doc.file_id),
                 )
                 if raw_doc:
                     raw_doc.processed = True
-                created += 1
-            db.commit()  # commmit after every document
-    return created
+                db.commit()  # commmit after every document
+                logger.info(
+                    f"commited bill_id {doc.bill_id} step_id {doc.step_id} file_id {doc.file_id} pages {len(pages)}"
+                )
+        except Exception:
+            logger.exception(
+                "Failed to process doc bill_id={} step_id={} file_id={}",
+                doc.bill_id,
+                doc.step_id,
+                doc.file_id,
+            )
+            return 0
+
+        return created
+
+    workers = 6
+    created_total = 0
+    _get_vllm_manager()
+    logger.info("Processing {} documents with {} workers", len(raw_docs), workers)
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_process_doc, doc) for doc in raw_docs]
+        for future in as_completed(futures):
+            try:
+                created_total += future.result()
+            except Exception:
+                logger.exception("Worker crashed unexpectedly")
+
+    logger.info("Created {} pages", created_total)
+    return created_total
 
 
 if __name__ == "__main__":
