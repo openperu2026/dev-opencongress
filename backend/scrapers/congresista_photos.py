@@ -23,29 +23,21 @@ def _looks_like_image(data: bytes) -> bool:
 
 
 def sync_photo(db: Session, congresista: db_models.Congresista) -> bool:
-    """
-    Download `congresista.photo_url` into `congresista.photo_bytes`.
-
-    Skips if `photo_bytes` is already populated. Returns True if the row was
-    updated, False otherwise (already populated, download failed, or response
-    didn't look like an image).
-    """
+    """Download `photo_url` into `photo_bytes`. Skips if already populated."""
     if congresista.photo_bytes is not None:
         return False
 
     response = get_url(congresista.photo_url)
     if response is None:
         logger.warning(
-            f"Could not download portrait for congresista {congresista.id}: "
-            f"{congresista.photo_url}"
+            f"Could not download portrait for congresista {congresista.id}: {congresista.photo_url}"
         )
         return False
 
     data = response.content
     if not _looks_like_image(data):
         logger.warning(
-            f"Response for congresista {congresista.id} doesn't look like an image "
-            f"(first 8 bytes: {data[:8]!r})"
+            f"Response for congresista {congresista.id} doesn't look like an image (first 8 bytes: {data[:8]!r})"
         )
         return False
 

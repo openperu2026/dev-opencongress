@@ -41,7 +41,8 @@ def main() -> int:
         stmt = stmt.limit(args.limit)
 
     updated = 0
-    failed = 0
+    skipped = 0
+    errors = 0
 
     with Session() as db:
         rows = db.scalars(stmt).all()
@@ -53,16 +54,16 @@ def main() -> int:
                     db.commit()
                     updated += 1
                 else:
-                    failed += 1
+                    skipped += 1
             except Exception as exc:
                 logger.exception(f"Failed for {cong.id} ({cong.full_name}): {exc}")
                 db.rollback()
-                failed += 1
+                errors += 1
 
             if args.sleep > 0:
                 time.sleep(args.sleep)
 
-    logger.info(f"Done. updated={updated} failed={failed}")
+    logger.info(f"Done. updated={updated} skipped={skipped} errors={errors}")
     return 0
 
 

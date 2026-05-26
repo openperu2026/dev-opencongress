@@ -697,8 +697,7 @@ class OpenPeruOrchestrator:
                             sync_congresista_photo(db, cong)
                         except Exception as photo_exc:
                             logger.warning(
-                                f"Photo sync failed for congresista {cong.id} "
-                                f"({cong.full_name}): {photo_exc}"
+                                f"Photo sync failed for congresista {cong.id}: {photo_exc}"
                             )
                     else:
                         clean_updated += 1
