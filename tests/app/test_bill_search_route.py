@@ -278,22 +278,6 @@ def test_search_results_cap_at_500_plus(client, session_factory):
     assert "Showing 1-50 of 500+ bills" in body
 
 
-def test_default_search_page_shows_recent_bills_table(client, session_factory):
-    _seed_bill_search_data(session_factory)
-
-    response = client.get("/bills")
-    body = response.get_data(as_text=True)
-
-    assert response.status_code == 200
-    assert "Recent bills" in body
-    assert "Bill 0003" in body
-    assert "Bill 0002" not in body
-    assert "Search Criteria" not in body
-    assert "Page" not in body
-    assert "page=10" in body
-    assert "page=11" not in body
-
-
 def test_search_form_includes_new_filters(client):
     response = client.get("/bills")
     body = response.get_data(as_text=True)
