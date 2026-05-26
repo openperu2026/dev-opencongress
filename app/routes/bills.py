@@ -4,6 +4,7 @@ from calendar import monthrange
 from math import ceil
 from types import SimpleNamespace
 from datetime import datetime
+import textwrap
 from flask import (
     Blueprint,
     current_app,
@@ -27,14 +28,17 @@ from backend.database.models import (
     Ley,
     Membership,
     Organization,
+    Vote,
+    VoteCounts,
+    VoteEvent,
 )
-from backend.core.enums import TypeOrganization
+from backend.core.enums import TypeOrganization, VoteOption
 from .processed_session import SessionProcessed
+from .utils import create_party_option, create_committee_option, latest_org_name
 import json
 import os
 import sqlite3
 from .generate_seats import generate_seats
-from .build_bancada_bars import build_bancada_bars
 from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
@@ -195,6 +199,157 @@ def get_topics(db, bill_id):
     return topics
 
 
+def _vote_option_key(option) -> str:
+    value = getattr(option, "value", option)
+    if value == VoteOption.SI.value:
+        return "yes"
+    if value == VoteOption.NO.value:
+        return "no"
+    if value == VoteOption.ABSTENCION.value:
+        return "abstain"
+    return "others"
+
+
+def _vote_option_label(option) -> str:
+    value = getattr(option, "value", option)
+    labels = {
+        VoteOption.SI.value: _("In favor"),
+        VoteOption.NO.value: _("Against"),
+        VoteOption.ABSTENCION.value: _("Abstain"),
+    }
+    return labels.get(value, _("Others"))
+
+
+def _build_vote_summary_counts(vote_event: VoteEvent) -> dict[str, int]:
+    vote_counts = {
+        "yes": vote_event.votes_in_favor,
+        "no": vote_event.votes_against,
+        "abstain": vote_event.votes_abstention,
+    }
+    counted_votes = sum(vote_counts.values())
+    vote_counts["others"] = max(130 - counted_votes, 0)
+    return vote_counts
+
+
+def _wrap_bancada_label(name: str, max_width: int = 24) -> list[str]:
+    lines = textwrap.wrap(
+        name,
+        width=max_width,
+        break_long_words=True,
+        break_on_hyphens=False,
+    )
+    return lines or [name]
+
+
+def _build_bancada_bars(bancada_votes):
+    bar_x = 220
+    bar_max_width = 520
+    label_line_height = 13
+    row_gap = 12
+
+    sorted_rows = sorted(
+        bancada_votes.items(),
+        key=lambda item: (-item[1]["total"], item[0]),
+    )
+
+    max_total = max((counts["total"] for _, counts in sorted_rows), default=0)
+    width_scale = bar_max_width / max_total if max_total else 0
+
+    rows = []
+    current_y = 20
+    for index, (name, counts) in enumerate(sorted_rows):
+        label_lines = _wrap_bancada_label(name)
+        label_height = max(label_line_height, len(label_lines) * label_line_height)
+        bar_y = current_y + label_height + 18
+
+        segments = []
+        offset = 0
+        for key in ("yes", "no", "abstain"):
+            width = counts[key] * width_scale
+            if width <= 0:
+                continue
+            segments.append(
+                {
+                    "key": key,
+                    "x": bar_x + offset,
+                    "width": width,
+                }
+            )
+            offset += width
+
+        total_width = max(offset, 2)
+        rows.append(
+            {
+                "name": name,
+                "label_lines": label_lines,
+                "yes": counts["yes"],
+                "no": counts["no"],
+                "abstain": counts["abstain"],
+                "total": counts["total"],
+                "bar_y": bar_y,
+                "bar_x": bar_x,
+                "total_x": bar_x + total_width + 10,
+                "segments": segments,
+            }
+        )
+        current_y += label_height + 34 + row_gap
+
+    chart_height = max(10, current_y + 10)
+    return rows, chart_height
+
+
+def _build_vote_bancada_rows(db: Session, vote_event_id: str):
+    bancada_votes: dict[str, dict[str, int]] = {}
+
+    rows = db.execute(
+        select(
+            VoteCounts.bancada_id,
+            Organization.org_name,
+            VoteCounts.option,
+            VoteCounts.count,
+        )
+        .join(Organization, Organization.org_id == VoteCounts.bancada_id)
+        .where(VoteCounts.vote_event_id == vote_event_id)
+        .order_by(Organization.org_name.asc())
+    ).all()
+
+    for bancada_id, bancada_name, option, count in rows:
+        bucket = bancada_votes.setdefault(
+            bancada_name,
+            {"yes": 0, "no": 0, "abstain": 0, "total": 0},
+        )
+        option_key = _vote_option_key(option)
+        if option_key in bucket:
+            bucket[option_key] += count
+            bucket["total"] += count
+
+    return _build_bancada_bars(bancada_votes)
+
+
+def _build_vote_rows(db: Session, vote_event_id: str):
+    vote_rows = []
+
+    rows = db.execute(
+        select(Vote, Congresista)
+        .join(Congresista, Congresista.id == Vote.voter_id)
+        .where(Vote.vote_event_id == vote_event_id)
+        .order_by(Congresista.full_name.asc())
+    ).all()
+
+    for vote, congresista in rows:
+        vote_rows.append(
+            SimpleNamespace(
+                id=congresista.id,
+                full_name=congresista.full_name,
+                party_name=latest_org_name(db, congresista.id, TypeOrganization.PARTY),
+                vote_label=_vote_option_label(vote.option),
+                vote_key=_vote_option_key(vote.option),
+            )
+        )
+
+    return vote_rows
+
+
 @bills_bp.route("/bills")
 def index():
     title_q = request.args.get("title_q", "").strip()
@@ -313,18 +468,6 @@ def index():
                 )
             )
 
-    if author_party_q:
-        filters.append(
-            Congresista.id.in_(
-                select(Membership.person_id)
-                .join(Organization, Organization.org_id == Membership.org_id)
-                .where(
-                    Membership.org_type == TypeOrganization.PARTY,
-                    Organization.org_name == author_party_q,
-                )
-            )
-        )
-
     if law_id_q:
         filters.append(
             select(Ley.id)
@@ -374,6 +517,7 @@ def index():
         filters.append(Bill.bill_approved.is_(False))
 
     bills = []
+    recent_bills = []
     total_count = 0
     total_count_display = None
     results_start = 0
@@ -468,6 +612,39 @@ def index():
                 results_end = results_start + len(rows) - 1
 
             bills = [SimpleNamespace(**row) for row in rows]
+        else:
+            earliest_bill_dates = (
+                select(
+                    BillOrganization.bill_id,
+                    func.min(BillOrganization.presentation_date).label(
+                        "first_presentation_date"
+                    ),
+                )
+                .group_by(BillOrganization.bill_id)
+                .subquery()
+            )
+
+            recent_stmt = (
+                select(
+                    Bill.id.label("id"),
+                    Bill.title.label("title"),
+                    Congresista.full_name.label("author_name"),
+                    earliest_bill_dates.c.first_presentation_date.label(
+                        "presentation_date"
+                    ),
+                )
+                .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
+                .join(earliest_bill_dates, earliest_bill_dates.c.bill_id == Bill.id)
+                .order_by(
+                    earliest_bill_dates.c.first_presentation_date.desc(),
+                    Bill.title.asc(),
+                    Bill.id.asc(),
+                )
+                .limit(10)
+            )
+
+            recent_rows = db.execute(recent_stmt).mappings().all()
+            recent_bills = [SimpleNamespace(**row) for row in recent_rows]
 
     prev_page_url = None
     next_page_url = None
@@ -506,6 +683,7 @@ def index():
         presentation_date_to_day=presentation_date_to_picker["day_value"],
         organization_name_q=organization_name_q,
         bills=bills,
+        recent_bills=recent_bills,
         radio_status=status,
         page=page,
         per_page=per_page,
@@ -530,36 +708,6 @@ def index():
         organization_name_options=organization_name_options,
         search_requested=search_requested,
     )
-
-
-def create_party_option(db):
-    return [
-        party_name
-        for party_name in db.execute(
-            select(Organization.org_name)
-            .join(Membership, Membership.org_id == Organization.org_id)
-            .where(Membership.org_type == TypeOrganization.PARTY)
-            .distinct()
-            .order_by(Organization.org_name.asc())
-        )
-        .scalars()
-        .all()
-    ]
-
-
-def create_committee_option(db):
-    return [
-        org_name
-        for org_name in db.execute(
-            select(Organization.org_name)
-            .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
-            .where(Organization.org_type == TypeOrganization.COMMITTEE)
-            .distinct()
-            .order_by(Organization.org_name.asc())
-        )
-        .scalars()
-        .all()
-    ]
 
 
 @bills_bp.route("/bills/<bill_id>")
@@ -629,12 +777,92 @@ def bill_detail(bill_id):
             latest_step=latest_step,
             all_steps=all_steps,
             diff_types=diff_types,
+            bill_is_approved=bill.bill_approved,
             bill_status=bill_status,
             author=author,
             party_name=org_name,
             presentation_date=presentation_date,
             days_since_presentation=days_since_presentation,
             topics=topics,
+        )
+
+
+@bills_bp.route("/bills/<bill_id>/votes/<vote_event_id>")
+def votes(bill_id, vote_event_id):
+    with SessionProcessed() as db:
+        bill = db.get(Bill, bill_id)
+        if not bill:
+            return "Not Found", 404
+
+        vote_event = db.execute(
+            select(VoteEvent).where(
+                VoteEvent.vote_event_id == vote_event_id,
+                VoteEvent.bill_id == bill_id,
+            )
+        ).scalar_one_or_none()
+
+        if vote_event is None:
+            return "Not Found", 404
+
+        vote_step = db.execute(
+            select(BillStep)
+            .where(
+                BillStep.bill_id == bill_id,
+                BillStep.vote_event_id == vote_event_id,
+            )
+            .order_by(BillStep.step_date.desc())
+            .limit(1)
+        ).scalar_one_or_none()
+
+        vote_date = vote_step.step_date if vote_step else vote_event.event_date
+        organization_name = db.scalar(
+            select(Organization.org_name).where(
+                Organization.org_id == vote_event.org_id
+            )
+        )
+
+        vote_counts = _build_vote_summary_counts(vote_event)
+        vote_rows = _build_vote_rows(db, vote_event_id)
+        seat_groups = {"yes": [], "no": [], "abstain": []}
+        for vote_row in vote_rows:
+            if vote_row.vote_key in seat_groups:
+                seat_groups[vote_row.vote_key].append(vote_row.full_name)
+
+        seats = generate_seats(
+            vote_counts,
+            seat_groups,
+        )
+
+        bancada_rows, bancada_chart_height = _build_vote_bancada_rows(db, vote_event_id)
+
+        bill_status = _("Not approved")
+        if bill.bill_approved:
+            bill_status = _("Approved")
+
+        presentation_date = db.scalar(
+            select(BillStep.step_date).where(
+                BillStep.bill_id == bill_id, BillStep.step_type == "Presentado"
+            )
+        )
+
+        topics = get_topics(db, bill_id)
+
+        return render_template(
+            "bills/votes.html",
+            bill=bill,
+            vote_event=vote_event,
+            vote_step=vote_step,
+            vote_date=vote_date,
+            organization_name=organization_name,
+            vote_counts=vote_counts,
+            seats=seats,
+            bancada_rows=bancada_rows,
+            bancada_chart_height=bancada_chart_height,
+            bill_is_approved=bill.bill_approved,
+            bill_status=bill_status,
+            presentation_date=presentation_date,
+            topics=topics,
+            vote_rows=vote_rows,
         )
 
 
@@ -694,7 +922,7 @@ def mock_votes(bill_id):
                     bancada_votes[bancada][vote_type] += 1
                     bancada_votes[bancada]["total"] += 1
 
-        bancada_rows, bancada_chart_height = build_bancada_bars(bancada_votes)
+        bancada_rows, bancada_chart_height = _build_bancada_bars(bancada_votes)
 
         bill_status = _("Not approved")
         if bill.bill_approved:

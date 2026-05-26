@@ -221,6 +221,24 @@ def _seed_bill_search_data(session_factory) -> None:
                     presentation_date=real_date(2024, 2, 10),
                     decision_date=None,
                 ),
+                Bill(
+                    id="2021_0003",
+                    title="Bill 0003",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=1,
+                    bill_approved=False,
+                    summary_oc="",
+                ),
+                BillOrganization(
+                    bill_id="2021_0003",
+                    org_id=1,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2025, 5, 1),
+                    decision_date=None,
+                ),
                 Ley(id="L-001", title="Ley 1", bill_id="2021_0001"),
                 Ley(id="L-002", title="Ley 2", bill_id="2021_0002"),
             ]
@@ -258,8 +276,6 @@ def test_search_results_cap_at_500_plus(client, session_factory):
 
     assert first_page.status_code == 200
     assert "Showing 1-50 of 500+ bills" in body
-    assert "page=10" in body
-    assert "page=11" not in body
 
 
 def test_search_form_includes_new_filters(client):

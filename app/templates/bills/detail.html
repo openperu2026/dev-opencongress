@@ -8,7 +8,7 @@
       <div class="bill-content">
         <div class="bill-topline">
           <span class="bill-code">PL 07324/2023-CR</span>
-          {% if bill_status == 'Approved' %}
+          {% if bill_is_approved %}
             <span class="bill-status">{{ bill_status }}</span>
           {% else %}
             <span class="bill-status not-approved">{{ bill_status }}</span>
@@ -57,9 +57,9 @@
                   <div class="timeline-type">{{ step.step_date.strftime('%Y-%m-%d') }} - {{ step.step_type.value }}</div>
                   <p class="step-detail"> {{ step.step_detail }}</p>
                 {% if step.vote_step and step.vote_event_id %}
-                  <a href = "/bills/{{bill.id}}/mock_votes">{{_('View details')}}</a>
-                  <!-- real data -->
-                  <!-- <a href="/bills/{{ bill.id }}/vote/{{ step.vote_event_id }}">View details</a> -->
+                  <!-- mock data -->
+                  <!-- <a href = "/bills/{{bill.id}}/mock_votes">{{_('View details')}}</a> -->
+                  <a href="/bills/{{ bill.id }}/votes/{{ step.vote_event_id }}">View details</a>
                 {% endif %}
                 {% if diff_types.get(step.step_id) in ('modified', 'incomparable') %}
                   <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('View changes')}}</a>
