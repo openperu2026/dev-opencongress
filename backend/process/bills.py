@@ -31,7 +31,6 @@ def process_bill_text(bill_pages: list[RawBillPage], version_id: int) -> BillTex
     final_text = extract_bill_body("\n".join(page.text for page in ordered_pages))
 
     if final_text is None:
-        print("\n".join(page.text for page in ordered_pages))
         raise ValueError("Bill body could not be extracted from raw pages")
     return BillText(
         bill_id=first_page.bill_id,
