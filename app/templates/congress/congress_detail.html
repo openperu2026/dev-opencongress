@@ -9,7 +9,7 @@
                 {{ congresista.party_name }} &middot; 
                 {{ congresista.dist_electoral or _('Not available') }} &middot; 
                 {{ congresista.condicion }} &middot;
-                {{ "{:,}".format(congresista.votes_in_election) }} votes obtanied
+                {{ _('%(count)s votes obtained', count="{:,}".format(congresista.votes_in_election)) }}
  
             </p>
         </header>
@@ -19,7 +19,7 @@
                 <img
                     class="congress-photo"
                     src="{{ congresista.photo_url.replace('https://www.congreso.gob.pe', 'https://www3.congreso.gob.pe') }}"
-                    alt="Photo of {{ congresista.full_name }}"
+                    alt="{{ _('Photo of %(name)s', name=congresista.full_name) }}"
                 >
             </div>
 
@@ -64,7 +64,7 @@
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>ID</th>
+                            <th>{{ _('ID') }}</th>
                             <th>{{_('Title')}}</th>
                             <th>{{_('Detail')}}</th>
                         </tr>
@@ -95,15 +95,6 @@
             </a>
         </p>
 
-        <section class="congress-section congress-votes-section">
-            <h2>{{_('Last Votings')}}</h2>
-            {% for vote in recent_votes %}
-                <article class="congress-vote">
-                    <strong>{{ vote.position }}</strong>
-                    <p>{{ vote.bill }}: {{ vote.description }}</p>
-                </article>
-            {% endfor %}
-        </section>
 
         <p class="congress-source">
             <a href="{{ congresista.website }}" target="_blank" rel="noopener noreferrer">

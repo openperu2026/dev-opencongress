@@ -22,7 +22,7 @@
                 </select>
             </div>
 
-            <button type="submit" class="search-icon-button" aria-label="Search">
+            <button type="submit" class="search-icon-button" aria-label="{{ _('Search') }}">
                 <i class="fa-solid fa-magnifying-glass"></i>
             </button>
         </div>
@@ -31,11 +31,11 @@
 
         <div class="search-row search-row--secondary">
             <div class="searching-container">
-                <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="Bill ID">
+                <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
             </div>
 
             <div class="searching-container">
-                <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="Law ID">
+                <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="{{ _('Law ID') }}">
             </div>
 
             <div class="searching-container">
@@ -136,11 +136,11 @@
         <thead>
             <tr>
                 <th>#</th>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>First presentation date</th>
-                <th>Detail</th>
+                <th>{{ _('ID') }}</th>
+                <th>{{ _('Title') }}</th>
+                <th>{{ _('Author') }}</th>
+                <th>{{ _('First presentation date') }}</th>
+                <th>{{ _('Detail') }}</th>
             </tr>
         </thead>
         <tbody>
@@ -174,10 +174,10 @@
             <span>{{_('Author')}}: {{author_q}}</span>
         {% endif %}
         {% if bill_id_q %}
-            <span>Bill ID: {{bill_id_q}}</span>
+            <span>{{ _('Bill ID') }}: {{bill_id_q}}</span>
         {% endif %}
         {% if law_id_q %}
-            <span>Law ID: {{law_id_q}}</span>
+            <span>{{ _('Law ID') }}: {{law_id_q}}</span>
         {% endif %}
         {% if current_step_q %}
             <span>{{_('Current Step')}}: {{current_step_q}}</span>
@@ -206,10 +206,10 @@
         <thead>
             <tr>
                 <th>#</th>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Author</th>
-                <th>Detail</th>
+                <th>{{ _('ID') }}</th>
+                <th>{{ _('Title') }}</th>
+                <th>{{ _('Author') }}</th>
+                <th>{{ _('Detail') }}</th>
             </tr>
         </thead>
         <tbody>
