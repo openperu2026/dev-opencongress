@@ -5,6 +5,7 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKeyConstraint,
     Index,
+    LargeBinary,
     Text,
     Enum,
     text,
@@ -465,6 +466,7 @@ class Congresista(Base):
         dni (str): DNI (Documento Nacional de Identidad) of the person.
         gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
+        photo_bytes (bytes | None): Downloaded portrait image bytes, when fetched.
         website (str): Official website of the congressperson.
     """
 
@@ -477,6 +479,7 @@ class Congresista(Base):
     dni: Mapped[str] = mapped_column(nullable=True)
     gender: Mapped[str] = mapped_column(nullable=True)
     photo_url: Mapped[str] = mapped_column(nullable=False)
+    photo_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     website: Mapped[str] = mapped_column(nullable=False)
 
     __table_args__ = (UniqueConstraint("full_name", "dni", name="uq_congresista_id"),)
