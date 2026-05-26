@@ -13,24 +13,15 @@ from backend.database.models import (
 )
 
 
-from .bills import create_party_option, create_committee_option
+from .utils import (
+    create_party_option,
+    create_committee_option,
+    create_region_option,
+    latest_org_name,
+)
 from .processed_session import SessionProcessed
 
 congress_bp = Blueprint("congress", __name__, template_folder="../templates")
-
-
-# get the latest organizations names
-def latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | None:
-    return db.execute(
-        select(Organization.org_name)
-        .join(Membership, Membership.org_id == Organization.org_id)
-        .where(
-            Membership.person_id == person_id,
-            Membership.org_type == org_type,
-        )
-        .order_by(Membership.end_date.desc(), Membership.start_date.desc())
-        .limit(1)
-    ).scalar_one_or_none()
 
 
 # Get the main information of the Congressmember
@@ -144,20 +135,6 @@ def index():
         region_options=region_options,
         committee_options=committee_options,
     )
-
-
-def create_region_option(db):
-    return [
-        dist_electoral
-        for dist_electoral in db.execute(
-            select(ChamberMembership.dist_electoral)
-            .where(ChamberMembership.dist_electoral.is_not(None))
-            .distinct()
-            .order_by(ChamberMembership.dist_electoral.asc())
-        )
-        .scalars()
-        .all()
-    ]
 
 
 @congress_bp.route("/congress/<congresista_id>")

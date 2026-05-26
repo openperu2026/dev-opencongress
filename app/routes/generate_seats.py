@@ -6,7 +6,7 @@ def generate_seats(vote_counts, groups):
     Generate seat positions and attributes for semicircular parliament chart.
 
     Args:
-        vote_counts: {'yes': int, 'no': int, 'abstain': int}
+        vote_counts: {'yes': int, 'no': int, 'abstain': int, 'others': int}
         groups: {'yes': [names], 'no': [names], 'abstain': [names]}
 
     Returns:
@@ -76,9 +76,14 @@ def generate_seats(vote_counts, groups):
 
             seats.append({"x": x, "y": y, "row": row, "theta": theta})
 
-    # Build color slots (left=no, middle=yes, right=abstain)
-    color_order = ["yes", "no", "abstain"]
-    color_map = {"yes": "#91c7b1", "no": "#cf294a", "abstain": "#e3d081"}
+    # Build color slots (gray others are placed last and do not get labels)
+    color_order = ["yes", "no", "abstain", "others"]
+    color_map = {
+        "yes": "#0f8f7c",
+        "no": "#cf294a",
+        "abstain": "#d29b00",
+        "others": "#b8b8b8",
+    }
     slots = []
     for key in color_order:
         count = vote_counts.get(key, 0)
@@ -94,12 +99,13 @@ def generate_seats(vote_counts, groups):
         "yes": groups.get("yes", [])[:],
         "no": groups.get("no", [])[:],
         "abstain": groups.get("abstain", [])[:],
+        "others": [],
     }
 
     for sorted_idx, (orig_idx, seat) in enumerate(indexed_seats):
         key = slots[sorted_idx]
         color = color_map.get(key, "#ccc")
-        label = queues[key].pop(0) if queues[key] else ""
+        label = queues[key].pop(0) if queues.get(key) else ""
 
         result[orig_idx] = {
             "x": round(seat["x"], 2),

@@ -127,6 +127,41 @@
 </form>
 
 
+{% if recent_bills and not search_requested %}
+    <div class="search-results-summary recent-bills-heading">
+        <p>{{ _('Recent bills') }}</p>
+    </div>
+
+    <table class="table table-striped search-results-table recent-bills-table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Author</th>
+                <th>First presentation date</th>
+                <th>Detail</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for bill in recent_bills %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td>{{ bill.id }}</td>
+                <td>{{ bill.title }}</td>
+                <td>{{ bill.author_name }}</td>
+                <td>{{ bill.presentation_date }}</td>
+                <td>
+                    <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
+                        {{_('View details')}}
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
 {% if bills %}
     <div class = "search-criteria">
         <h3>{{_('Search Criteria')}}</h3>
@@ -196,7 +231,7 @@
 
     {% if pagination_pages %}
         <nav class="search-pagination" aria-label="{{ _('Search pages') }}">
-            
+            <div class="search-pagination-label">{{ _('Page') }}</div>
             <div class="pagination-tabs">
                 {% for page_item in pagination_pages %}
                     {% if page_item.current %}
