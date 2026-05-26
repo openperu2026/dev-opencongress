@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-26 04:53-0500\n"
+"POT-Creation-Date: 2026-05-26 13:32-0500\n"
 "PO-Revision-Date: 2026-05-17 15:22-0500\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -382,7 +382,7 @@ msgid "No committee membership records found."
 msgstr "No se encontraron registros de membresía en comisiones."
 
 #: templates/congress/congress_detail.html:45
-msgid "Assistance Rate"
+msgid "Attendance Rate"
 msgstr "Tasa de asistencia"
 
 #: templates/congress/congress_detail.html:49
@@ -405,11 +405,7 @@ msgstr "No se encontraron proyectos de ley."
 msgid "View all bills authored"
 msgstr "Ver todos los proyectos de ley presentados"
 
-#: templates/congress/congress_detail.html:99
-msgid "Last Votings"
-msgstr "Últimas votaciones"
-
-#: templates/congress/congress_detail.html:110
+#: templates/congress/congress_detail.html:101
 msgid "Official congress profile"
 msgstr "Perfil oficial del congresista"
 
@@ -532,4 +528,7 @@ msgstr "Conoce al equipo"
 #~ " grupos políticos y la actividad "
 #~ "legislativa puedan explorarse en un solo"
 #~ " lugar."
+
+#~ msgid "Last Votings"
+#~ msgstr "Últimas votaciones"
 
