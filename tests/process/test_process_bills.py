@@ -262,12 +262,12 @@ def test_process_bill_text_extracts_body_from_ordered_pages():
         ),
     ]
 
-    bill_text = mod.process_bill_text(pages)
+    bill_text = mod.process_bill_text(pages, 8)
 
     assert bill_text.bill_id == "PL_123"
     assert bill_text.step_id == 1
     assert bill_text.file_id == 12
-    assert bill_text.version_id == 1
+    assert bill_text.version_id == 8
     assert bill_text.text.startswith("FÓRMULA LEGAL")
     assert "Articulo 2. Final" in bill_text.text
 
@@ -276,12 +276,12 @@ def test_process_bill_text_raises_when_body_missing():
     pages = [_raw_page(text="Texto sin encabezado")]
 
     with pytest.raises(ValueError):
-        mod.process_bill_text(pages)
+        mod.process_bill_text(pages, 1)
 
 
 def test_process_bill_text_raises_on_empty_pages():
     with pytest.raises(ValueError, match="No raw pages"):
-        mod.process_bill_text([])
+        mod.process_bill_text([], 1)
 
 
 def test_process_bill_text_raises_on_mixed_ocr_models():
@@ -291,4 +291,4 @@ def test_process_bill_text_raises_on_mixed_ocr_models():
     ]
 
     with pytest.raises(ValueError, match="mix OCR models"):
-        mod.process_bill_text(pages)
+        mod.process_bill_text(pages, 1)

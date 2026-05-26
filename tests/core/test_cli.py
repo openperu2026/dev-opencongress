@@ -105,7 +105,7 @@ def test_cli_process_target_runs_all_processing(monkeypatch):
             "process_motions": True,
             "process_leyes": True,
             "process_others": True,
-            "include_documents": True,
+            "process_documents": False,
             "first_load": False,
         }
     ]

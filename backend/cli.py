@@ -47,9 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scrape pending bill/motion documents",
     )
     parser.add_argument(
-        "--no-documents",
+        "--process-documents",
         action="store_true",
-        help="Skip loading documents in processing stage",
+        help="Enable document processing stage",
     )
     parser.add_argument(
         "--first-summary",
@@ -112,6 +112,6 @@ def main(argv: list[str] | None = None) -> None:
             process_motions=run_motions,
             process_leyes=run_leyes,
             process_others=run_others,
-            include_documents=not args.no_documents,
+            process_documents=args.process_documents,
             first_load=args.first_summary,
         )

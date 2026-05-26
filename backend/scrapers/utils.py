@@ -38,6 +38,9 @@ URLS = {
 }
 
 
+_TESSERACT_CONFIGURED = False
+
+
 def _configure_tesseract() -> None:
     """
     Configure pytesseract in an environment-agnostic way.
@@ -47,14 +50,20 @@ def _configure_tesseract() -> None:
     2. `tesseract` found in PATH
     3. Raise a clear error if not found
     """
+    global _TESSERACT_CONFIGURED
+    if _TESSERACT_CONFIGURED:
+        return
+
     cmd_from_env = os.getenv("TESSERACT_CMD")
     if cmd_from_env:
         pytesseract.pytesseract.tesseract_cmd = cmd_from_env
+        _TESSERACT_CONFIGURED = True
         return
 
     cmd_from_path = shutil.which("tesseract")
     if cmd_from_path:
         pytesseract.pytesseract.tesseract_cmd = cmd_from_path
+        _TESSERACT_CONFIGURED = True
         return
 
     raise RuntimeError(
@@ -62,9 +71,6 @@ def _configure_tesseract() -> None:
         "or set the TESSERACT_CMD environment variable to its full path."
     )
 
-
-# Run once on import
-_configure_tesseract()
 
 DEFAULT_TIMEOUT = httpx.Timeout(connect=10.0, read=60.0, write=30.0, pool=10.0)
 
@@ -100,6 +106,7 @@ def extract_text_from_page(page):
     Args:
         page: A PyMuPDF page object.
     """
+    _configure_tesseract()
     pix = page.get_pixmap(dpi=300)
     img = np.frombuffer(pix.samples, dtype=np.uint8).reshape(
         pix.height, pix.width, pix.n
