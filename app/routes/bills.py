@@ -172,6 +172,29 @@ def _build_date_picker(prefix, args, today):
     }
 
 
+def get_topics(db, bill_id):
+    committees = db.scalars(
+        select(Organization.org_name)
+        .join(
+            BillOrganization,
+            BillOrganization.org_id == Organization.org_id,
+        )
+        .where(
+            Organization.org_type == "Comisión",
+            Organization.org_subtype == "Comisión Ordinaria",
+            BillOrganization.bill_id == bill_id,
+        )
+        .distinct()
+        .order_by(Organization.org_name)
+    ).all()
+
+    topics = []
+    for comm in committees:
+        topics.extend(TOPIC_MAPPING[comm])
+
+    return topics
+
+
 @bills_bp.route("/bills")
 def index():
     title_q = request.args.get("title_q", "").strip()
@@ -373,30 +396,8 @@ def index():
             .scalars()
             .all()
         ]
-        author_party_options = [
-            party_name
-            for party_name in db.execute(
-                select(Organization.org_name)
-                .join(Membership, Membership.org_id == Organization.org_id)
-                .where(Membership.org_type == TypeOrganization.PARTY)
-                .distinct()
-                .order_by(Organization.org_name.asc())
-            )
-            .scalars()
-            .all()
-        ]
-        organization_name_options = [
-            org_name
-            for org_name in db.execute(
-                select(Organization.org_name)
-                .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
-                .where(Organization.org_type == TypeOrganization.COMMITTEE)
-                .distinct()
-                .order_by(Organization.org_name.asc())
-            )
-            .scalars()
-            .all()
-        ]
+        author_party_options = create_party_option(db)
+        organization_name_options = create_committee_option(db)
 
         if search_requested:
             latest_bill_dates = (
@@ -531,6 +532,36 @@ def index():
     )
 
 
+def create_party_option(db):
+    return [
+        party_name
+        for party_name in db.execute(
+            select(Organization.org_name)
+            .join(Membership, Membership.org_id == Organization.org_id)
+            .where(Membership.org_type == TypeOrganization.PARTY)
+            .distinct()
+            .order_by(Organization.org_name.asc())
+        )
+        .scalars()
+        .all()
+    ]
+
+
+def create_committee_option(db):
+    return [
+        org_name
+        for org_name in db.execute(
+            select(Organization.org_name)
+            .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+            .where(Organization.org_type == TypeOrganization.COMMITTEE)
+            .distinct()
+            .order_by(Organization.org_name.asc())
+        )
+        .scalars()
+        .all()
+    ]
+
+
 @bills_bp.route("/bills/<bill_id>")
 def bill_detail(bill_id):
     with SessionProcessed() as db:
@@ -590,24 +621,7 @@ def bill_detail(bill_id):
             days_since_presentation = (today - presentation_date).days
 
         # Committes -> Topics
-        committees = db.scalars(
-            select(Organization.org_name)
-            .join(
-                BillOrganization,
-                BillOrganization.org_id == Organization.org_id,
-            )
-            .where(
-                Organization.org_type == "Comisión",
-                Organization.org_subtype == "Comisión Ordinaria",
-                BillOrganization.bill_id == bill_id,
-            )
-            .distinct()
-            .order_by(Organization.org_name)
-        ).all()
-
-        topics = []
-        for comm in committees:
-            topics.extend(TOPIC_MAPPING[comm])
+        topics = get_topics(db, bill_id)
 
         return render_template(
             "bills/detail.html",
@@ -631,7 +645,7 @@ def mock_votes(bill_id):
         if not bill:
             return "Not Found", 404
 
-        _, latest_step = extract_steps(db, bill_id)
+        all_steps, latest_step = extract_steps(db, bill_id)
 
         mock_data_path = os.path.join(
             os.path.dirname(__file__), "..", "mock_data", "example_vote_event.json"
@@ -682,6 +696,18 @@ def mock_votes(bill_id):
 
         bancada_rows, bancada_chart_height = build_bancada_bars(bancada_votes)
 
+        bill_status = _("Not approved")
+        if bill.bill_approved:
+            bill_status = _("Approved")
+
+        presentation_date = db.scalar(
+            select(BillStep.step_date).where(
+                BillStep.bill_id == bill_id, BillStep.step_type == "Presentado"
+            )
+        )
+
+        topics = get_topics(db, bill_id)
+
         return render_template(
             "bills/mock_votes.html",
             bill=bill,
@@ -690,6 +716,10 @@ def mock_votes(bill_id):
             seats=seats,
             bancada_rows=bancada_rows,
             bancada_chart_height=bancada_chart_height,
+            bill_status=bill_status,
+            presentation_date=presentation_date,
+            topics=topics,
+            # vote_date = vote_date
         )
 
 
