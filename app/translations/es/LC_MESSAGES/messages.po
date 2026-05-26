@@ -88,7 +88,7 @@ msgstr "Ver detalles"
 
 #: app/templates/bills/detail.html:39
 msgid "View changes"
-msgstr ""
+msgstr "Ver cambios"
 
 #: app/templates/bills/difference.html:5
 msgid "Bill"
@@ -233,11 +233,11 @@ msgstr "Criterios de búsqueda"
 
 #: app/templates/bills/search.html:154
 msgid "Presentation Date"
-msgstr ""
+msgstr "Fecha de presentación"
 
 #: app/templates/bills/search.html:157
 msgid "Organization"
-msgstr ""
+msgstr "Organización"
 
 #: app/templates/bills/search.html:160
 #: app/templates/congress/congress_detail.html:26
@@ -336,7 +336,7 @@ msgstr "Limpiar"
 
 #: app/templates/congress/search.html:65
 msgid "No matching congresspeople found."
-msgstr "No se encontraron proyectos de ley."
+msgstr "No se encontraron congresistas."
 
 #: app/templates/landing/index.html:11
 msgid ""
