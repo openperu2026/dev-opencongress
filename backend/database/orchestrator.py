@@ -71,6 +71,7 @@ from backend.process.utils import (
     replace_www,
 )
 from backend.scrapers.utils import get_last_id
+from backend.scrapers.congresista_photos import sync_photo as sync_congresista_photo
 
 
 class OpenPeruOrchestrator:
@@ -692,6 +693,13 @@ class OpenPeruOrchestrator:
                     cong = crud_core.upsert_congresista(db, cong_schema)
                     if pre is None:
                         clean_inserted += 1
+                        try:
+                            sync_congresista_photo(db, cong)
+                        except Exception as photo_exc:
+                            logger.warning(
+                                f"Photo sync failed for congresista {cong.id} "
+                                f"({cong.full_name}): {photo_exc}"
+                            )
                     else:
                         clean_updated += 1
 
