@@ -12,11 +12,12 @@ OpenPeru helps solve this problem by turning complex and fragmented congressiona
 
 At its current stage, OpenPeru focuses on the legislative core of Congress and integrates data across multiple dimensions:
 
-- **Bills and motions**: proposals, authorship, legislative status, and procedural steps
+- **Bills and motions**: proposals, authorship, legislative status, procedural steps, and bill PDF text trimmed to the main body when standard headings are found
 - **Voting records and attendance**: individual‑level and aggregate vote outcomes
 - **Congress members (congresistas)**: identities, party affiliations, and memberships over time
 - **Political organizations**: parties, parliamentary groups, and committees
 - **Legislative processes**: structured representations of how initiatives evolve
+- **Bill text differences**: a per-step structural + line + word diff between consecutive bill versions, rendered as HTML at `/bills/<bill_id>/difference/<step_id>` (see `docs/bill_difference_contract.md`)
 
 All information is stored in relational databases designed for analysis, reuse, and future API access.
 
@@ -47,6 +48,34 @@ All information is stored in relational databases designed for analysis, reuse, 
     pre-commit install
     pre-commit install --hook-type pre-push
     ```
+
+## Scheduled ETL Jobs
+
+The repository includes a Docker Compose `cron` service for unattended ETL runs.
+The service uses the project Makefile targets as its public interface and writes
+job output to `/app/logs/cron.log` inside the container.
+
+```bash
+docker compose up cron
+```
+
+The cron schedule runs on `America/Lima` time:
+
+- `scrape-others`
+- `scrape-bills`
+- `scrape-motions`
+- `scrape-leyes`
+- `process`
+
+For local one-off runs, use the same Makefile targets directly:
+
+```bash
+make scrape-others
+make scrape-bills
+make scrape-motions
+make scrape-leyes
+make process
+```
 
 ## GitFlow Workflow
 We follow a GitFlow branching model. For detailed rules, go [here](https://github.com/openperu2026/dev-opencongress/blob/feature/repo-config/docs/git-flow.md).
@@ -147,8 +176,7 @@ E1 --> F3
 
 ### 1. Data Acquisition (Scrapers)
 
-Custom scrapers collect legislative data directly from Congress websites.
-They handle HTML pages, PDFs, and historical archives while remaining resilient to format changes.
+Custom scrapers collect legislative data directly from Congress websites. They handle HTML pages, PDFs, and historical archives while remaining resilient to format changes.
 
 ### 2. Raw Data Layer
 
@@ -181,7 +209,6 @@ Automated tests cover scrapers, database models, and processing logic to detect 
 
 The architecture is intentionally modular to support future extensions such as APIs, dashboards, and machine‑learning pipelines.
 
-
 ## Project Status and Roadmap
 
 OpenPeru is under active development. Current priorities include:
@@ -198,4 +225,3 @@ Contributions and feedback are welcome.
 ## License
 
 This project is released under an open-source license. See the `LICENSE` file for details.
-
