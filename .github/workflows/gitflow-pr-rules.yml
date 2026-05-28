@@ -20,6 +20,11 @@ jobs:
           is_feature=false
           is_release=false
           is_hotfix=false
+          is_dev=false
+
+          if [[ "$HEAD_REF" =~ ^dev ]]; then
+            is_dev=true
+          fi
 
           if [[ "$HEAD_REF" =~ ^feature/[a-z0-9._-]+$ ]]; then
             is_feature=true
@@ -33,13 +38,18 @@ jobs:
             is_hotfix=true
           fi
 
-          if [[ "$is_feature" == false && "$is_release" == false && "$is_hotfix" == false ]]; then
+          if [[ "$is_feature" == false && "$is_release" == false && "$is_hotfix" == false  && "$is_dev" == false]]; then
             echo "Invalid source branch: $HEAD_REF"
             echo "Allowed source branches:"
+            echo "  dev"
             echo "  feature/<short-name>"
             echo "  release/<major>.<minor>.<patch>"
             echo "  hotfix/<short-name>"
             exit 1
+          fi
+
+          if [[ "$is_dev" == true ]]; then
+            [[ "$BASE_REF" == "main" ]] || { echo "dev branch may only target main"; exit 1; }
           fi
 
           if [[ "$is_feature" == true ]]; then
@@ -51,5 +61,5 @@ jobs:
           fi
 
           if [[ "$is_hotfix" == true ]]; then
-            [[ "$BASE_REF" == "main" || "$BASE_REF" == "dev" ]] || { echo "hotfix/* branches may only target main or dev."; exit 1; }
+            [[ "$BASE_REF" == "main"  ]] || { echo "hotfix/* branches may only target main or dev."; exit 1; }
           fi
