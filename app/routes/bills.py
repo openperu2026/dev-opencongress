@@ -141,6 +141,10 @@ def _parse_int_arg(value, default):
 
 
 def _build_date_picker(prefix, args, today):
+    """
+    Safely normalizes form date inputs and prepares both the selected date (if valid)
+    and the select-box option lists for the template.
+    """
     raw_year = args.get(f"{prefix}_year")
     raw_month = args.get(f"{prefix}_month")
     raw_day = args.get(f"{prefix}_day")
@@ -232,6 +236,9 @@ def _build_vote_summary_counts(vote_event: VoteEvent) -> dict[str, int]:
 
 
 def _wrap_bancada_label(name: str, max_width: int = 24) -> list[str]:
+    """
+    Wrap lines when the bancada name is too long.
+    """
     lines = textwrap.wrap(
         name,
         width=max_width,
@@ -252,9 +259,11 @@ def _build_bancada_bars(bancada_votes):
         key=lambda item: (-item[1]["total"], item[0]),
     )
 
+    # Match the width to the bancada with the largest number of items.
     max_total = max((counts["total"] for _, counts in sorted_rows), default=0)
     width_scale = bar_max_width / max_total if max_total else 0
 
+    # Set the x and y coordinates of the bars for each yes, no, and abstain option in each bancada.
     rows = []
     current_y = 20
     for index, (name, counts) in enumerate(sorted_rows):
@@ -299,6 +308,10 @@ def _build_bancada_bars(bancada_votes):
 
 
 def _build_vote_bancada_rows(db: Session, vote_event_id: str):
+    """
+    Extract the voting results for each bancada from the database and organize them into a
+    dictionary grouped by option.
+    """
     bancada_votes: dict[str, dict[str, int]] = {}
 
     rows = db.execute(
@@ -367,7 +380,10 @@ def index():
     _allowed_status = {"all", "approved", "not-approved"}
     if status not in _allowed_status:
         status = "all"
+    # Add search conditions to the filters and build the query.
     filters = []
+    # Set author_display so that the author name or query is correctly shown in the
+    # search conditions, regardless of whether the input is an ID or a person's name.
     author_display = None
     author_id_query = author_q.isdigit()
     author_id_int = None
@@ -452,8 +468,9 @@ def index():
         filters.append(Bill.id.ilike(f"%{bill_id_q}%"))
 
     if author_q:
+        # Since author_q may contain either an ID or a person's name, build the query
+        # appropriately based on whether the input is an integer.
         if author_id_query:
-            # filter by numeric author id
             try:
                 author_id_int = int(author_q)
             except ValueError:
@@ -485,6 +502,7 @@ def index():
         )
         filters.append(latest_step_type_expr == current_step_q)
 
+    # Extract bills whose presentation dates fall between the from and to dates.
     if presentation_date_from or presentation_date_to:
         presentation_filters = [BillOrganization.bill_id == Bill.id]
         if presentation_date_from:
@@ -540,6 +558,7 @@ def index():
             .scalars()
             .all()
         ]
+        # Create a list of dropdown options from the database.
         author_party_options = create_party_option(db)
         organization_name_options = create_committee_option(db)
 
@@ -569,6 +588,7 @@ def index():
                 .where(*filters)
             )
 
+            # Limit the number of displayed results, create pagination, and display the results in fixed-size pages.
             count_stmt = select(func.count()).select_from(
                 stmt.order_by(None).limit(max_search_results + 1).subquery()
             )
@@ -613,6 +633,7 @@ def index():
 
             bills = [SimpleNamespace(**row) for row in rows]
         else:
+            # Display the 10 bills with the most recent initial presentation dates by default.
             earliest_bill_dates = (
                 select(
                     BillOrganization.bill_id,
@@ -744,7 +765,6 @@ def bill_detail(bill_id):
 
         author, org_name = get_author_with_party(db, author_id)
 
-        # Presentation date
         presentation_date = db.scalar(
             select(BillStep.step_date).where(
                 BillStep.bill_id == bill_id, BillStep.step_type == "Presentado"
@@ -821,6 +841,9 @@ def votes(bill_id, vote_event_id):
             )
         )
 
+        # Generate all the information needed to visualize the vote page
+        # (such as each member’s voting status and the coordinates for positioning
+        # circles) in Python and send it to the HTML template.
         vote_counts = _build_vote_summary_counts(vote_event)
         vote_rows = _build_vote_rows(db, vote_event_id)
         seat_groups = {"yes": [], "no": [], "abstain": []}
@@ -863,91 +886,6 @@ def votes(bill_id, vote_event_id):
             presentation_date=presentation_date,
             topics=topics,
             vote_rows=vote_rows,
-        )
-
-
-@bills_bp.route("/bills/<bill_id>/mock_votes")
-def mock_votes(bill_id):
-    with SessionProcessed() as db:
-        bill = db.get(Bill, bill_id)
-        if not bill:
-            return "Not Found", 404
-
-        all_steps, latest_step = extract_steps(db, bill_id)
-
-        mock_data_path = os.path.join(
-            os.path.dirname(__file__), "..", "mock_data", "example_vote_event.json"
-        )
-        vote_counts = {"yes": 0, "no": 0, "abstain": 0}
-
-        with open(mock_data_path, "r", encoding="utf-8") as f:
-            vote_event = json.load(f)
-
-        for count in vote_event.get("counts", []):
-            option = count.get("option", "").lower()
-            value = count.get("value", 0)
-
-            vote_counts[option] = value
-
-        # Build grouped name lists
-        votes = vote_event.get("votes", [])
-
-        groups = {"yes": [], "no": [], "abstain": []}
-        for v in votes:
-            opt = v.get("option", "").lower()
-            voter = v.get("voter")
-            name = voter.get("name", "")
-            if opt in groups:
-                groups[opt].append(name)
-
-        # Generate seat positions and attributes server-side
-        seats = generate_seats(vote_counts, groups)
-
-        # Load voter-bancada mapping and aggregate by bancada
-        voter_bancada_map = load_voter_bancada_dict()
-        bancada_votes = {}
-
-        # reparsing the votes list
-        for vote_type, names in groups.items():
-            for name in names:
-                bancada = voter_bancada_map.get(name, "unknown")
-                if bancada not in bancada_votes:
-                    bancada_votes[bancada] = {
-                        "yes": 0,
-                        "no": 0,
-                        "abstain": 0,
-                        "total": 0,
-                    }
-                if vote_type in bancada_votes[bancada]:
-                    bancada_votes[bancada][vote_type] += 1
-                    bancada_votes[bancada]["total"] += 1
-
-        bancada_rows, bancada_chart_height = _build_bancada_bars(bancada_votes)
-
-        bill_status = _("Not approved")
-        if bill.bill_approved:
-            bill_status = _("Approved")
-
-        presentation_date = db.scalar(
-            select(BillStep.step_date).where(
-                BillStep.bill_id == bill_id, BillStep.step_type == "Presentado"
-            )
-        )
-
-        topics = get_topics(db, bill_id)
-
-        return render_template(
-            "bills/mock_votes.html",
-            bill=bill,
-            latest_step=latest_step,
-            vote_counts=vote_counts,
-            seats=seats,
-            bancada_rows=bancada_rows,
-            bancada_chart_height=bancada_chart_height,
-            bill_status=bill_status,
-            presentation_date=presentation_date,
-            topics=topics,
-            # vote_date = vote_date
         )
 
 

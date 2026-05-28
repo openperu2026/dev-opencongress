@@ -12,8 +12,9 @@ def generate_seats(vote_counts, groups):
     Returns:
         List of dicts with keys: x, y, r (radius of dot), color, label
     """
-    # Configuration
-    seats_per_row = [14, 17, 20, 23, 26, 30]  # inner to outer
+    # To arrange seats in a circular layout, specify the number of seats from
+    # inner to outer row so that the total adds up to 130.
+    seats_per_row = [14, 17, 20, 23, 26, 30]
     edge_inset = 0.03
     max_total = 130
 

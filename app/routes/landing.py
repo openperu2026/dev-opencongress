@@ -10,9 +10,8 @@ def index():
     Landing page (main menu)
     """
     menu_items = [
-        {"name": _("Bills"), "url": "/bills"},  # considering using url_for
+        {"name": _("Bills"), "url": "/bills"},
         {"name": _("Congressmen"), "url": "/congress"},
-        # {"name": _("Data"), "url": "/info"},
     ]
 
     return render_template("landing/index.html", menu_items=menu_items)
