@@ -2,7 +2,6 @@
 
 {% block content %}
 
-
 <form class="congress-search-form" method="get" action="{{ url_for('congress.index') }}">
    
     <h1 class="search-title">{{_('Search a congressmember by:')}}</h1>
@@ -10,7 +9,6 @@
 
         <div class="searching-container">
 
-               <!--<h3>{{_('Name')}}</h3>-->
             <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="{{_('Name')}}">
                 
         </div>
@@ -47,8 +45,6 @@
         </button>
     </div>
 </form>
-
-
 
  {% if congresistas %}
         <div class="search-criteria">
@@ -94,8 +90,6 @@
     {% elif name_q or party_q or region_q or commission_q %}
         <p>{{_('No matching congresspeople found.')}}</p>
     {% endif %}
-
-
 
 {% endblock %}
 
