@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
-"POT-Creation-Date: 2026-05-26 13:32-0500\n"
+"POT-Creation-Date: 2026-05-28 10:49-0500\n"
 "PO-Revision-Date: 2026-05-17 15:22-0500\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language: es\n"
@@ -18,34 +18,31 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Generated-By: Babel 2.18.0\n"
 
-#: routes/bills.py:216 templates/bills/mock_votes.html:65
-#: templates/bills/mock_votes.html:88 templates/bills/votes.html:77
+#: routes/bills.py:220 templates/bills/votes.html:77
 msgid "In favor"
 msgstr "A favor"
 
-#: routes/bills.py:217 templates/bills/mock_votes.html:66
-#: templates/bills/mock_votes.html:89 templates/bills/votes.html:78
+#: routes/bills.py:221 templates/bills/votes.html:78
 msgid "Against"
 msgstr "En contra"
 
-#: routes/bills.py:218 templates/bills/mock_votes.html:67
-#: templates/bills/mock_votes.html:90 templates/bills/votes.html:79
+#: routes/bills.py:222 templates/bills/votes.html:79
 msgid "Abstain"
 msgstr "Abstención"
 
-#: routes/bills.py:220 templates/bills/votes.html:80
+#: routes/bills.py:224 templates/bills/votes.html:80
 msgid "Others"
 msgstr "Otros"
 
-#: routes/bills.py:755 routes/bills.py:838 routes/bills.py:927
+#: routes/bills.py:775 routes/bills.py:861
 msgid "Not approved"
 msgstr "No aprobado"
 
-#: routes/bills.py:757 routes/bills.py:840 routes/bills.py:929
+#: routes/bills.py:777 routes/bills.py:863
 msgid "Approved"
 msgstr "Aprobado"
 
-#: routes/landing.py:13 templates/base.html:34
+#: routes/landing.py:13 templates/base.html:28
 msgid "Bills"
 msgstr "Proyectos de ley"
 
@@ -53,53 +50,57 @@ msgstr "Proyectos de ley"
 msgid "Congressmen"
 msgstr "Congresistas"
 
-#: templates/base.html:5
+#: templates/base.html:6
 msgid "Open Congress"
 msgstr "Open Congress"
 
-#: templates/base.html:32
+#: templates/base.html:19
+msgid "Open navigation menu"
+msgstr ""
+
+#: templates/base.html:23
+msgid "Close navigation menu"
+msgstr ""
+
+#: templates/base.html:26
 msgid "Home"
 msgstr "Inicio"
 
-#: templates/base.html:33 templates/base.html:57
-#: templates/landing/index.html:46
+#: templates/base.html:27 templates/base.html:47
+#: templates/landing/index.html:40
 msgid "About"
 msgstr "Acerca de"
 
-#: templates/base.html:35 templates/bills/votes.html:111
+#: templates/base.html:29 templates/bills/votes.html:111
 msgid "Congressmember"
 msgstr "Congresista"
 
-#: templates/base.html:36
-msgid "Data"
-msgstr "Datos"
-
-#: templates/base.html:41
+#: templates/base.html:32
 msgid "Language"
 msgstr "Idioma"
 
-#: templates/base.html:42
+#: templates/base.html:33
 msgid "English"
 msgstr "Ingles"
 
-#: templates/base.html:43
+#: templates/base.html:34
 msgid "Spanish"
 msgstr "Espanol"
 
-#: templates/base.html:58
+#: templates/base.html:48
 msgid "Terms of Service"
 msgstr "Términos de servicio"
 
-#: templates/base.html:59
+#: templates/base.html:49
 msgid "Privacy"
 msgstr "Privacidad"
 
-#: templates/base.html:60
+#: templates/base.html:50
 msgid "Contact"
 msgstr "Contacto"
 
-#: templates/bills/detail.html:29 templates/bills/mock_votes.html:27
-#: templates/bills/search.html:61 templates/bills/votes.html:28
+#: templates/bills/detail.html:29 templates/bills/search.html:61
+#: templates/bills/votes.html:28
 msgid "Presentation date"
 msgstr "Fecha de presentación"
 
@@ -150,7 +151,7 @@ msgstr "Ver cambios"
 msgid "Bill"
 msgstr "Proyecto de ley"
 
-#: templates/bills/difference.html:16 templates/bills/mock_votes.html:33
+#: templates/bills/difference.html:16
 msgid "Step"
 msgstr "Paso"
 
@@ -197,22 +198,6 @@ msgstr "No hay texto disponible"
 #: templates/bills/difference.html:60
 msgid "Version 2"
 msgstr "Versión 2"
-
-#: templates/bills/mock_votes.html:37 templates/bills/votes.html:45
-msgid "Voting Results"
-msgstr "Resultados de votación"
-
-#: templates/bills/mock_votes.html:43 templates/bills/votes.html:51
-msgid "IN FAVOR"
-msgstr "A FAVOR"
-
-#: templates/bills/mock_votes.html:44 templates/bills/votes.html:52
-msgid "AGAINST"
-msgstr "EN CONTRA"
-
-#: templates/bills/mock_votes.html:45 templates/bills/votes.html:53
-msgid "ABSTAIN"
-msgstr "ABSTENCIÓN"
 
 #: templates/bills/search.html:5
 msgid "Search the bill by:"
@@ -351,6 +336,22 @@ msgstr "No disponible"
 msgid "Vote date"
 msgstr "Fecha de votacion"
 
+#: templates/bills/votes.html:45
+msgid "Voting Results"
+msgstr "Resultados de votación"
+
+#: templates/bills/votes.html:51
+msgid "IN FAVOR"
+msgstr "A FAVOR"
+
+#: templates/bills/votes.html:52
+msgid "AGAINST"
+msgstr "EN CONTRA"
+
+#: templates/bills/votes.html:53
+msgid "ABSTAIN"
+msgstr "ABSTENCIÓN"
+
 #: templates/bills/votes.html:54
 msgid "OTHERS"
 msgstr "OTROS"
@@ -431,11 +432,11 @@ msgstr "Comision"
 msgid "No matching congresspeople found."
 msgstr "No se encontraron congresistas."
 
-#: templates/landing/index.html:8
+#: templates/landing/index.html:7
 msgid "Welcome to Open Congress"
 msgstr "Bienvenido a Open Congress"
 
-#: templates/landing/index.html:11
+#: templates/landing/index.html:10
 msgid ""
 "Open Congress brings together public information from the Peruvian "
 "Congress in one place. Explore bills from the 2021-2026 congressional "
@@ -447,52 +448,56 @@ msgstr ""
 "quienes los presentaron, observa como votaron los congresistas y compara "
 "cambios entre distintas versiones de cada proyecto."
 
-#: templates/landing/index.html:12
+#: templates/landing/index.html:11
 msgid "Click below to start exploring:"
 msgstr "Haz clic abajo para empezar a explorar:"
 
-#: templates/landing/index.html:31
+#: templates/landing/index.html:29
 msgid "Open Congress logo"
 msgstr "Logo de Open Congress"
 
-#: templates/landing/index.html:33
+#: templates/landing/index.html:31
 msgid "Transparency and accountability for a stronger democracy"
 msgstr "Transparencia y rendicion de cuentas para una democracia mas fuerte"
 
-#: templates/landing/index.html:47
+#: templates/landing/index.html:41
 msgid ""
-"Open Congress is built as a public data pipeline for legislative "
-"information. It collects official public records from the Peruvian "
-"Congress, processes them, and organizes them into a structured, clean "
-"relational database."
+"Open Congress is built as a public data pipeline for legislative \n"
+"            information. It collects official public records from the "
+"Peruvian Congress, \n"
+"            processes them, and organizes them into a structured, \n"
+"            clean relational database."
 msgstr ""
 "Open Congress esta construido como un pipeline publico de datos para "
 "informacion legislativa. Recopila registros publicos oficiales del "
 "Congreso peruano, los procesa y los organiza en una base de datos "
 "relacional estructurada y limpia."
 
-#: templates/landing/index.html:48
+#: templates/landing/index.html:45
 msgid ""
-"The platform began as part of the University of Chicago's Master of "
-"Computational Analysis and Public Policy program and is developed by a "
-"six-student team from the program."
+"The platform began as part of the University of Chicago's \n"
+"            Master of Computational Analysis and Public Policy program "
+"and \n"
+"            is developed by a six-student team from the program."
 msgstr ""
 "La plataforma nacio como parte del programa Master of Computational "
 "Analysis and Public Policy de la Universidad de Chicago y es desarrollada"
 " por un equipo de seis estudiantes del programa."
 
-#: templates/landing/index.html:49
+#: templates/landing/index.html:48
 msgid ""
-"It is mainly written in Python and uses SQLAlchemy, SQLite, OCR/document "
-"parsing, and automated tests to track bills, votes, congressmembers, "
-"political groups, and text changes across the legislative process."
+"It is mainly written in Python and uses SQLAlchemy, \n"
+"            PostgreSQL, OCR/document parsing, and automated tests to "
+"track \n"
+"            bills, votes, congressmembers, political groups, and text \n"
+"            changes across the legislative process."
 msgstr ""
-"Esta escrita principalmente en Python y usa SQLAlchemy, SQLite, "
+"Esta escrita principalmente en Python y usa SQLAlchemy, PostgreSQL, "
 "OCR/procesamiento de documentos y pruebas automatizadas para seguir "
 "proyectos de ley, votos, congresistas, grupos politicos y cambios de "
 "texto a lo largo del proceso legislativo."
 
-#: templates/landing/index.html:55
+#: templates/landing/index.html:57
 msgid "Know the team"
 msgstr "Conoce al equipo"
 
@@ -532,3 +537,5 @@ msgstr "Conoce al equipo"
 #~ msgid "Last Votings"
 #~ msgstr "Últimas votaciones"
 
+#~ msgid "Data"
+#~ msgstr "Datos"

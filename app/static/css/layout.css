@@ -4,7 +4,7 @@
     --color-frame: #000000;
     --color-background: #f9f3f3fa;
     --dark-orange: #5a1a1a;
-    --dark-pink:#C0076F;
+    --dark-pink: #C0076F;
     --color-highlight: #B33951;
     --color-black: #2A0800;
     --color-black-transparency: #2A080030;
@@ -19,16 +19,16 @@
     --light-blue: #0E9EFF;
     --divider-white: #ffd9d9;
 
-    --color-magenta:     #8B1A5E;
-    --color-crimson:     #C0154A;
-    --color-hot-pink:    #E8295B;
+    --color-magenta: #8B1A5E;
+    --color-crimson: #C0154A;
+    --color-hot-pink: #E8295B;
     --color-deep-purple: #3B1F6E;
-    --color-royal-blue:  #1A4FA0;
+    --color-royal-blue: #1A4FA0;
     --color-andean-teal: #2BA89C;
-    --color-forest-green:#1E7A3C;
-    --color-gold:        #E8A020;
-    --color-cream:       #F5F0E8;
-    --color-near-black:  #1A1018;    
+    --color-forest-green: #1E7A3C;
+    --color-gold: #E8A020;
+    --color-cream: #F5F0E8;
+    --color-near-black: #1A1018;
 }
 
 html,
@@ -49,7 +49,6 @@ main {
 
 
 .site-navbar {
-
   /*To stay in screen*/
     position: sticky;
     top: 0;
@@ -59,7 +58,7 @@ main {
     justify-content: flex-start;
     gap: 20px;
     padding: 14px 24px;
-    background:  var(--color-hero);
+    background: var(--color-hero);
     border-bottom: 1px solid var(--color-frame);
 
     font-size: 20px;
@@ -103,31 +102,6 @@ main {
         var(--green) 70px 77px
     );
 
-    
-    /*
-    Horizontal stripe pattern
-
-    background: repeating-linear-gradient(
-        180deg,
-        var(--color-magenta) 0 7px,
-        var(--color-crimson) 7px 14px,
-        var(--color-hot-pink) 14px 21px,
-        var(--color-deep-purple) 21px 28px,
-        var(--color-royal-blue) 28px 35px,
-        var(--color-andean-teal) 35px 42px,
-        var(--color-forest-green) 42px 49px,
-        var(--color-gold) 49px 56px,
-        var(--color-cream) 56px 63px,
-        var(--light-green) 63px 70px,
-        var(--color-near-black) 70px 77px
-
-
-    var(--color-forest-green);
-    var(--);
-    var(--);
-    var(--);  
-    );
-     */
 }
 
 .nav-brand {
@@ -219,23 +193,22 @@ main {
     height: 68px;
     border: none;
     color: var(--color-background);
-    background-color:  var(--color-highlight);
+    background-color: var(--color-highlight);
     font-size: 24px;
     cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .searching-container input,
-.searching-container select,
 .searching-container select {
-  width: 100%;
-  min-width: 0;
-  height: 68px;
-  padding: 0 18px;
+    width: 100%;
+    min-width: 0;
+    height: 68px;
+    padding: 0 18px;
     border: 2px solid #b7b7b7;
-  font-size: 17px;
+    font-size: 17px;
     box-sizing: border-box;
     background-color: var(--color-background);
 }
@@ -353,10 +326,10 @@ main {
   min-width: 0;
   height: 34px;
   padding: 0 9px;
-    border: 2px solid #b7b7b7;
+  border: 2px solid #b7b7b7;
   font-size: 10px;
-    box-sizing: border-box;
-  background-color: var(--color-background)
+  box-sizing: border-box;
+  background-color: var(--color-background);
 }
 
 .bill-search-form .radio-container {
@@ -529,25 +502,6 @@ main {
     transform: translateY(-2px);
 }
 
-/* View details button in timeline */
-.timeline-content a {
-    margin-top: -8px;
-    display: inline-block;
-    padding: 8px 12px;
-    background-color: #0066cc;
-    color: white;
-    text-decoration: none;
-    border-radius: 4px;
-    font-size: 14px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-
-.timeline-content a:hover {
-    background-color: #0052a3;
-    transform: translateY(-1px);
-}
-
 /* Bills */
 /* detail page */
 .page-details {
@@ -557,7 +511,7 @@ main {
     "details timeline";
   max-width: 1500px;
   margin: 0 auto;
-  padding: 20px 36px 20px 36px ;
+  padding: 20px 36px;
 }
 
 .bill-details {
@@ -565,7 +519,7 @@ main {
 }
 
 .bill-hero {
-  padding: 0 36px 0 36px ;
+  padding: 0 36px;
   border-left: 5px solid var(--dark-pink);
 }
 
@@ -628,12 +582,12 @@ main {
     color: #344452;
     font-family: "Roboto", sans-serif;
     font-size: 19px;
-    padding: 10px 0 0 0 ;
+    padding: 10px 0 0;
 }
 
 .bill-meta {
   background: var(--color-background);
-  padding: 10px 36px 0 36px ;
+  padding: 10px 36px 0;
   font-size: 20px;
   line-height: 1.55;
 }
@@ -817,15 +771,17 @@ main {
   background: var(--color-black);
   text-decoration: none;
   border-radius: 8px;
+  transition: all 0.2s ease;
 }
 
 .timeline-content a:hover {
   background-color: var(--dark-pink);
   text-decoration: underline;
+  transform: translateY(-1px);
 }
 
 @media (max-width: 900px) {
-  .bill-details {
+  .page-details {
     grid-template-columns: 1fr;
     grid-template-areas:
       "details"
@@ -856,7 +812,7 @@ main {
 .page-votes {
   max-width: 1500px;
   margin: 0 auto;
-  padding: 20px 36px 20px 36px ;
+  padding: 20px 36px;
 }
 
 
@@ -1085,17 +1041,17 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .vote-sort-button::after {
-  content: "↕";
+  content: "\2195";
   float: right;
   color: #8b96a3;
 }
 
 .vote-sort-button[data-direction="asc"]::after {
-  content: "↑";
+  content: "\2191";
 }
 
 .vote-sort-button[data-direction="desc"]::after {
-  content: "↓";
+  content: "\2193";
 }
 
 .vote-members-table td:first-child a {
@@ -1701,55 +1657,6 @@ svg#seatsSvg circle { cursor: default; }
     font-weight: 700;
     text-transform: uppercase;
 }
-
-/*Formats of:*/
-/*Text of title of the sections
-title{*/
-
-/*Text of subtitles or descriptions
-subtitle{*/
-
-/*Format of input boxes and select boxes
-form-control{*/
-
-/*Format of labels above inputs
-form-label{*/
-
-/*Format of bordered information boxes
-panel{*/
-
-/*Format of links
-link{*/
-
-/*Format of green status text
-text-success{*/
-
-/*Format of red status text
-text-danger{*/
-
-/*Format of yellow status text
-text-warning{*/
-
-/*Format of blue information text
-text-info{*/
-
-/*Format of numbers and statistics
-stat{*/
-
-/*Format of timeline for bill steps
-timeline{*/
-
-/*Format of each item in a timeline
-timeline-item{*/
-
-/*Format of profile information blocks
-profile-summary{*/
-
-/*Format of lists of bills or votings
-item-list{*/
-
-/*Format of source and download links
-source-list{*/
 
 /* Bill difference page */
 .diff-back-link {

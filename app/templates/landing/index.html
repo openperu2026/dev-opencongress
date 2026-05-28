@@ -2,7 +2,6 @@
 
 {% block content %}
 
-
 <div class="hero">
     <div class="hero-container hero-text">
         <h1 class="hero-title">{{ _('Welcome to Open Congress') }}</h1>
@@ -23,8 +22,7 @@
                 </div>
             {% endfor %}
         </div>
-
-       
+      
     </div>
 
     <div class="hero-container">
@@ -33,20 +31,24 @@
             {{_('Transparency and accountability for a stronger democracy')}}
         </p>
 
-        
-
     </div>
 
 </div>
 
-
-
 <section id="about" class="about-section">
     <div class="about-content">
         <h2>{{_('About')}}</h2>
-        <p>{{ _('Open Congress is built as a public data pipeline for legislative information. It collects official public records from the Peruvian Congress, processes them, and organizes them into a structured, clean relational database.') }}</p>
-        <p>{{ _('The platform began as part of the University of Chicago\'s Master of Computational Analysis and Public Policy program and is developed by a six-student team from the program.') }}</p>
-        <p>{{ _('It is mainly written in Python and uses SQLAlchemy, SQLite, OCR/document parsing, and automated tests to track bills, votes, congressmembers, political groups, and text changes across the legislative process.') }}</p>
+        <p>{{ _('Open Congress is built as a public data pipeline for legislative 
+            information. It collects official public records from the Peruvian Congress, 
+            processes them, and organizes them into a structured, 
+            clean relational database.') }}</p>
+        <p>{{ _('The platform began as part of the University of Chicago\'s 
+            Master of Computational Analysis and Public Policy program and 
+            is developed by a six-student team from the program.') }}</p>
+        <p>{{ _('It is mainly written in Python and uses SQLAlchemy, 
+            PostgreSQL, OCR/document parsing, and automated tests to track 
+            bills, votes, congressmembers, political groups, and text 
+            changes across the legislative process.') }}</p>
     </div>
 </section>
 
@@ -75,6 +77,4 @@
     </div>
 </section>
 
-
 {% endblock %}
-
