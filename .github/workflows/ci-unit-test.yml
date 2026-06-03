@@ -3,7 +3,12 @@ name: CI Unit Tests
 on:
   pull_request:
     paths-ignore:
-      - "**/*.md"  
+      - "**/*.md"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
 
 jobs:
   test:
@@ -35,8 +40,8 @@ jobs:
 
   pr-coverage:
     name: Coverage (pull_request)
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+
     permissions:
       contents: read
       pull-requests: write
@@ -66,14 +71,15 @@ jobs:
       - name: Run tests with coverage
         run: |
           uv run coverage run \
-          --source=backend/scrapers,backend/database,backend/process \
-          -m pytest
+            --source=backend/scrapers,backend/database,backend/process \
+            -m pytest
           uv run coverage report --fail-under=50
           uv run coverage xml
           uv run coverage lcov
 
       - name: Comment PR with coverage
+        if: github.event.pull_request.head.repo.full_name == github.repository
         uses: romeovs/lcov-reporter-action@v0.3.1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          lcov-file: ./coverage.lcov        
+          lcov-file: ./coverage.lcov
