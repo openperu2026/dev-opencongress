@@ -475,6 +475,7 @@ class Organization(PrintableModel):
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
         org_subtype (str): Subtype of organization (e.g. ordinaria, especial, etc)
+        org_short_name (str | None): Shortened name for special committees.
         org_link (str): Url of the organization's website.
         parent_org_name (str): Name of other organization where this organization belongs to
         parent_org_type (TypeOrganization): Type of organization of parent
@@ -486,6 +487,7 @@ class Organization(PrintableModel):
     org_name: str
     org_type: TypeOrganization
     org_subtype: TypeCommittee | TypeAdmin | None = None
+    org_short_name: str | None = None
     org_link: str | None = None
     parent_org_name: str | None = None
     parent_org_type: TypeOrganization | None = None

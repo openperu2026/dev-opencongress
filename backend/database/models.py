@@ -497,6 +497,7 @@ class Organization(Base):
         org_name (str): Name of the organization.
         org_type (str): Type of organization (e.g. bancada, partido, committee, etc)
         org_subtype (str): Subtype of organization (e.g. ordinaria, especial, etc)
+        org_short_name (str | None): Shortened name for special committees.
         org_link (str): Url of the organization's website.
         parent_org_id (int): Unique identification of the organization's parent
         date_founding (date): Date of establishment of the organization
@@ -513,6 +514,7 @@ class Organization(Base):
         nullable=False,
     )
     org_subtype: Mapped[str | None] = mapped_column(nullable=True)
+    org_short_name: Mapped[str | None] = mapped_column(nullable=True)
     org_link: Mapped[str | None] = mapped_column(nullable=True)
 
     parent_org_id: Mapped[int | None] = mapped_column(
