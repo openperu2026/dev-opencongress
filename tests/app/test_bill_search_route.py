@@ -287,7 +287,7 @@ def test_search_form_includes_new_filters(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'name="bill_id_q"' in body
+    assert 'name="pley_id_q"' in body
     assert 'name="law_id_q"' in body
     assert 'name="current_step_q"' in body
     assert 'name="presentation_date_from_year"' in body
@@ -316,7 +316,7 @@ def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_f
     response = client.get(
         "/bills",
         query_string={
-            "bill_id_q": "2021_0001",
+            "pley_id_q": "2021_0001",
             "law_id_q": "L-001",
             "current_step_q": TypeBillStep.VOTACION.value,
             "author_party_q": "Partido Verde",

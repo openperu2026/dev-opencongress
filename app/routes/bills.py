@@ -369,7 +369,7 @@ def index():
     author_q = request.args.get("author_q", "").strip()
     author_party_q = request.args.get("author_party_q", "").strip()
     status = request.args.get("status", "all").strip()
-    bill_id_q = request.args.get("bill_id_q", "").strip()
+    pley_id_q = request.args.get("pley_id_q", "").strip()
     law_id_q = request.args.get("law_id_q", "").strip()
     current_step_q = request.args.get("current_step_q", "").strip()
     organization_name_q = request.args.get("organization_name_q", "").strip()
@@ -401,7 +401,7 @@ def index():
             title_q,
             author_q,
             author_party_q,
-            bill_id_q,
+            pley_id_q,
             law_id_q,
             current_step_q,
             presentation_date_from is not None,
@@ -415,7 +415,7 @@ def index():
         author_q=author_q,
         author_party_q=author_party_q,
         status=status,
-        bill_id_q=bill_id_q,
+        pley_id_q=pley_id_q,
         law_id_q=law_id_q,
         current_step_q=current_step_q,
         organization_name_q=organization_name_q,
@@ -464,8 +464,8 @@ def index():
             )
         )
 
-    if bill_id_q:
-        filters.append(Bill.id.ilike(f"%{bill_id_q}%"))
+    if pley_id_q:
+        filters.append(Bill.pley_id.ilike(f"%{pley_id_q}%"))
 
     if author_q:
         # Since author_q may contain either an ID or a person's name, build the query
@@ -577,7 +577,9 @@ def index():
             stmt = (
                 select(
                     Bill.id.label("id"),
+                    Bill.pley_id.label("pley_id"),
                     Bill.title.label("title"),
+                    Bill.proponent.label("proponent"),
                     Congresista.full_name.label("author_name"),
                     latest_bill_dates.c.latest_presentation_date.label(
                         "presentation_date"
@@ -649,6 +651,8 @@ def index():
                 select(
                     Bill.id.label("id"),
                     Bill.title.label("title"),
+                    Bill.pley_id.label("pley_id"),
+                    Bill.proponent.label("proponent"),
                     Congresista.full_name.label("author_name"),
                     earliest_bill_dates.c.first_presentation_date.label(
                         "presentation_date"
@@ -689,7 +693,7 @@ def index():
         author_q=author_q,
         author_party_q=author_party_q,
         author_display=author_display,
-        bill_id_q=bill_id_q,
+        pley_id_q=pley_id_q,
         law_id_q=law_id_q,
         current_step_q=current_step_q,
         presentation_date_from=presentation_date_from,

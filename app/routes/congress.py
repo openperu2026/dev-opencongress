@@ -163,6 +163,7 @@ def congress_detail(congresista_id):
             SimpleNamespace(
                 id=bill.id,
                 title=bill.title,
+                pley_id=bill.pley_id,
             )
             for bill in db.execute(
                 select(Bill)
@@ -197,6 +198,7 @@ def congress_detail(congresista_id):
                     Organization.org_name,
                     Organization.org_type,
                     Organization.org_subtype,
+                    Organization.org_short_name,
                 )
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
