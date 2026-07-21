@@ -26,6 +26,7 @@ def _raw_bill(
             "desEstado": "En Comisión",
             "desProponente": "Ministerio Público",
             "desGpar": "Bancada Test",
+            "proyectoLey": "PL_123",
         }
     if congresistas is None:
         congresistas = []
@@ -131,6 +132,7 @@ def test_process_bill_approved_uses_steps_then_status_fallback():
         "desEstado": "Publicada en el Diario Oficial El Peruano",
         "desProponente": "Ministerio Público",
         "desGpar": "Bancada Test",
+        "proyectoLey": "PL_123",
     }
     rb = _raw_bill(general=general, steps=[])
     bill, _, _ = mod.process_bill(rb)

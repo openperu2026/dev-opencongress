@@ -83,6 +83,7 @@ def _seed_bills(session_factory, count: int) -> None:
                     proponent=Proponents.CONGRESO,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id=f"2021_{index:04d}",
                 )
             )
         db.commit()
@@ -102,6 +103,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     author_id=1,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0001",
                 ),
                 Bill(
                     id="2021_0002",
@@ -113,6 +115,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     author_id=2,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0002",
                 ),
                 Congresista(
                     id=1,
@@ -231,6 +234,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     author_id=1,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0003",
                 ),
                 BillOrganization(
                     bill_id="2021_0003",
@@ -371,6 +375,7 @@ def test_search_ignores_spanish_accents_for_text_filters(client, session_factory
                     author_id=10,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0099",
                 ),
                 PartyMembership(
                     person_id=10,

@@ -74,6 +74,7 @@ def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrat
                         "desEstado": "Presentado",
                         "desProponente": "Ministerio Público",
                         "desGpar": "Bancada Ausente",
+                        "proyectoLey": "2026_1",
                     }
                 ),
                 congresistas=json.dumps(
@@ -139,6 +140,7 @@ def test_process_bills_marks_raw_pages_processed_when_bill_text_extracted(
                         "desEstado": "Presentado",
                         "desProponente": "Ministerio Público",
                         "desGpar": "Bancada Ausente",
+                        "proyectoLey": bill_id,
                     }
                 ),
                 congresistas=json.dumps([]),
@@ -348,6 +350,7 @@ def test_bill_step_upsert_retains_planned_vote_event_reference(orchestrator):
                 author_id=None,
                 bill_approved=False,
                 summary_oc="Resumen OC",
+                pley_id="2026_10",
             )
         )
         db.flush()
@@ -412,6 +415,7 @@ def _seed_bill_with_two_text_steps(db, bill_id="2026_30"):
             proponent=Proponents.CONGRESO,
             bill_approved=False,
             summary_oc="Resumen OC",
+            pley_id=bill_id,
         )
     )
     db.add(
@@ -521,6 +525,7 @@ def test_process_bill_differences_skips_bills_without_text(orchestrator):
                 proponent=Proponents.CONGRESO,
                 bill_approved=False,
                 summary_oc="Resumen OC",
+                pley_id="2026_31",
             )
         )
         db.commit()

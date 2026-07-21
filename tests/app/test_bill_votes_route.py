@@ -55,6 +55,7 @@ def _seed_vote_page(session_factory) -> None:
                     proponent=Proponents.CONGRESO,
                     bill_approved=True,
                     summary_oc="",
+                    pley_id="2021_0001",
                 ),
                 BillStep(
                     bill_id="2021_0001",
