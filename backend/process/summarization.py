@@ -555,7 +555,7 @@ def _paragraph_two(bill, steps) -> str:
 
 def summarize_bill_from_steps(bill: db_models.Bill, steps: list[db_models.BillStep]):
     context = _build_context(bill.id, steps)
-    paragraph_one = _paragraph_one(bill.id, bill, steps).strip()
+    paragraph_one = _paragraph_one(bill.pley_id, bill, steps).strip()
 
     if len(steps) <= 5:
         summary = paragraph_one
@@ -585,9 +585,7 @@ def summarize_bill_from_db(bill_id: str) -> dict:
             return {
                 "bill_id": bill_id,
                 "context": "",
-                "summary": (
-                    f"No se encontro el proyecto {bill_id} en la base de datos."
-                ),
+                "summary": ("No se encontro el proyecto en la base de datos."),
             }
 
         steps = (
@@ -602,7 +600,7 @@ def summarize_bill_from_db(bill_id: str) -> dict:
                 "bill_id": bill_id,
                 "context": "",
                 "summary": (
-                    f"El proyecto {bill_id} no tiene pasos legislativos registrados."
+                    f"El proyecto {bill.pley_id} no tiene pasos legislativos registrados."
                 ),
             }
 
