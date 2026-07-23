@@ -613,7 +613,7 @@ class OpenPeruOrchestrator:
                 motion_id=motion_id,
                 update=False,
                 download_local=False,
-                upload_s3=upload_s3,
+                upload_s3=False,
             )
             count += len(motion_docs.documents)
             motion_docs.load_raw_documents()
