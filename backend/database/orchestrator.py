@@ -186,6 +186,7 @@ class OpenPeruOrchestrator:
         scrape_others: bool = True,
         only_current: bool = True,
         scrape_documents: bool = False,
+        upload_s3: bool = False,
     ) -> None:
         """
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
@@ -354,7 +355,7 @@ class OpenPeruOrchestrator:
             with log_manager.stage("scraper", "documents") as stage_logger:
                 console.info("Starting document scraper")
                 stage_logger.info("Starting document scraper")
-                doc_bill_run, doc_motion_run = self._scrape_pending_documents()
+                doc_bill_run, doc_motion_run = self._scrape_pending_documents(upload_s3)
                 self.scraper_results["bills_documents.py"] = doc_bill_run
                 self.scraper_results["motions_documents.py"] = doc_motion_run
                 self._load_scraper_results("bills_documents.py")
@@ -556,7 +557,9 @@ class OpenPeruOrchestrator:
         end_time = datetime.now()
         return ScraperStats(start_time, end_time, count)
 
-    def _scrape_pending_documents(self) -> tuple[ScraperStats, ScraperStats]:
+    def _scrape_pending_documents(
+        self, upload_s3: bool = False
+    ) -> tuple[ScraperStats, ScraperStats]:
         """Fetch documents for bills and motions still missing them; returns (bill_stats, motion_stats)."""
         from backend.scrapers.bills_documents import RawBillDocumentScraper
         from backend.scrapers.motions_documents import RawMotionDocumentScraper
@@ -572,10 +575,32 @@ class OpenPeruOrchestrator:
                 bill_id=bill_id,
                 update=False,
                 download_local=False,
-                upload_s3=False,
+                upload_s3=upload_s3,
             )
             count += len(bill_docs.documents)
             bill_docs.load_raw_documents()
+
+        if upload_s3:
+            doc_list = bill_docs.get_docs_pending_s3_upload()
+            succeeded = 0
+            failed = 0
+
+            for doc in doc_list:
+                try:
+                    if bill_docs.upload_s3(doc):
+                        succeeded += 1
+                    else:
+                        failed += 1
+                except SQLAlchemyError:
+                    logger.exception(
+                        f"Unexpected error uploading bill_id={doc.bill_id} "
+                        f"step_id={doc.step_id} file_id={doc.file_id}"
+                    )
+                    failed += 1
+
+            logger.info(
+                f"S3 upload complete: {succeeded} succeeded, {failed} failed, {len(doc_list)} total"
+            )
         end_time = datetime.now()
         doc_bill_run = ScraperStats(start_time, end_time, count)
 
@@ -588,7 +613,7 @@ class OpenPeruOrchestrator:
                 motion_id=motion_id,
                 update=False,
                 download_local=False,
-                upload_s3=False,
+                upload_s3=upload_s3,
             )
             count += len(motion_docs.documents)
             motion_docs.load_raw_documents()
