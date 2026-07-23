@@ -49,7 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--upload-s3",
         action="store_true",
-        help="Uploads to s3 pending documents and bills",
+        help="Uploads to s3 pending documents",
     )
     parser.add_argument(
         "--process-documents",
