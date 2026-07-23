@@ -582,10 +582,7 @@ class OpenPeruOrchestrator:
             bill_docs.load_raw_documents()
 
         if upload_s3:
-            total_doc_list = bill_docs.get_docs_pending_s3_upload()
-            import random
-
-            doc_list = random.sample(total_doc_list, 200)
+            doc_list = bill_docs.get_docs_pending_s3_upload()
             succeeded = 0
             failed = 0
 
