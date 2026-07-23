@@ -595,7 +595,7 @@ class OpenPeruOrchestrator:
                 except SQLAlchemyError as exc:
                     return False, exc
 
-            with ThreadPoolExecutor(max_workers=10) as executor:
+            with ThreadPoolExecutor(max_workers=15) as executor:
                 future_to_doc = {
                     executor.submit(_upload_one, doc): doc for doc in doc_list
                 }
