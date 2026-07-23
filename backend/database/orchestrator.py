@@ -4,6 +4,7 @@ import json
 import time
 from datetime import date, datetime, timedelta
 from typing import Type, Callable
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
 from loguru import logger
@@ -581,22 +582,40 @@ class OpenPeruOrchestrator:
             bill_docs.load_raw_documents()
 
         if upload_s3:
-            doc_list = bill_docs.get_docs_pending_s3_upload()
+            total_doc_list = bill_docs.get_docs_pending_s3_upload()
+            import random
+
+            doc_list = random.sample(total_doc_list, 200)
             succeeded = 0
             failed = 0
 
-            for doc in doc_list:
+            def _upload_one(doc):
                 try:
-                    if bill_docs.upload_s3(doc):
+                    return bill_docs.upload_s3(doc), None
+                except SQLAlchemyError as exc:
+                    return False, exc
+
+            with ThreadPoolExecutor(max_workers=15) as executor:
+                future_to_doc = {
+                    executor.submit(_upload_one, doc): doc for doc in doc_list
+                }
+
+                for future in tqdm(
+                    as_completed(future_to_doc),
+                    total=len(doc_list),
+                    desc="Uploading to S3",
+                ):
+                    doc = future_to_doc[future]
+                    ok, exc = future.result()
+                    if ok:
                         succeeded += 1
                     else:
                         failed += 1
-                except SQLAlchemyError:
-                    logger.exception(
-                        f"Unexpected error uploading bill_id={doc.bill_id} "
-                        f"step_id={doc.step_id} file_id={doc.file_id}"
-                    )
-                    failed += 1
+                        if exc:
+                            logger.exception(
+                                f"DB error persisting s3_key for bill_id={doc.bill_id} "
+                                f"step_id={doc.step_id} file_id={doc.file_id}"
+                            )
 
             logger.info(
                 f"S3 upload complete: {succeeded} succeeded, {failed} failed, {len(doc_list)} total"
