@@ -43,7 +43,7 @@
                     <option value="">{{ _('Current Step') }}</option>
                     {% for step_option in current_step_options or [] %}
                         <option value="{{ step_option }}" {% if current_step_q == step_option %}selected{% endif %}>{{ step_option }}</option>
-                    {% endfor %}W
+                    {% endfor %}
                 </select>
             </div>
 
