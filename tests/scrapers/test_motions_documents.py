@@ -397,6 +397,11 @@ def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
         "client",
         lambda *args, **kwargs: FakeClient(),
     )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_S3_BUCKET_NAME",
+        "test-bucket",
+    )
 
     assert (
         RawMotionDocumentScraper._upload_url_to_s3(

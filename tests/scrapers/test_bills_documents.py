@@ -479,6 +479,11 @@ def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
         "client",
         lambda *args, **kwargs: FakeClient(),
     )
+    monkeypatch.setattr(
+        bills_documents_module.settings,
+        "AWS_S3_BUCKET_NAME",
+        "test-bucket",
+    )
 
     assert (
         RawBillDocumentScraper._upload_url_to_s3(
