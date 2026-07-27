@@ -42,6 +42,7 @@ def _setup_bill_step(db, bill_id="BILL_1", step_id=1):
             proponent=Proponents.CONGRESO,
             bill_approved=False,
             summary_oc="",
+            pley_id=bill_id,
         )
     )
     db.add(

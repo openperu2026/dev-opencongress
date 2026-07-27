@@ -92,6 +92,7 @@ def test_create_bill(session):
         author_id=1,
         bill_approved=False,
         summary_oc="Resumen OC",
+        pley_id="B001",
     )
     session.add(bill)
     session.commit()
@@ -285,6 +286,7 @@ def test_create_semantic_bill(session):
         author_id=None,
         bill_approved=False,
         summary_oc="Resumen OC",
+        pley_id="B002",
     )
     semantic_bill = SemanticBill(
         bill_id="B002",

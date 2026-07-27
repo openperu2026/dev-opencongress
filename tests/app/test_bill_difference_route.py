@@ -65,6 +65,7 @@ def _seed_bill(session_factory, *, bill_id="2021_1234"):
                 proponent=Proponents.CONGRESO,
                 bill_approved=False,
                 summary_oc="",
+                pley_id=bill_id,
             )
         )
         db.commit()

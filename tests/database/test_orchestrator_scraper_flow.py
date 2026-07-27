@@ -274,3 +274,156 @@ def test_scrape_range_uses_plain_ley_numbers(monkeypatch, engine, session):
 
     assert calls == [32559, 32560]
     assert stats.scrapped == 2
+
+
+def test_document_s3_workflow_uploads_backlog_before_scraping_and_new_after(
+    monkeypatch,
+):
+    calls = []
+    old_bill = SimpleNamespace(
+        bill_id="B-old",
+        step_id="1",
+        file_id="10",
+    )
+    new_bill = SimpleNamespace(
+        bill_id="B-new",
+        step_id="2",
+        file_id="20",
+    )
+    old_motion = SimpleNamespace(
+        motion_id="M-old",
+        step_id="3",
+        file_id="30",
+    )
+    new_motion = SimpleNamespace(
+        motion_id="M-new",
+        step_id="4",
+        file_id="40",
+    )
+
+    class FakeBillDocumentScraper:
+        def __init__(self):
+            self.documents = []
+            self.pending_reads = 0
+
+        def get_docs_pending_s3_upload(self):
+            self.pending_reads += 1
+            calls.append(("bill_pending", self.pending_reads))
+            return [old_bill] if self.pending_reads == 1 else [old_bill, new_bill]
+
+        def get_bills_pending_documents(self):
+            calls.append(("bill_ids",))
+            return ["B-new"]
+
+        def get_bill_documents(self, *, bill_id, update, download_local):
+            calls.append(("bill_scrape", bill_id, update, download_local))
+            self.documents.append(new_bill)
+
+        def load_raw_documents(self):
+            calls.append(("bill_load",))
+            self.documents = []
+
+    class FakeMotionDocumentScraper:
+        def __init__(self):
+            self.documents = []
+            self.pending_reads = 0
+
+        def get_docs_pending_s3_upload(self):
+            self.pending_reads += 1
+            calls.append(("motion_pending", self.pending_reads))
+            return [old_motion] if self.pending_reads == 1 else [old_motion, new_motion]
+
+        def get_motions_pending_documents(self):
+            calls.append(("motion_ids",))
+            return ["M-new"]
+
+        def get_motion_documents(self, *, motion_id, update, download_local):
+            calls.append(("motion_scrape", motion_id, update, download_local))
+            self.documents.append(new_motion)
+
+        def load_raw_documents(self):
+            calls.append(("motion_load",))
+            self.documents = []
+
+    monkeypatch.setattr(
+        "backend.scrapers.bills_documents.RawBillDocumentScraper",
+        FakeBillDocumentScraper,
+    )
+    monkeypatch.setattr(
+        "backend.scrapers.motions_documents.RawMotionDocumentScraper",
+        FakeMotionDocumentScraper,
+    )
+
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+
+    def fake_upload_documents(
+        *,
+        scraper,
+        documents,
+        document_kind,
+        phase,
+    ):
+        del scraper
+        entity_attr = "bill_id" if document_kind == "bill" else "motion_id"
+        calls.append(
+            (
+                "upload",
+                document_kind,
+                phase,
+                [getattr(document, entity_attr) for document in documents],
+            )
+        )
+
+    monkeypatch.setattr(orch, "_upload_documents", fake_upload_documents)
+
+    bill_stats, motion_stats = orch._scrape_pending_documents(upload_s3=True)
+
+    assert calls == [
+        ("bill_pending", 1),
+        ("motion_pending", 1),
+        ("upload", "bill", "backlog", ["B-old"]),
+        ("upload", "motion", "backlog", ["M-old"]),
+        ("bill_ids",),
+        ("bill_scrape", "B-new", False, False),
+        ("bill_load",),
+        ("motion_ids",),
+        ("motion_scrape", "M-new", False, False),
+        ("motion_load",),
+        ("bill_pending", 2),
+        ("motion_pending", 2),
+        ("upload", "bill", "new-document", ["B-new"]),
+        ("upload", "motion", "new-document", ["M-new"]),
+    ]
+    assert bill_stats.scrapped == 1
+    assert motion_stats.scrapped == 1
+
+
+def test_upload_documents_continues_after_failures():
+    calls = []
+    documents = [
+        SimpleNamespace(step_id="1", file_id="10"),
+        SimpleNamespace(step_id="2", file_id="20"),
+        SimpleNamespace(step_id="3", file_id="30"),
+    ]
+
+    class FakeScraper:
+        def upload_s3(self, document):
+            calls.append(document.file_id)
+            if document.file_id == "10":
+                return False
+            if document.file_id == "20":
+                raise RuntimeError("upload failed")
+            return True
+
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+    stats = orch._upload_documents(
+        scraper=FakeScraper(),
+        documents=documents,
+        document_kind="bill",
+        phase="backlog",
+    )
+
+    assert set(calls) == {"10", "20", "30"}
+    assert stats.total == 3
+    assert stats.succeeded == 1
+    assert stats.failed == 2

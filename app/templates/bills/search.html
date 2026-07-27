@@ -31,7 +31,7 @@
 
         <div class="search-row search-row--secondary">
             <div class="searching-container">
-                <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
+                <input type="text" name="pley_id_q" value="{{ pley_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
             </div>
 
             <div class="searching-container">
@@ -147,9 +147,13 @@
             {% for bill in recent_bills %}
             <tr>
                 <td>{{ loop.index }}</td>
-                <td>{{ bill.id }}</td>
+                <td>{{ bill.pley_id }}</td>
                 <td>{{ bill.title }}</td>
-                <td>{{ bill.author_name }}</td>
+                {% if bill.author_name %}
+                    <td>{{ bill.author_name }}</td>
+                {% else %}
+                    <td>{{ bill.proponent.value }}</td>
+                {% endif %}
                 <td>{{ bill.presentation_date }}</td>
                 <td>
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
@@ -173,8 +177,8 @@
         {% elif author_q %}
             <span>{{_('Author')}}: {{author_q}}</span>
         {% endif %}
-        {% if bill_id_q %}
-            <span>{{ _('Bill ID') }}: {{bill_id_q}}</span>
+        {% if pley_id_q %}
+            <span>{{ _('Bill ID') }}: {{pley_id_q}}</span>
         {% endif %}
         {% if law_id_q %}
             <span>{{ _('Law ID') }}: {{law_id_q}}</span>
@@ -216,7 +220,7 @@
             {% for bill in bills %}
             <tr>
                 <td>{{ results_start + loop.index0 }}</td>
-                <td>{{ bill.id }}</td>
+                <td>{{ bill.pley_id }}</td>
                 <td>{{ bill.title }}</td>
                 <td>{{ bill.author_name }}</td>
                 <td>

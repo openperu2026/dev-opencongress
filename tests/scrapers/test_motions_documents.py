@@ -6,6 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from backend.database.raw_models import Base as RawBase, RawMotion, RawMotionDocument
+from backend.scrapers import motions_documents as motions_documents_module
 from backend.scrapers.motions_documents import (
     RawMotionDocumentScraper,
     BASE_URL,
@@ -132,6 +133,7 @@ def test_get_motion_documents_populates_urls(monkeypatch):
     assert doc.motion_id == motion_id
     assert doc.step_id == "10"
     assert doc.file_id == "111"
+    assert doc.s3_key is None
     # Check that step_date was parsed correctly
     assert doc.step_date == datetime.strptime(step_date_str, "%Y-%m-%dT%H:%M:%S.%f%z")
 
@@ -227,3 +229,191 @@ def test_load_raw_documents_calls_add_and_resets_urls(monkeypatch):
 
     assert called["called"] is True
     assert scraper.documents == []
+
+
+def test_get_docs_pending_s3_upload_returns_only_null_keys():
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawMotionDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+
+    with SessionLocal() as session:
+        session.add_all(
+            [
+                RawMotionDocument(
+                    motion_id="2021_10",
+                    step_id="1",
+                    file_id="100",
+                    step_date=datetime.now(timezone.utc),
+                    url="http://example.com/pending.pdf",
+                    s3_key=None,
+                    local_path=None,
+                    timestamp=datetime.now(timezone.utc),
+                ),
+                RawMotionDocument(
+                    motion_id="2021_10",
+                    step_id="2",
+                    file_id="200",
+                    step_date=datetime.now(timezone.utc),
+                    url="http://example.com/uploaded.pdf",
+                    s3_key="documents/motions/uploaded.pdf",
+                    local_path=None,
+                    timestamp=datetime.now(timezone.utc),
+                ),
+            ]
+        )
+        session.commit()
+
+    pending = scraper.get_docs_pending_s3_upload()
+
+    assert [(doc.step_id, doc.file_id) for doc in pending] == [("1", "100")]
+
+
+def test_upload_s3_persists_key_only_after_success(monkeypatch):
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawMotionDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+    expected_key = scraper._build_s3_key("motions", "2021_11-1-101.pdf")
+
+    with SessionLocal() as session:
+        session.add(
+            RawMotionDocument(
+                motion_id="2021_11",
+                step_id="1",
+                file_id="101",
+                step_date=datetime.now(timezone.utc),
+                url="http://example.com/motion.pdf",
+                s3_key=None,
+                local_path=None,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    calls = []
+    monkeypatch.setattr(
+        scraper,
+        "_upload_url_to_s3",
+        lambda url, key: calls.append((url, key)) or True,
+    )
+    pending_doc = scraper.get_docs_pending_s3_upload()[0]
+
+    assert scraper.upload_s3(pending_doc) is True
+    assert calls == [("http://example.com/motion.pdf", expected_key)]
+
+    with SessionLocal() as session:
+        stored = session.get(
+            RawMotionDocument,
+            {"motion_id": "2021_11", "step_id": "1", "file_id": "101"},
+        )
+        assert stored.s3_key == expected_key
+
+
+def test_upload_s3_failure_leaves_key_null(monkeypatch):
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawMotionDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+
+    with SessionLocal() as session:
+        session.add(
+            RawMotionDocument(
+                motion_id="2021_12",
+                step_id="1",
+                file_id="102",
+                step_date=datetime.now(timezone.utc),
+                url="http://example.com/failure.pdf",
+                s3_key=None,
+                local_path=None,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(scraper, "_upload_url_to_s3", lambda url, key: False)
+    pending_doc = scraper.get_docs_pending_s3_upload()[0]
+
+    assert scraper.upload_s3(pending_doc) is False
+
+    with SessionLocal() as session:
+        stored = session.get(
+            RawMotionDocument,
+            {"motion_id": "2021_12", "step_id": "1", "file_id": "102"},
+        )
+        assert stored.s3_key is None
+
+
+def test_upload_s3_fails_when_database_row_is_missing(monkeypatch):
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawMotionDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+    monkeypatch.setattr(scraper, "_upload_url_to_s3", lambda url, key: True)
+    missing_doc = RawMotionDocument(
+        motion_id="2021_missing",
+        step_id="1",
+        file_id="999",
+        step_date=datetime.now(timezone.utc),
+        url="http://example.com/missing.pdf",
+        s3_key=None,
+        local_path=None,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    assert scraper.upload_s3(missing_doc) is False
+
+
+def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
+    uploaded = []
+
+    class FakeResponse:
+        content = b"%PDF-test"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def upload_fileobj(self, fileobj, bucket, key):
+            uploaded.append((fileobj.read(), bucket, key))
+
+    monkeypatch.setattr(
+        motions_documents_module,
+        "get_url",
+        lambda url: FakeResponse(),
+    )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_ACCESS_KEY_ID",
+        None,
+    )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_SECRET_ACCESS_KEY",
+        None,
+    )
+    monkeypatch.setattr(
+        motions_documents_module.boto3,
+        "client",
+        lambda *args, **kwargs: FakeClient(),
+    )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_S3_BUCKET_NAME",
+        "test-bucket",
+    )
+
+    assert (
+        RawMotionDocumentScraper._upload_url_to_s3(
+            "http://example.com/motion.pdf",
+            "documents/motions/motion.pdf",
+        )
+        is True
+    )
+    assert uploaded == [
+        (
+            b"%PDF-test",
+            motions_documents_module.settings.AWS_S3_BUCKET_NAME,
+            "documents/motions/motion.pdf",
+        )
+    ]

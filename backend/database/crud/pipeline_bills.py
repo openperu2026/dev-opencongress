@@ -37,6 +37,7 @@ def upsert_bill(db: Session, schema: schema.Bill) -> db_models.Bill:
         "author_id": author.id if author else None,
         "bill_approved": schema.bill_approved,
         "summary_oc": schema.summary_oc,
+        "pley_id": schema.pley_id,
     }
 
     existing = db.get(db_models.Bill, schema.id)

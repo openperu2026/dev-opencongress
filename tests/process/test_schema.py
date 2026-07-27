@@ -111,6 +111,7 @@ def sample_bill():
         bancada_name="Bancada Test",
         bill_approved=True,
         summary_oc="Resumen OC",
+        pley_id="b001",
     )
 
 

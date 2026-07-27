@@ -65,6 +65,7 @@ The cron schedule runs on `America/Lima` time:
 - `scrape-bills`
 - `scrape-motions`
 - `scrape-leyes`
+- `scrape-documents`
 - `process`
 
 For local one-off runs, use the same Makefile targets directly:
@@ -74,8 +75,15 @@ make scrape-others
 make scrape-bills
 make scrape-motions
 make scrape-leyes
+make scrape-documents
 make process
 ```
+
+`make scrape-documents` first retries bill and motion documents whose `s3_key`
+is null, then scrapes missing documents and uploads those new records. Configure
+`AWS_S3_BUCKET_NAME`, `AWS_REGION`, and optionally `AWS_S3_PREFIX`; AWS
+credentials may be provided explicitly or through the runtime's default
+credential provider. Failed uploads remain null and are retried on the next run.
 
 ## GitFlow Workflow
 We follow a GitFlow branching model. For detailed rules, go [here](https://github.com/openperu2026/dev-opencongress/blob/feature/repo-config/docs/git-flow.md).

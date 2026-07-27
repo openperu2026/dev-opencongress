@@ -83,6 +83,7 @@ def _seed_bills(session_factory, count: int) -> None:
                     proponent=Proponents.CONGRESO,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id=f"2021_{index:04d}",
                 )
             )
         db.commit()
@@ -102,6 +103,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     author_id=1,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0001",
                 ),
                 Bill(
                     id="2021_0002",
@@ -113,6 +115,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     author_id=2,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0002",
                 ),
                 Congresista(
                     id=1,
@@ -231,6 +234,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     author_id=1,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0003",
                 ),
                 BillOrganization(
                     bill_id="2021_0003",
@@ -283,7 +287,7 @@ def test_search_form_includes_new_filters(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert 'name="bill_id_q"' in body
+    assert 'name="pley_id_q"' in body
     assert 'name="law_id_q"' in body
     assert 'name="current_step_q"' in body
     assert 'name="presentation_date_from_year"' in body
@@ -312,7 +316,7 @@ def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_f
     response = client.get(
         "/bills",
         query_string={
-            "bill_id_q": "2021_0001",
+            "pley_id_q": "2021_0001",
             "law_id_q": "L-001",
             "current_step_q": TypeBillStep.VOTACION.value,
             "author_party_q": "Partido Verde",
@@ -371,6 +375,7 @@ def test_search_ignores_spanish_accents_for_text_filters(client, session_factory
                     author_id=10,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id="2021_0099",
                 ),
                 PartyMembership(
                     person_id=10,

@@ -54,12 +54,15 @@ def bill_factory():
         presentation_date=date(2021, 1, 1),
         title="Ley de prueba",
         status="En comisión",
+        pley_id=None,
     ):
+        pley_id = pley_id if pley_id is not None else bill_id
         return SimpleNamespace(
             id=bill_id,
             presentation_date=presentation_date,
             title=title,
             status=status,
+            pley_id=pley_id,
         )
 
     return _make
