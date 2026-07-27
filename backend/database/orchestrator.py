@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from typing import Type, Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -74,6 +75,13 @@ from backend.process.utils import (
 )
 from backend.scrapers.utils import get_last_id
 from backend.scrapers.congresista_photos import sync_photo as sync_congresista_photo
+
+
+@dataclass(frozen=True)
+class _DocumentUploadStats:
+    total: int
+    succeeded: int
+    failed: int
 
 
 class OpenPeruOrchestrator:
@@ -558,16 +566,101 @@ class OpenPeruOrchestrator:
         end_time = datetime.now()
         return ScraperStats(start_time, end_time, count)
 
+    @staticmethod
+    def _document_identity(document, entity_attr: str) -> tuple[str, str, str]:
+        return (
+            str(getattr(document, entity_attr)),
+            str(document.step_id),
+            str(document.file_id),
+        )
+
+    def _upload_documents(
+        self,
+        *,
+        scraper,
+        documents: list,
+        document_kind: str,
+        phase: str,
+    ) -> _DocumentUploadStats:
+        succeeded = 0
+        failed = 0
+
+        with ThreadPoolExecutor(max_workers=15) as executor:
+            future_to_doc = {
+                executor.submit(scraper.upload_s3, document): document
+                for document in documents
+            }
+
+            for future in tqdm(
+                as_completed(future_to_doc),
+                total=len(documents),
+                desc=f"{document_kind.title()} {phase} S3 uploads",
+            ):
+                document = future_to_doc[future]
+                try:
+                    ok = future.result()
+                except Exception as exc:
+                    ok = False
+                    logger.exception(
+                        f"Unexpected {document_kind} S3 upload error for "
+                        f"step_id={document.step_id} file_id={document.file_id}: {exc}"
+                    )
+
+                if ok:
+                    succeeded += 1
+                else:
+                    failed += 1
+
+        stats = _DocumentUploadStats(
+            total=len(documents),
+            succeeded=succeeded,
+            failed=failed,
+        )
+        logger.info(
+            f"{document_kind.title()} {phase} S3 upload complete: "
+            f"{stats.succeeded} succeeded, {stats.failed} failed, "
+            f"{stats.total} total"
+        )
+        return stats
+
     def _scrape_pending_documents(
         self, upload_s3: bool = False
     ) -> tuple[ScraperStats, ScraperStats]:
-        """Fetch documents for bills and motions still missing them; returns (bill_stats, motion_stats)."""
+        """Upload backlogs, scrape missing bill/motion documents, and upload new rows."""
         from backend.scrapers.bills_documents import RawBillDocumentScraper
         from backend.scrapers.motions_documents import RawMotionDocumentScraper
 
         logger.info("Scraping pending bill and motion documents")
 
         bill_docs = RawBillDocumentScraper()
+        motion_docs = RawMotionDocumentScraper()
+        bill_backlog_ids: set[tuple[str, str, str]] = set()
+        motion_backlog_ids: set[tuple[str, str, str]] = set()
+
+        if upload_s3:
+            bill_backlog = bill_docs.get_docs_pending_s3_upload()
+            motion_backlog = motion_docs.get_docs_pending_s3_upload()
+            bill_backlog_ids = {
+                self._document_identity(document, "bill_id")
+                for document in bill_backlog
+            }
+            motion_backlog_ids = {
+                self._document_identity(document, "motion_id")
+                for document in motion_backlog
+            }
+            self._upload_documents(
+                scraper=bill_docs,
+                documents=bill_backlog,
+                document_kind="bill",
+                phase="backlog",
+            )
+            self._upload_documents(
+                scraper=motion_docs,
+                documents=motion_backlog,
+                document_kind="motion",
+                phase="backlog",
+            )
+
         start_time = datetime.now()
         count = 0
         bill_ids = bill_docs.get_bills_pending_documents()
@@ -576,51 +669,12 @@ class OpenPeruOrchestrator:
                 bill_id=bill_id,
                 update=False,
                 download_local=False,
-                upload_s3=upload_s3,
             )
             count += len(bill_docs.documents)
             bill_docs.load_raw_documents()
-
-        if upload_s3:
-            doc_list = bill_docs.get_docs_pending_s3_upload()
-            succeeded = 0
-            failed = 0
-
-            def _upload_one(doc):
-                try:
-                    return bill_docs.upload_s3(doc), None
-                except SQLAlchemyError as exc:
-                    return False, exc
-
-            with ThreadPoolExecutor(max_workers=15) as executor:
-                future_to_doc = {
-                    executor.submit(_upload_one, doc): doc for doc in doc_list
-                }
-
-                for future in tqdm(
-                    as_completed(future_to_doc),
-                    total=len(doc_list),
-                    desc="Uploading to S3",
-                ):
-                    doc = future_to_doc[future]
-                    ok, exc = future.result()
-                    if ok:
-                        succeeded += 1
-                    else:
-                        failed += 1
-                        if exc:
-                            logger.exception(
-                                f"DB error persisting s3_key for bill_id={doc.bill_id} "
-                                f"step_id={doc.step_id} file_id={doc.file_id}"
-                            )
-
-            logger.info(
-                f"S3 upload complete: {succeeded} succeeded, {failed} failed, {len(doc_list)} total"
-            )
         end_time = datetime.now()
         doc_bill_run = ScraperStats(start_time, end_time, count)
 
-        motion_docs = RawMotionDocumentScraper()
         start_time = datetime.now()
         count = 0
         motion_ids = motion_docs.get_motions_pending_documents()
@@ -629,12 +683,36 @@ class OpenPeruOrchestrator:
                 motion_id=motion_id,
                 update=False,
                 download_local=False,
-                upload_s3=False,
             )
             count += len(motion_docs.documents)
             motion_docs.load_raw_documents()
         end_time = datetime.now()
         doc_motion_run = ScraperStats(start_time, end_time, count)
+
+        if upload_s3:
+            new_bill_documents = [
+                document
+                for document in bill_docs.get_docs_pending_s3_upload()
+                if self._document_identity(document, "bill_id") not in bill_backlog_ids
+            ]
+            new_motion_documents = [
+                document
+                for document in motion_docs.get_docs_pending_s3_upload()
+                if self._document_identity(document, "motion_id")
+                not in motion_backlog_ids
+            ]
+            self._upload_documents(
+                scraper=bill_docs,
+                documents=new_bill_documents,
+                document_kind="bill",
+                phase="new-document",
+            )
+            self._upload_documents(
+                scraper=motion_docs,
+                documents=new_motion_documents,
+                document_kind="motion",
+                phase="new-document",
+            )
 
         return doc_bill_run, doc_motion_run
 

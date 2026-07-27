@@ -48,25 +48,40 @@ class RawBillDocumentScraper:
         )
         s3_key = self._build_s3_key("bills", file_name)
 
-        success = self._upload_url_to_s3(raw_doc.url, s3_key)
-        if not success:
-            logger.warning(
-                f"Skipping s3_key update for bill_id={raw_doc.bill_id} "
-                f"step_id={raw_doc.step_id} file_id={raw_doc.file_id}: upload failed"
+        try:
+            success = self._upload_url_to_s3(raw_doc.url, s3_key)
+            if not success:
+                logger.warning(
+                    f"Skipping s3_key update for bill_id={raw_doc.bill_id} "
+                    f"step_id={raw_doc.step_id} file_id={raw_doc.file_id}: upload failed"
+                )
+                return False
+
+            with self.Session() as session:
+                result = session.execute(
+                    update(RawBillDocument)
+                    .where(
+                        RawBillDocument.bill_id == raw_doc.bill_id,
+                        RawBillDocument.step_id == raw_doc.step_id,
+                        RawBillDocument.file_id == raw_doc.file_id,
+                    )
+                    .values(s3_key=s3_key)
+                )
+                if result.rowcount != 1:
+                    session.rollback()
+                    logger.error(
+                        f"Expected one raw bill document row for bill_id={raw_doc.bill_id} "
+                        f"step_id={raw_doc.step_id} file_id={raw_doc.file_id}, "
+                        f"updated {result.rowcount}"
+                    )
+                    return False
+                session.commit()
+        except Exception as exc:
+            logger.exception(
+                f"Failed S3 upload for bill_id={raw_doc.bill_id} "
+                f"step_id={raw_doc.step_id} file_id={raw_doc.file_id}: {exc}"
             )
             return False
-
-        with self.Session() as session:
-            session.execute(
-                update(RawBillDocument)
-                .where(
-                    RawBillDocument.bill_id == raw_doc.bill_id,
-                    RawBillDocument.step_id == raw_doc.step_id,
-                    RawBillDocument.file_id == raw_doc.file_id,
-                )
-                .values(s3_key=s3_key)
-            )
-            session.commit()
 
         return True
 
@@ -129,7 +144,6 @@ class RawBillDocumentScraper:
         *,
         update: bool = False,
         download_local: bool = False,
-        upload_s3: bool = False,
     ) -> None:
         """
         Extract the urls from a RawBill's files and extract the text from each of its pages
@@ -175,17 +189,13 @@ class RawBillDocumentScraper:
                 if download_local:
                     self._download_to_path(url, dest_path)
 
-                s3_key = None
-                if upload_s3:
-                    s3_key = self._build_s3_key("bills", file_name)
-
                 new_doc = RawBillDocument(
                     bill_id=bill_id,
                     step_id=str(step_id),
                     file_id=str(file_id),
                     step_date=datetime.strptime(step_date, "%Y-%m-%dT%H:%M:%S.%f%z"),
                     url=url,
-                    s3_key=s3_key,
+                    s3_key=None,
                     local_path=str(dest_path) if dest_path is not None else None,
                     timestamp=datetime.now(),
                     processed=False,
