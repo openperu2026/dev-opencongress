@@ -316,3 +316,34 @@ def upsert_bill_difference(
     existing.difference_content = difference_content
     db.flush()
     return existing
+
+
+# Mirrors the difference_type contract documented in
+# backend/process/diff/pipeline.py::compute_bill_difference.
+BILL_DIFF_TYPES = {"first_version", "no_change", "modified"}
+
+
+def refresh_bill_diff_flag(db: Session, bill_id: str) -> bool:
+    """Recompute and persist Bill.bill_diff from bill_differences rows.
+
+    Re-derives from the table rather than accumulating a flag while the
+    caller iterates steps, so it self-corrects if a bill's rows change on a
+    later pipeline run (e.g. a PARSER_VERSION bump flips a row's type).
+    """
+    has_diff = (
+        db.execute(
+            select(db_models.BillDifference.step_id)
+            .where(
+                db_models.BillDifference.bill_id == bill_id,
+                db_models.BillDifference.difference_type.in_(BILL_DIFF_TYPES),
+            )
+            .limit(1)
+        ).first()
+        is not None
+    )
+
+    bill = db.get(db_models.Bill, bill_id)
+    if bill is not None:
+        bill.bill_diff = has_diff
+        db.flush()
+    return has_diff
