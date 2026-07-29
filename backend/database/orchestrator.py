@@ -1446,6 +1446,8 @@ class OpenPeruOrchestrator:
                 prev_step = step
                 prev_bt = new_bt
 
+        crud_bills.refresh_bill_diff_flag(db, bill_id)
+
     def _process_motions(
         self, *, include_documents: bool, limit: int | None
     ) -> ProcessStats:

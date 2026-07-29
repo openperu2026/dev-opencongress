@@ -482,6 +482,8 @@ def test_process_bill_differences_runs_over_bill_texts(orchestrator):
         assert rows[1].prev_step_id == 1
         assert rows[1].difference_content is not None
 
+        assert db.get(db_models.Bill, "2026_30").bill_diff is True
+
 
 def test_process_bill_differences_isolates_failures_per_bill(orchestrator, monkeypatch):
     # Regression: a failure on one bill must not roll back diffs already
@@ -535,3 +537,5 @@ def test_process_bill_differences_skips_bills_without_text(orchestrator):
     assert stats.processed == 0
     with orchestrator.DBSession() as db:
         assert db.query(db_models.BillDifference).count() == 0
+        # Never touched by the diff stage, so it stays at its column default.
+        assert db.get(db_models.Bill, "2026_31").bill_diff is False
