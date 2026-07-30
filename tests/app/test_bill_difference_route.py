@@ -250,7 +250,9 @@ def test_structured_payload_renders_into_page(client, session_factory):
 
     resp = client.get("/bills/2021_1234/difference/1")
     body = resp.get_data(as_text=True)
-    assert 'data-renderer-version="1"' in body
+    assert 'data-renderer-version="3"' in body
+    assert "diff-rendered-old" in body
+    assert "diff-rendered-new" in body
     assert "diff-tok-delete" in body
     assert "diff-tok-insert" in body
     assert "viejo" in body
@@ -324,7 +326,7 @@ def test_renderer_exception_falls_through_cleanly(client, session_factory, monke
     def _boom(_payload):
         raise RuntimeError("renderer is angry")
 
-    monkeypatch.setattr(bills_module, "render_payload_html", _boom)
+    monkeypatch.setattr(bills_module, "render_payload_html_split", _boom)
 
     resp = client.get("/bills/2021_1234/difference/1")
     assert resp.status_code == 200
