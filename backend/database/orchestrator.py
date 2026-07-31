@@ -1324,7 +1324,11 @@ class OpenPeruOrchestrator:
                         text=text_schema.text,
                     )
 
-                    raw_doc = db.get(RawBillDocument, (bill_id, step_id, file_id))
+                    # RawBillDocument primary key is (bill_id, step_id, file_id)
+                    # where step_id and file_id are strings in the raw schema.
+                    raw_doc = db.get(
+                        RawBillDocument, (bill_id, str(step_id), str(file_id))
+                    )
 
                     if raw_doc is None:
                         stats.errors += 1
