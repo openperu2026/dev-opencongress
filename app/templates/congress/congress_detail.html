@@ -43,13 +43,18 @@
         <div class="congress-stats">
             <article>
                 <h2>{{_('Attendance Rate')}}</h2>
-                <strong>{{ profile_stats.assistance_rate }}</strong>
+                <!---<strong>{{ profile_stats.assistance_rate }}</strong>-->
+                <strong>{{_('Building')}}</strong>
             </article>
             <article>
                 <h2>{{_('Bills Authored')}}</h2>
                 <strong>{{ profile_stats.bills_authored }}</strong>
             </article>
-            <article>
+            <article
+                class="approval-rate-card"
+                tabindex="0"
+                data-tooltip="{{ _('Representa el porcentaje de proyectos de ley aprobados sobre el total de proyectos presentados') }}. {{ _('Promedio de congresistas') }}: {{ profile_stats.average_success_rate }}"
+            >
                 <h2>{{_('Approval bill rate')}}</h2>
                 <strong>{{ profile_stats.success_rate }}</strong>
             </article>
@@ -66,6 +71,7 @@
                             <th>#</th>
                             <th>{{ _('ID') }}</th>
                             <th>{{_('Title')}}</th>
+                            <th>{{_('Date')}}</th>
                             <th>{{_('Detail')}}</th>
                         </tr>
                     </thead>
@@ -75,6 +81,7 @@
                             <td>{{ loop.index }}</td>
                             <td>{{ bill.id }}</td>
                             <td>{{ bill.title }}</td>
+                            <td>{{ bill.presentation_date.strftime('%d-%m-%Y') }}</td>
                             <td>
                                 <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
                                     {{_('View details')}}

@@ -4,10 +4,10 @@
 
 <div class="hero">
     <div class="hero-container hero-text">
-        <h1 class="hero-title">{{ _('Welcome to Open Congress') }}</h1>
+        <h1 class="hero-title">{{ _('Welcome to Open Peru') }}</h1>
 
         <p class="hero-description">
-            {{ _('Open Congress brings together public information from the Peruvian Congress in one place. Explore bills from the 2021-2026 congressional period, review who authored them, see how congress members voted, and compare changes between different versions of each bill.') }}
+            {{ _('Open Peru brings together public information from the Peruvian Congress in one place. Explore bills from the 2021-2026 congressional period, review who authored them, see how congress members voted, and compare changes between different versions of each bill.') }}
             {{ _('Click below to start exploring:') }}
             <br><br>
 
@@ -27,7 +27,7 @@
 
     <div class="hero-container">
         <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="{{ _('Open Congress logo') }}">
-         <p class="page-subtitle">
+        <p class="page-subtitle">
             {{_('Transparency and accountability for a stronger democracy')}}
         </p>
 
@@ -75,6 +75,15 @@
             {% endfor %}
         </div>
     </div>
+</section>
+
+
+<section id="contact" class="about-section">
+    <div class="about-content">
+        <h2>{{_('Contact')}}</h2>
+        <p>{{ _('Si deseas mayor información o ponerte en contacto con el equipo
+            escribe a openperu@civic.garden.org') }}</p>
+        </div>
 </section>
 
 {% endblock %}

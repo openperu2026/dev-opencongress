@@ -43,6 +43,7 @@ from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 DATE_YEAR_MIN = 1900
+PRESENTATION_DATE_MAX = date(2026, 7, 27)
 
 TOPIC_MAPPING = {
     "Inclusión Social y Personas con Discapacidad": [
@@ -140,7 +141,7 @@ def _parse_int_arg(value, default):
         return default
 
 
-def _build_date_picker(prefix, args, today):
+def _build_date_picker(prefix, args, today, min_date=None, max_date=None):
     """
     Safely normalizes form date inputs and prepares both the selected date (if valid)
     and the select-box option lists for the template.
@@ -153,19 +154,37 @@ def _build_date_picker(prefix, args, today):
     year = _parse_int_arg(raw_year, None)
     month = _parse_int_arg(raw_month, None)
     day = _parse_int_arg(raw_day, None)
+    min_date = min_date or date(DATE_YEAR_MIN, 1, 1)
+    max_date = max_date or today
+    if min_date > max_date:
+        min_date = max_date
 
     if year is not None:
-        year = max(DATE_YEAR_MIN, min(year, today.year))
-    if month is not None:
+        year = max(min_date.year, min(year, max_date.year))
+
+    month_options = list(range(1, 13))
+    if year is not None:
+        first_month = min_date.month if year == min_date.year else 1
+        last_month = max_date.month if year == max_date.year else 12
+        month_options = list(range(first_month, last_month + 1))
+        if month is not None:
+            month = max(first_month, min(month, last_month))
+    elif month is not None:
         month = max(1, min(month, 12))
 
     selected_date = None
     day_options = []
     if year is not None and month is not None:
+        first_day = (
+            min_date.day if year == min_date.year and month == min_date.month else 1
+        )
         last_day = monthrange(year, month)[1]
-        day_options = list(range(1, last_day + 1))
+        if year == max_date.year and month == max_date.month:
+            last_day = max_date.day
+        day_options = list(range(first_day, last_day + 1))
         if day is not None:
-            day = max(1, min(day, last_day))
+            valid_month_last_day = monthrange(year, month)[1]
+            day = max(1, min(day, valid_month_last_day))
             selected_date = date(year, month, day)
 
     return {
@@ -174,8 +193,8 @@ def _build_date_picker(prefix, args, today):
         "year_value": year,
         "month_value": month,
         "day_value": day,
-        "year_options": list(range(today.year, DATE_YEAR_MIN - 1, -1)),
-        "month_options": list(range(1, 13)),
+        "year_options": list(range(max_date.year, min_date.year - 1, -1)),
+        "month_options": month_options,
         "day_options": day_options,
     }
 
@@ -387,12 +406,24 @@ def index():
     author_display = None
     author_id_query = author_q.isdigit()
     author_id_int = None
-    today = date.today()
+    with SessionProcessed() as db:
+        presentation_date_min = db.scalar(
+            select(func.min(BillOrganization.presentation_date))
+        )
+    today = PRESENTATION_DATE_MAX
     presentation_date_from_picker = _build_date_picker(
-        "presentation_date_from", request.args, today
+        "presentation_date_from",
+        request.args,
+        today,
+        min_date=presentation_date_min,
+        max_date=PRESENTATION_DATE_MAX,
     )
     presentation_date_to_picker = _build_date_picker(
-        "presentation_date_to", request.args, today
+        "presentation_date_to",
+        request.args,
+        today,
+        min_date=presentation_date_min,
+        max_date=PRESENTATION_DATE_MAX,
     )
     presentation_date_from = presentation_date_from_picker["selected_date"]
     presentation_date_to = presentation_date_to_picker["selected_date"]
@@ -578,6 +609,7 @@ def index():
                 select(
                     Bill.id.label("id"),
                     Bill.title.label("title"),
+                    Bill.status.label("status"),
                     Congresista.full_name.label("author_name"),
                     latest_bill_dates.c.latest_presentation_date.label(
                         "presentation_date"
@@ -649,6 +681,7 @@ def index():
                 select(
                     Bill.id.label("id"),
                     Bill.title.label("title"),
+                    Bill.status.label("status"),
                     Congresista.full_name.label("author_name"),
                     earliest_bill_dates.c.first_presentation_date.label(
                         "presentation_date"

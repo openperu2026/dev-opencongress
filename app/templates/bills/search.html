@@ -25,104 +25,113 @@
             <button type="submit" class="search-icon-button" aria-label="{{ _('Search') }}">
                 <i class="fa-solid fa-magnifying-glass"></i>
             </button>
+
+            <a href="{{ url_for('bills.index') }}" class="clear-button bill-clean-button">
+                {{ _('Clean') }}
+            </a>
         </div>
 
-        <div class="search-section-title">{{ _('Advanced Search Options:') }}</div>
+        <details class="advanced-search" {% if bill_id_q or law_id_q or current_step_q or author_party_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
+            <summary class="search-section-title">
+                <span>{{ _('Advanced Search Options:') }}</span>
+                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </summary>
 
-        <div class="search-row search-row--secondary">
-            <div class="searching-container">
-                <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
-            </div>
-
-            <div class="searching-container">
-                <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="{{ _('Law ID') }}">
-            </div>
-
-            <div class="searching-container">
-                <select name="current_step_q">
-                    <option value="">{{ _('Current Step') }}</option>
-                    {% for step_option in current_step_options or [] %}
-                        <option value="{{ step_option }}" {% if current_step_q == step_option %}selected{% endif %}>{{ step_option }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="searching-container">
-                <select name="author_party_q">
-                    <option value="">{{ _('Author party') }}</option>
-                    {% for party_option in author_party_options or [] %}
-                        <option value="{{ party_option }}" {% if author_party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </div>
-
-        <div class="search-date-panel">
-            <div class="search-date-title">{{ _('Presentation date') }}</div>
-            <div class="search-date-grid">
-                <div class="search-date-group">
-                    <span class="search-date-label">{{ _('From') }}</span>
-                    <div class="search-date-selects">
-                        <select name="presentation_date_from_year">
-                            <option value="" {% if presentation_date_from_year is none %}selected{% endif %}>{{ _('Year') }}</option>
-                            {% for year_option in presentation_date_from_year_options or [] %}
-                                <option value="{{ year_option }}" {% if presentation_date_from_year == year_option %}selected{% endif %}>{{ year_option }}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="presentation_date_from_month">
-                            <option value="" {% if presentation_date_from_month is none %}selected{% endif %}>{{ _('Month') }}</option>
-                            {% for month_option in presentation_date_from_month_options or [] %}
-                                <option value="{{ month_option }}" {% if presentation_date_from_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="presentation_date_from_day" data-selected-day="{{ presentation_date_from_day or '' }}">
-                            <option value="" {% if presentation_date_from_day is none %}selected{% endif %}>{{ _('Day') }}</option>
-                            {% for day_option in presentation_date_from_day_options or [] %}
-                                <option value="{{ day_option }}" {% if presentation_date_from_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
+            <div class="search-row search-row--secondary">
+                <div class="searching-container">
+                    <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
                 </div>
 
-                <div class="search-date-group">
-                    <span class="search-date-label">{{ _('To') }}</span>
-                    <div class="search-date-selects">
-                        <select name="presentation_date_to_year">
-                            <option value="" {% if presentation_date_to_year is none %}selected{% endif %}>{{ _('Year') }}</option>
-                            {% for year_option in presentation_date_to_year_options or [] %}
-                                <option value="{{ year_option }}" {% if presentation_date_to_year == year_option %}selected{% endif %}>{{ year_option }}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="presentation_date_to_month">
-                            <option value="" {% if presentation_date_to_month is none %}selected{% endif %}>{{ _('Month') }}</option>
-                            {% for month_option in presentation_date_to_month_options or [] %}
-                                <option value="{{ month_option }}" {% if presentation_date_to_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="presentation_date_to_day" data-selected-day="{{ presentation_date_to_day or '' }}">
-                            <option value="" {% if presentation_date_to_day is none %}selected{% endif %}>{{ _('Day') }}</option>
-                            {% for day_option in presentation_date_to_day_options or [] %}
-                                <option value="{{ day_option }}" {% if presentation_date_to_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
-                            {% endfor %}
-                        </select>
+                <div class="searching-container">
+                    <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="{{ _('Law ID') }}">
+                </div>
+
+                <div class="searching-container">
+                    <select name="current_step_q">
+                        <option value="">{{ _('Current Step') }}</option>
+                        {% for step_option in current_step_options or [] %}
+                            <option value="{{ step_option }}" {% if current_step_q == step_option %}selected{% endif %}>{{ step_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="searching-container">
+                    <select name="author_party_q">
+                        <option value="">{{ _('Author party') }}</option>
+                        {% for party_option in author_party_options or [] %}
+                            <option value="{{ party_option }}" {% if author_party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <div class="search-date-panel">
+                <div class="search-date-title">{{ _('Presentation date') }}</div>
+                <div class="search-date-grid">
+                    <div class="search-date-group">
+                        <span class="search-date-label">{{ _('From') }}</span>
+                        <div class="search-date-selects">
+                            <select name="presentation_date_from_year">
+                                <option value="" {% if presentation_date_from_year is none %}selected{% endif %}>{{ _('Year') }}</option>
+                                {% for year_option in presentation_date_from_year_options or [] %}
+                                    <option value="{{ year_option }}" {% if presentation_date_from_year == year_option %}selected{% endif %}>{{ year_option }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="presentation_date_from_month">
+                                <option value="" {% if presentation_date_from_month is none %}selected{% endif %}>{{ _('Month') }}</option>
+                                {% for month_option in presentation_date_from_month_options or [] %}
+                                    <option value="{{ month_option }}" {% if presentation_date_from_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="presentation_date_from_day" data-selected-day="{{ presentation_date_from_day or '' }}">
+                                <option value="" {% if presentation_date_from_day is none %}selected{% endif %}>{{ _('Day') }}</option>
+                                {% for day_option in presentation_date_from_day_options or [] %}
+                                    <option value="{{ day_option }}" {% if presentation_date_from_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="search-date-group">
+                        <span class="search-date-label">{{ _('To') }}</span>
+                        <div class="search-date-selects">
+                            <select name="presentation_date_to_year">
+                                <option value="" {% if presentation_date_to_year is none %}selected{% endif %}>{{ _('Year') }}</option>
+                                {% for year_option in presentation_date_to_year_options or [] %}
+                                    <option value="{{ year_option }}" {% if presentation_date_to_year == year_option %}selected{% endif %}>{{ year_option }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="presentation_date_to_month">
+                                <option value="" {% if presentation_date_to_month is none %}selected{% endif %}>{{ _('Month') }}</option>
+                                {% for month_option in presentation_date_to_month_options or [] %}
+                                    <option value="{{ month_option }}" {% if presentation_date_to_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
+                                {% endfor %}
+                            </select>
+                            <select name="presentation_date_to_day" data-selected-day="{{ presentation_date_to_day or '' }}">
+                                <option value="" {% if presentation_date_to_day is none %}selected{% endif %}>{{ _('Day') }}</option>
+                                {% for day_option in presentation_date_to_day_options or [] %}
+                                    <option value="{{ day_option }}" {% if presentation_date_to_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="radio-container">
-            <label>
-                <input type="radio" name="status" value="all" {% if radio_status == "all" %}checked{% endif %}>{{_('All bills')}}
-            </label>
+            <div class="radio-container">
+                <label>
+                    <input type="radio" name="status" value="all" {% if radio_status == "all" %}checked{% endif %}>{{_('All bills')}}
+                </label>
 
-            <label>
-                <input type="radio" name="status" value="approved" {% if radio_status == "approved" %}checked{% endif %}>{{_('Approved bills')}}
-            </label>
+                <label>
+                    <input type="radio" name="status" value="approved" {% if radio_status == "approved" %}checked{% endif %}>{{_('Approved bills')}}
+                </label>
 
-            <label>
-                <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Not approved bills')}}
-            </label>
-        </div>
+                <label>
+                    <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Not approved bills')}}
+                </label>
+            </div>
+        </details>
     </div>
 </form>
 
@@ -140,6 +149,7 @@
                 <th>{{ _('Title') }}</th>
                 <th>{{ _('Author') }}</th>
                 <th>{{ _('First presentation date') }}</th>
+                <th>{{ _('Status') }}</th>
                 <th>{{ _('Detail') }}</th>
             </tr>
         </thead>
@@ -151,6 +161,7 @@
                 <td>{{ bill.title }}</td>
                 <td>{{ bill.author_name }}</td>
                 <td>{{ bill.presentation_date }}</td>
+                <td>{{ bill.status }}</td>
                 <td>
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
                         {{_('View details')}}
@@ -209,6 +220,8 @@
                 <th>{{ _('ID') }}</th>
                 <th>{{ _('Title') }}</th>
                 <th>{{ _('Author') }}</th>
+                <th>{{ _('Presentation date') }}</th>
+                <th>{{ _('Status') }}</th>
                 <th>{{ _('Detail') }}</th>
             </tr>
         </thead>
@@ -219,6 +232,8 @@
                 <td>{{ bill.id }}</td>
                 <td>{{ bill.title }}</td>
                 <td>{{ bill.author_name }}</td>
+                <td>{{ bill.presentation_date }}</td>
+                <td>{{ bill.status }}</td>
                 <td>
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
                         {{_('View details')}}
