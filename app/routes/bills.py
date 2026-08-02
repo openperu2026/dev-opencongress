@@ -638,6 +638,7 @@ def index():
                     Bill.pley_id.label("pley_id"),
                     Bill.title.label("title"),
                     Bill.status.label("status"),
+                    Bill.proponent.label("proponent"),
                     Congresista.full_name.label("author_name"),
                     latest_bill_dates.c.latest_presentation_date.label(
                         "presentation_date"
@@ -708,8 +709,10 @@ def index():
             recent_stmt = (
                 select(
                     Bill.id.label("id"),
+                    Bill.pley_id.label("pley_id"),
                     Bill.title.label("title"),
                     Bill.status.label("status"),
+                    Bill.proponent.label("proponent"),
                     Congresista.full_name.label("author_name"),
                     earliest_bill_dates.c.first_presentation_date.label(
                         "presentation_date"
