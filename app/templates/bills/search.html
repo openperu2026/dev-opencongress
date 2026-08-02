@@ -31,7 +31,7 @@
             </a>
         </div>
 
-        <details class="advanced-search" {% if bill_id_q or law_id_q or current_step_q or author_party_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
+        <details class="advanced-search" {% if pley_id_q or bill_id_q or law_id_q or current_step_q or author_party_q or bill_diff_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
             <summary class="search-section-title">
                 <span>{{ _('Advanced Search Options:') }}</span>
                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
@@ -39,7 +39,8 @@
 
             <div class="search-row search-row--secondary">
                 <div class="searching-container">
-                    <input type="text" name="bill_id_q" value="{{ bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
+                    <input type="hidden" name="bill_id_q" value="">
+                    <input type="text" name="pley_id_q" value="{{ pley_id_q or bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
                 </div>
 
                 <div class="searching-container">
@@ -61,6 +62,14 @@
                         {% for party_option in author_party_options or [] %}
                             <option value="{{ party_option }}" {% if author_party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
                         {% endfor %}
+                    </select>
+                </div>
+
+                <div class="searching-container">
+                    <select name="bill_diff_q">
+                        <option value="">{{ _('Tiene diferencia de versiones') }}</option>
+                        <option value="yes" {% if bill_diff_q == "yes" %}selected{% endif %}>{{ _('SI') }}</option>
+                        <option value="no" {% if bill_diff_q == "no" %}selected{% endif %}>{{ _('NO') }}</option>
                     </select>
                 </div>
             </div>
@@ -184,8 +193,8 @@
         {% elif author_q %}
             <span>{{_('Author')}}: {{author_q}}</span>
         {% endif %}
-        {% if bill_id_q %}
-            <span>{{ _('Bill ID') }}: {{bill_id_q}}</span>
+        {% if pley_id_q or bill_id_q %}
+            <span>{{ _('Bill ID') }}: {{ pley_id_q or bill_id_q }}</span>
         {% endif %}
         {% if law_id_q %}
             <span>{{ _('Law ID') }}: {{law_id_q}}</span>
@@ -195,6 +204,9 @@
         {% endif %}
         {% if author_party_q %}
             <span>{{_('Author party')}}: {{author_party_q}}</span>
+        {% endif %}
+        {% if bill_diff_q %}
+            <span>{{ _('Tiene diferencia de versiones') }}: {{ _('SI') if bill_diff_q == 'yes' else _('NO') }}</span>
         {% endif %}
         {% if presentation_date_from and presentation_date_to %}
             <span>{{_('Presentation Date')}}: {{ '%04d-%02d-%02d'|format(presentation_date_from_year, presentation_date_from_month, presentation_date_from_day) }} - {{ '%04d-%02d-%02d'|format(presentation_date_to_year, presentation_date_to_month, presentation_date_to_day) }}</span>

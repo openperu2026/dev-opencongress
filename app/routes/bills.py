@@ -388,10 +388,14 @@ def index():
     author_q = request.args.get("author_q", "").strip()
     author_party_q = request.args.get("author_party_q", "").strip()
     status = request.args.get("status", "all").strip()
+    pley_id_q = request.args.get("pley_id_q", "").strip()
+    has_pley_id_q = bool(pley_id_q)
     bill_id_q = request.args.get("bill_id_q", "").strip()
+    pley_id_q = pley_id_q or bill_id_q
     law_id_q = request.args.get("law_id_q", "").strip()
     current_step_q = request.args.get("current_step_q", "").strip()
     organization_name_q = request.args.get("organization_name_q", "").strip()
+    bill_diff_q = request.args.get("bill_diff_q", "").strip()
     page = request.args.get("page", 1, type=int)
     page = page if page and page > 0 else 1
     per_page = 50
@@ -399,6 +403,9 @@ def index():
     _allowed_status = {"all", "approved", "not-approved"}
     if status not in _allowed_status:
         status = "all"
+    _allowed_bill_diff = {"", "yes", "no"}
+    if bill_diff_q not in _allowed_bill_diff:
+        bill_diff_q = ""
     # Add search conditions to the filters and build the query.
     filters = []
     # Set author_display so that the author name or query is correctly shown in the
@@ -432,12 +439,13 @@ def index():
             title_q,
             author_q,
             author_party_q,
-            bill_id_q,
+            pley_id_q,
             law_id_q,
             current_step_q,
             presentation_date_from is not None,
             presentation_date_to is not None,
             organization_name_q,
+            bill_diff_q,
         ]
     )
 
@@ -446,11 +454,15 @@ def index():
         author_q=author_q,
         author_party_q=author_party_q,
         status=status,
-        bill_id_q=bill_id_q,
         law_id_q=law_id_q,
         current_step_q=current_step_q,
         organization_name_q=organization_name_q,
+        bill_diff_q=bill_diff_q,
     )
+    if has_pley_id_q:
+        search_params["pley_id_q"] = pley_id_q
+    elif bill_id_q:
+        search_params["bill_id_q"] = bill_id_q
     if presentation_date_from_picker["provided"]:
         search_params.update(
             {
@@ -495,8 +507,11 @@ def index():
             )
         )
 
-    if bill_id_q:
-        filters.append(Bill.id.ilike(f"%{bill_id_q}%"))
+    if pley_id_q:
+        if has_pley_id_q:
+            filters.append(Bill.pley_id.ilike(f"%{pley_id_q}%"))
+        else:
+            filters.append(Bill.id.ilike(f"%{pley_id_q}%"))
 
     if author_q:
         # Since author_q may contain either an ID or a person's name, build the query
@@ -564,6 +579,11 @@ def index():
         filters.append(Bill.bill_approved.is_(True))
     elif status == "not-approved":
         filters.append(Bill.bill_approved.is_(False))
+
+    if bill_diff_q == "yes":
+        filters.append(Bill.bill_diff.is_(True))
+    elif bill_diff_q == "no":
+        filters.append(Bill.bill_diff.is_(False))
 
     bills = []
     recent_bills = []
@@ -722,9 +742,11 @@ def index():
         author_q=author_q,
         author_party_q=author_party_q,
         author_display=author_display,
+        pley_id_q=pley_id_q,
         bill_id_q=bill_id_q,
         law_id_q=law_id_q,
         current_step_q=current_step_q,
+        bill_diff_q=bill_diff_q,
         presentation_date_from=presentation_date_from,
         presentation_date_to=presentation_date_to,
         presentation_date_from_provided=presentation_date_from_picker["provided"],
