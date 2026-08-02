@@ -6,6 +6,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.scrapers import bills_documents as bills_documents_module
 from backend.scrapers.bills_documents import (
     RawBillDocumentScraper,
     BASE_URL,
@@ -138,6 +139,7 @@ def test_get_bill_documents_populates_documents(monkeypatch):
     assert doc.file_id == "111"
     assert doc.step_id == "10"
     assert doc.url == expected_url
+    assert doc.s3_key is None
     # step_date parsed correctly
     assert isinstance(doc.step_date, datetime)
 
@@ -309,3 +311,191 @@ def test_load_raw_documents_calls_add_and_clears(monkeypatch):
 
     assert calls["added"] is True
     assert scraper.documents == []
+
+
+def test_get_docs_pending_s3_upload_returns_only_null_keys():
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawBillDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+
+    with SessionLocal() as session:
+        session.add_all(
+            [
+                RawBillDocument(
+                    bill_id="2021_10",
+                    step_id="1",
+                    file_id="100",
+                    step_date=datetime.now(timezone.utc),
+                    url="http://example.com/pending.pdf",
+                    s3_key=None,
+                    local_path=None,
+                    timestamp=datetime.now(timezone.utc),
+                ),
+                RawBillDocument(
+                    bill_id="2021_10",
+                    step_id="2",
+                    file_id="200",
+                    step_date=datetime.now(timezone.utc),
+                    url="http://example.com/uploaded.pdf",
+                    s3_key="documents/bills/uploaded.pdf",
+                    local_path=None,
+                    timestamp=datetime.now(timezone.utc),
+                ),
+            ]
+        )
+        session.commit()
+
+    pending = scraper.get_docs_pending_s3_upload()
+
+    assert [(doc.step_id, doc.file_id) for doc in pending] == [("1", "100")]
+
+
+def test_upload_s3_persists_key_only_after_success(monkeypatch):
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawBillDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+    expected_key = scraper._build_s3_key("bills", "2021_11-1-101.pdf")
+
+    with SessionLocal() as session:
+        session.add(
+            RawBillDocument(
+                bill_id="2021_11",
+                step_id="1",
+                file_id="101",
+                step_date=datetime.now(timezone.utc),
+                url="http://example.com/bill.pdf",
+                s3_key=None,
+                local_path=None,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    calls = []
+    monkeypatch.setattr(
+        scraper,
+        "_upload_url_to_s3",
+        lambda url, key: calls.append((url, key)) or True,
+    )
+    pending_doc = scraper.get_docs_pending_s3_upload()[0]
+
+    assert scraper.upload_s3(pending_doc) is True
+    assert calls == [("http://example.com/bill.pdf", expected_key)]
+
+    with SessionLocal() as session:
+        stored = session.get(
+            RawBillDocument,
+            {"bill_id": "2021_11", "step_id": "1", "file_id": "101"},
+        )
+        assert stored.s3_key == expected_key
+
+
+def test_upload_s3_failure_leaves_key_null(monkeypatch):
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawBillDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+
+    with SessionLocal() as session:
+        session.add(
+            RawBillDocument(
+                bill_id="2021_12",
+                step_id="1",
+                file_id="102",
+                step_date=datetime.now(timezone.utc),
+                url="http://example.com/failure.pdf",
+                s3_key=None,
+                local_path=None,
+                timestamp=datetime.now(timezone.utc),
+            )
+        )
+        session.commit()
+
+    monkeypatch.setattr(scraper, "_upload_url_to_s3", lambda url, key: False)
+    pending_doc = scraper.get_docs_pending_s3_upload()[0]
+
+    assert scraper.upload_s3(pending_doc) is False
+
+    with SessionLocal() as session:
+        stored = session.get(
+            RawBillDocument,
+            {"bill_id": "2021_12", "step_id": "1", "file_id": "102"},
+        )
+        assert stored.s3_key is None
+
+
+def test_upload_s3_fails_when_database_row_is_missing(monkeypatch):
+    engine, SessionLocal = _setup_inmemory_db()
+    scraper = RawBillDocumentScraper()
+    scraper.engine = engine
+    scraper.Session = SessionLocal
+    monkeypatch.setattr(scraper, "_upload_url_to_s3", lambda url, key: True)
+    missing_doc = RawBillDocument(
+        bill_id="2021_missing",
+        step_id="1",
+        file_id="999",
+        step_date=datetime.now(timezone.utc),
+        url="http://example.com/missing.pdf",
+        s3_key=None,
+        local_path=None,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    assert scraper.upload_s3(missing_doc) is False
+
+
+def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
+    uploaded = []
+
+    class FakeResponse:
+        content = b"%PDF-test"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def upload_fileobj(self, fileobj, bucket, key):
+            uploaded.append((fileobj.read(), bucket, key))
+
+    monkeypatch.setattr(
+        bills_documents_module,
+        "get_url",
+        lambda url: FakeResponse(),
+    )
+    monkeypatch.setattr(
+        bills_documents_module.settings,
+        "AWS_ACCESS_KEY_ID",
+        None,
+    )
+    monkeypatch.setattr(
+        bills_documents_module.settings,
+        "AWS_SECRET_ACCESS_KEY",
+        None,
+    )
+    monkeypatch.setattr(
+        bills_documents_module.boto3,
+        "client",
+        lambda *args, **kwargs: FakeClient(),
+    )
+    monkeypatch.setattr(
+        bills_documents_module.settings,
+        "AWS_S3_BUCKET_NAME",
+        "test-bucket",
+    )
+
+    assert (
+        RawBillDocumentScraper._upload_url_to_s3(
+            "http://example.com/bill.pdf",
+            "documents/bills/bill.pdf",
+        )
+        is True
+    )
+    assert uploaded == [
+        (
+            b"%PDF-test",
+            bills_documents_module.settings.AWS_S3_BUCKET_NAME,
+            "documents/bills/bill.pdf",
+        )
+    ]

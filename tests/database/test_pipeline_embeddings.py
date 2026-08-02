@@ -87,6 +87,7 @@ def test_empty_bill_text_builds_no_semantic_rows(session):
             author_id=None,
             bill_approved=False,
             summary_oc="",
+            pley_id="B_EMPTY",
         )
     )
     session.commit()
@@ -114,6 +115,7 @@ def test_bulk_upsert_semantic_bills_roundtrip_uses_embedding_model_name(session)
             author_id=None,
             bill_approved=False,
             summary_oc="",
+            pley_id="B_SEM",
         )
     )
     session.add(

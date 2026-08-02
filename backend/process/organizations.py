@@ -3,7 +3,7 @@ from backend.process.schema import Organization, Membership
 from backend.process.utils import split_and_sort_name
 from backend.core.parsers import parse_comm_type
 
-from backend import find_leg_period, normalize_membership_role
+from backend import find_leg_period, normalize_membership_role, COMISION_SHORT_NAMES
 
 from lxml.html import fromstring
 
@@ -47,6 +47,7 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
                     org_name=name_comm,
                     org_type="Comisión",
                     org_subtype=parse_comm_type(type_comm),
+                    org_short_name=COMISION_SHORT_NAMES.get(name_comm),
                     org_link=link,
                     # TODO: Update this when the new congress website address
                     # for different routes for committees in camara

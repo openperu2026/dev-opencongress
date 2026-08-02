@@ -41,6 +41,7 @@ def _minimal_bill_and_step(db, bill_id: str, step_id: int):
             author_id=None,
             bill_approved=False,
             summary_oc="",
+            pley_id=bill_id,
         )
     )
     db.add(

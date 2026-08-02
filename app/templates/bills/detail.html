@@ -7,7 +7,7 @@
     <section class="bill-hero">
       <div class="bill-content">
         <div class="bill-topline">
-          <span class="bill-code">PL 07324/2023-CR</span>
+          <span class="bill-code">PL {{ bill.pley_id }}</span>
           {% if bill_is_approved %}
             <span class="bill-status">{{ bill_status }}</span>
           {% else %}
@@ -39,8 +39,13 @@
       {% if latest_step %}
           <p><strong>{{_('Current Step')}}:</strong> {{ latest_step.step_type.value }}</p>
       {% endif %}
-      <p><strong>{{_('Author')}}:</strong> <a href=" /congress/{{author.id}} ">{{ author.full_name }}</a></p>
-      <p><strong>{{_('Party')}}:</strong> {{ party_name }}</p>
+      {% if author %}
+        <p><strong>{{_('Author')}}:</strong> <a href=" /congress/{{author.id}} ">{{ author.full_name }}</a></p>
+        <p><strong>{{_('Party')}}:</strong> {{ party_name }}</p>
+      {% else %}
+        <p><strong>{{_('Author')}}:</strong> <a>{{ bill.proponent.value }}</a></p>
+
+      {% endif %}
       <p class="summary-label"><strong>{{_('Summary')}}:</strong></p>
       <p class="summary-text">{{ bill.summary_oc }}</p>
 

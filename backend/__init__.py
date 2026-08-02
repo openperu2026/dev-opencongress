@@ -5,6 +5,8 @@ from backend.core.constants import (
     PARTIES,
     PARTY_ALIASES,
     LEGAL_TERMS,
+    REGIONS_MAP,
+    COMISION_SHORT_NAMES,
 )
 from backend.core.enums import (
     AttendanceStatus,
@@ -46,6 +48,8 @@ __all__ = [
     "LEGISLATURE_ALIASES",
     "BILL_ROLE_MAPS",
     "LEGAL_TERMS",
+    "REGIONS_MAP",
+    "COMISION_SHORT_NAMES",
     "TypeMajority",
     "VoteResult",
     "VoteOption",

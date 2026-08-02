@@ -16,8 +16,15 @@ from flask import (
 )
 from sqlalchemy import func, select, desc
 from sqlalchemy.orm import Session
-from app.diff_render import RENDERER_VERSION, render_payload_html
+from app.diff_render import (
+    RENDERER_VERSION,
+    render_payload_html_split,
+    render_summary_html,
+)
+import boto3
 from backend.database.crud.pipeline_bills import get_billtext_for_step
+from backend.database.raw_models import RawBillDocument
+from backend.config import settings
 from backend.database.models import (
     Bill,
     BillDifference,
@@ -628,6 +635,7 @@ def index():
             stmt = (
                 select(
                     Bill.id.label("id"),
+                    Bill.pley_id.label("pley_id"),
                     Bill.title.label("title"),
                     Bill.status.label("status"),
                     Congresista.full_name.label("author_name"),
@@ -956,6 +964,70 @@ def extract_steps(db, bill_id):
     return all_steps, latest_step
 
 
+def _resolve_s3_key(db, bill_id: str, step_id: int) -> str | None:
+    """Look up the S3 key backing a step's canonical document, or None.
+
+    Returns the S3 key if found and non-empty, None otherwise.
+    Logs detailed diagnostics at each failure point for debugging.
+    """
+    try:
+        bt = get_billtext_for_step(db, bill_id, step_id)
+        if bt is None:
+            current_app.logger.warning(
+                "No BillText found for bill %s step %s (no extracted text yet?)",
+                bill_id,
+                step_id,
+            )
+            return None
+
+        current_app.logger.debug(
+            "Found BillText for bill %s step %s: file_id=%s version_id=%s",
+            bill_id,
+            step_id,
+            bt.file_id,
+            bt.version_id,
+        )
+
+        # RawBillDocument primary key is (bill_id, step_id, file_id) where
+        # step_id and file_id are strings in the raw schema.
+        raw_key = (bill_id, str(step_id), str(bt.file_id))
+        raw_doc = db.get(RawBillDocument, raw_key)
+
+        if raw_doc is None:
+            current_app.logger.warning(
+                "RawBillDocument not found for bill %s step %s file_id %s "
+                "(raw document not scraped yet?)",
+                bill_id,
+                step_id,
+                bt.file_id,
+            )
+            return None
+
+        if not raw_doc.s3_key:
+            current_app.logger.warning(
+                "RawBillDocument exists for bill %s step %s file_id %s "
+                "but s3_key is empty (not uploaded to S3 yet?)",
+                bill_id,
+                step_id,
+                bt.file_id,
+            )
+            return None
+
+        current_app.logger.debug(
+            "Resolved S3 key for bill %s step %s: %s", bill_id, step_id, raw_doc.s3_key
+        )
+        return raw_doc.s3_key
+
+    except Exception as e:
+        current_app.logger.exception(
+            "Exception resolving S3 key for bill %s step %s: %s",
+            bill_id,
+            step_id,
+            str(e),
+        )
+        return None
+
+
 @bills_bp.route("/bills/<bill_id>/difference/<int:step_id>")
 def bill_difference(bill_id, step_id):
     with SessionProcessed() as db:
@@ -969,13 +1041,8 @@ def bill_difference(bill_id, step_id):
 
         diff = db.get(BillDifference, (bill_id, step_id))
 
-        new_bt = get_billtext_for_step(db, bill_id, step_id)
-        new_text = new_bt.text if new_bt else None
-        old_text = None
         prev_step = None
         if diff and diff.prev_step_id is not None:
-            old_bt = get_billtext_for_step(db, bill_id, diff.prev_step_id)
-            old_text = old_bt.text if old_bt else None
             prev_step = db.get(BillStep, (bill_id, diff.prev_step_id))
 
         # ETag covers every input the renderer (and the page) depends on so
@@ -1001,7 +1068,7 @@ def bill_difference(bill_id, step_id):
         # Both parse and render are guarded: a malformed row or a renderer
         # bug must not take the page down — the template falls back to the
         # "no difference data available" branch.
-        text_html = None
+        old_diff_html = new_diff_html = summary_html = None
         if diff and diff.difference_content:
             try:
                 parsed = json.loads(diff.difference_content)
@@ -1014,12 +1081,27 @@ def bill_difference(bill_id, step_id):
                 parsed = None
             if isinstance(parsed, dict):
                 try:
-                    text_html = render_payload_html(parsed)
+                    old_diff_html, new_diff_html = render_payload_html_split(parsed)
+                    summary_html = render_summary_html(parsed.get("summary"))
                 except Exception:
                     current_app.logger.exception(
                         "Renderer failed for bill %s step %s", bill_id, step_id
                     )
-                    text_html = None
+                    old_diff_html = new_diff_html = summary_html = None
+
+        new_doc_available = _resolve_s3_key(db, bill_id, step_id) is not None
+        old_doc_available = (
+            diff is not None
+            and diff.prev_step_id is not None
+            and _resolve_s3_key(db, bill_id, diff.prev_step_id) is not None
+        )
+
+        new_doc_url = url_for("bills.bill_document", bill_id=bill_id, step_id=step_id)
+        old_doc_url = (
+            url_for("bills.bill_document", bill_id=bill_id, step_id=diff.prev_step_id)
+            if diff and diff.prev_step_id is not None
+            else None
+        )
 
         resp = make_response(
             render_template(
@@ -1028,9 +1110,13 @@ def bill_difference(bill_id, step_id):
                 step=step,
                 prev_step=prev_step,
                 difference_type=difference_type,
-                old_version_text=old_text,
-                new_version_text=new_text,
-                text_html=text_html,
+                old_diff_html=old_diff_html,
+                new_diff_html=new_diff_html,
+                summary_html=summary_html,
+                new_doc_available=new_doc_available,
+                old_doc_available=old_doc_available,
+                new_doc_url=new_doc_url,
+                old_doc_url=old_doc_url,
             )
         )
         resp.set_etag(etag)
@@ -1038,3 +1124,55 @@ def bill_difference(bill_id, step_id):
             "public, max-age=300, stale-while-revalidate=86400"
         )
         return resp
+
+
+@bills_bp.route("/bills/<bill_id>/document/<int:step_id>")
+def bill_document(bill_id, step_id):
+    with SessionProcessed() as db:
+        bill = db.get(Bill, bill_id)
+        if not bill:
+            return "Not Found", 404
+
+        step = db.get(BillStep, (bill_id, step_id))
+        if not step:
+            return "Not Found", 404
+
+        s3_key = _resolve_s3_key(db, bill_id, step_id)
+        if not s3_key:
+            return "Document not available", 404
+
+    bucket = settings.AWS_S3_BUCKET_NAME
+    if not bucket:
+        current_app.logger.error("AWS_S3_BUCKET_NAME is not configured")
+        return "Document not available", 404
+
+    if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
+        client = boto3.session.Session(
+            aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+            region_name=settings.AWS_REGION,
+        ).client("s3")
+    else:
+        client = boto3.client("s3", region_name=settings.AWS_REGION)
+
+    try:
+        obj = client.get_object(Bucket=bucket, Key=s3_key)
+    except client.exceptions.NoSuchKey:
+        current_app.logger.warning(
+            "S3 object missing for bill %s step %s key %s",
+            bill_id,
+            step_id,
+            s3_key,
+        )
+        return "Document not available", 404
+    except Exception:
+        current_app.logger.exception(
+            "S3 fetch failed for bill %s step %s", bill_id, step_id
+        )
+        return "Document not available", 502
+
+    resp = make_response(obj["Body"].read())
+    resp.headers["Content-Type"] = obj.get("ContentType", "application/pdf")
+    resp.headers["Content-Disposition"] = f'inline; filename="{bill_id}-{step_id}.pdf"'
+    resp.headers["Cache-Control"] = "public, max-age=86400"
+    return resp

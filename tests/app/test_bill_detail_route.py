@@ -63,6 +63,7 @@ def _seed(session_factory, *, steps_with_diff_types):
                 proponent=Proponents.CONGRESO,
                 bill_approved=False,
                 summary_oc="",
+                pley_id=bill_id,
             )
         )
         for step_id, step_type, diff_type in steps_with_diff_types:
@@ -104,6 +105,7 @@ def _seed_author_affiliations(session_factory):
                     author_id=1,
                     bill_approved=False,
                     summary_oc="",
+                    pley_id=bill_id,
                 ),
                 Congresista(
                     id=1,

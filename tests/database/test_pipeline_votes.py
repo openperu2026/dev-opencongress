@@ -98,6 +98,7 @@ def test_refresh_congresista_metrics_rebuilds_without_committing(session):
             author_id=1,
             bill_approved=True,
             summary_oc="",
+            pley_id="B_2021_1",
         )
     )
     session.add(

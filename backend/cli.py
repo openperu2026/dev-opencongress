@@ -47,6 +47,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Scrape pending bill/motion documents",
     )
     parser.add_argument(
+        "--upload-s3",
+        action="store_true",
+        help="Upload existing and newly scraped bill/motion documents to S3",
+    )
+    parser.add_argument(
         "--process-documents",
         action="store_true",
         help="Enable document processing stage",
@@ -104,6 +109,7 @@ def main(argv: list[str] | None = None) -> None:
             scrape_others=run_others,
             only_current=args.only_current,
             scrape_documents=run_documents,
+            upload_s3=args.upload_s3,
         )
 
     if not args.skip_processing:

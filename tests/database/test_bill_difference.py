@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.core.enums import Proponents, TypeBillStep
 from backend.database.crud.pipeline_bills import (
     get_billtext_for_step,
+    refresh_bill_diff_flag,
     upsert_bill_difference,
 )
 from backend.database.models import (
@@ -42,6 +43,7 @@ def _setup_bill_step(db, bill_id="BILL_1", step_id=1):
             proponent=Proponents.CONGRESO,
             bill_approved=False,
             summary_oc="",
+            pley_id=bill_id,
         )
     )
     db.add(
@@ -154,3 +156,82 @@ def test_get_billtext_for_step_prefers_latest_version(session):
 def test_get_billtext_for_step_missing_returns_none(session):
     _setup_bill_step(session)
     assert get_billtext_for_step(session, "BILL_1", 9999) is None
+
+
+# ── refresh_bill_diff_flag ───────────────────────────────────────────────────
+
+
+def test_refresh_bill_diff_flag_no_rows_is_false(session):
+    _setup_bill_step(session)
+    assert refresh_bill_diff_flag(session, "BILL_1") is False
+    assert session.get(Bill, "BILL_1").bill_diff is False
+
+
+def test_refresh_bill_diff_flag_unavailable_only_is_false(session):
+    _setup_bill_step(session)
+    upsert_bill_difference(
+        session,
+        bill_id="BILL_1",
+        step_id=1,
+        prev_step_id=None,
+        difference_type="unavailable",
+        difference_content=None,
+    )
+    session.commit()
+    assert refresh_bill_diff_flag(session, "BILL_1") is False
+
+
+def test_refresh_bill_diff_flag_incomparable_only_is_false(session):
+    _setup_bill_step(session)
+    upsert_bill_difference(
+        session,
+        bill_id="BILL_1",
+        step_id=1,
+        prev_step_id=None,
+        difference_type="incomparable",
+        difference_content=None,
+    )
+    session.commit()
+    assert refresh_bill_diff_flag(session, "BILL_1") is False
+
+
+@pytest.mark.parametrize("difference_type", ["first_version", "no_change", "modified"])
+def test_refresh_bill_diff_flag_counted_types_are_true(session, difference_type):
+    _setup_bill_step(session)
+    upsert_bill_difference(
+        session,
+        bill_id="BILL_1",
+        step_id=1,
+        prev_step_id=None,
+        difference_type=difference_type,
+        difference_content=None,
+    )
+    session.commit()
+    assert refresh_bill_diff_flag(session, "BILL_1") is True
+    assert session.get(Bill, "BILL_1").bill_diff is True
+
+
+def test_refresh_bill_diff_flag_flips_back_to_false_on_recompute(session):
+    _setup_bill_step(session)
+    upsert_bill_difference(
+        session,
+        bill_id="BILL_1",
+        step_id=1,
+        prev_step_id=None,
+        difference_type="modified",
+        difference_content='{"nodes": []}',
+    )
+    session.commit()
+    assert refresh_bill_diff_flag(session, "BILL_1") is True
+
+    upsert_bill_difference(
+        session,
+        bill_id="BILL_1",
+        step_id=1,
+        prev_step_id=None,
+        difference_type="unavailable",
+        difference_content=None,
+    )
+    session.commit()
+    assert refresh_bill_diff_flag(session, "BILL_1") is False
+    assert session.get(Bill, "BILL_1").bill_diff is False

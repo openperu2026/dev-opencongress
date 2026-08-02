@@ -42,6 +42,7 @@ def test_cli_scrape_only_others_matches_make_target(monkeypatch):
             "scrape_others": True,
             "only_current": True,
             "scrape_documents": False,
+            "upload_s3": False,
         }
     ]
     assert orch.processing_calls == []
@@ -58,6 +59,7 @@ def test_cli_scrape_only_bills_matches_make_target(monkeypatch):
             "scrape_others": False,
             "only_current": False,
             "scrape_documents": False,
+            "upload_s3": False,
         }
     ]
     assert orch.processing_calls == []
@@ -74,6 +76,7 @@ def test_cli_scrape_only_motions_matches_make_target(monkeypatch):
             "scrape_others": False,
             "only_current": False,
             "scrape_documents": False,
+            "upload_s3": False,
         }
     ]
     assert orch.processing_calls == []
@@ -90,6 +93,32 @@ def test_cli_scrape_only_leyes_matches_make_target(monkeypatch):
             "scrape_others": False,
             "only_current": False,
             "scrape_documents": False,
+            "upload_s3": False,
+        }
+    ]
+    assert orch.processing_calls == []
+
+
+def test_cli_scrape_documents_with_s3_upload_matches_make_target(monkeypatch):
+    orch = run_cli(
+        monkeypatch,
+        [
+            "--scrape",
+            "--skip-processing",
+            "--scrape-documents",
+            "--upload-s3",
+        ],
+    )
+
+    assert orch.scraper_calls == [
+        {
+            "scrape_bills": False,
+            "scrape_motions": False,
+            "scrape_leyes": False,
+            "scrape_others": False,
+            "only_current": False,
+            "scrape_documents": True,
+            "upload_s3": True,
         }
     ]
     assert orch.processing_calls == []

@@ -196,7 +196,7 @@ class RawCongresistasScraper:
         with self.Session() as session:
             last_congresista = (
                 session.query(RawCongresista)
-                .filter(RawCongresista.id == congresista.id)
+                .filter(RawCongresista.website == congresista.website)
                 .order_by(RawCongresista.timestamp.desc())
                 .first()
             )

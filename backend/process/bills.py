@@ -68,6 +68,7 @@ def process_bill(
     status = classify_des_estado(general.get("desEstado"))
     proponent = general.get("desProponente")
     bancada_name = general.get("desGpar")
+    pley_id = general.get("proyectoLey")
 
     # Extracting information from firmantes dictionary
     cong_list = []
@@ -107,6 +108,7 @@ def process_bill(
         bancada_name=bancada_name,
         bill_approved=bill_approved,
         summary_oc=summary_oc,
+        pley_id=pley_id,
     )
 
     return bill, cong_list, bill_steps
