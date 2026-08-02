@@ -310,6 +310,53 @@ def test_search_form_includes_new_filters(client):
     assert 'name="presentation_date_to_day"' in body and 'value="" selected' in body
 
 
+def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
+    client, session_factory
+):
+    with session_factory() as db:
+        db.add_all(
+            [
+                Bill(
+                    id="2021_0100",
+                    title="Bill without author",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=None,
+                    bill_approved=False,
+                    summary_oc="",
+                    pley_id="0100/2021-CR",
+                ),
+                Organization(
+                    org_id=100,
+                    org_name="Comisión Test",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                BillOrganization(
+                    bill_id="2021_0100",
+                    org_id=100,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 3, 1),
+                    decision_date=None,
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get("/bills")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Bill without author" in body
+    assert Proponents.CONGRESO.value in body
+
+
 def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_factory):
     _seed_bill_search_data(session_factory)
 
