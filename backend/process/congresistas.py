@@ -1,4 +1,4 @@
-from backend import normalize_membership_role
+from backend import normalize_membership_role, REGIONS_MAP
 from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership, Organization
 from backend.process.utils import gen_congresistas_df, to_datetime
@@ -156,6 +156,7 @@ def process_profile_content(
         time_stamp=getattr(raw_cong, "timestamp", datetime.now()),
     )
 
+    region = xpath2('//*[@class="representa"]/span[2]', html)
     # TODO: Update when the webpage divides diputados and senadores
     chamber_mem = Membership(
         cong_name=cong.full_name,
@@ -166,7 +167,7 @@ def process_profile_content(
         time_stamp=getattr(raw_cong, "timestamp", datetime.now()),
         condicion=xpath2('//*[@class="condicion"]/span[2]', html),
         votes_in_election=int(votes_text.replace(",", "")),
-        dist_electoral=xpath2('//*[@class="representa"]/span[2]', html),
+        dist_electoral=REGIONS_MAP.get(region, region),
     )
 
     chamber = Organization(

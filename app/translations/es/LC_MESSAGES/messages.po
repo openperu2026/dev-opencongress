@@ -81,11 +81,11 @@ msgstr "Idioma"
 
 #: templates/base.html:33
 msgid "English"
-msgstr "Ingles"
+msgstr "Inglés"
 
 #: templates/base.html:34
 msgid "Spanish"
-msgstr "Espanol"
+msgstr "Español"
 
 #: templates/base.html:48
 msgid "Terms of Service"
@@ -106,15 +106,15 @@ msgstr "Fecha de presentación"
 
 #: templates/bills/detail.html:31
 msgid "Time to approval"
-msgstr "Tiempo hasta la aprobacion"
+msgstr "Tiempo hasta la aprobación"
 
 #: templates/bills/detail.html:31 templates/bills/detail.html:33
 msgid "days"
-msgstr "dias"
+msgstr "días"
 
 #: templates/bills/detail.html:33
 msgid "Time since presentation"
-msgstr "Tiempo desde la presentacion"
+msgstr "Tiempo desde la presentación"
 
 #: templates/bills/detail.html:40 templates/bills/search.html:43
 #: templates/bills/search.html:183
@@ -223,11 +223,11 @@ msgstr "Opciones de búsqueda avanzada:"
 
 #: templates/bills/search.html:34 templates/bills/search.html:177
 msgid "Bill ID"
-msgstr "ID del proyecto de ley"
+msgstr "Número de Proyecto de ley"
 
 #: templates/bills/search.html:38 templates/bills/search.html:180
 msgid "Law ID"
-msgstr "ID de la ley"
+msgstr "Número de la ley"
 
 #: templates/bills/search.html:52 templates/bills/search.html:186
 msgid "Author party"
@@ -256,7 +256,7 @@ msgstr "Hasta"
 
 #: templates/bills/search.html:115
 msgid "All bills"
-msgstr "Proyectos de ley"
+msgstr "Todos"
 
 #: templates/bills/search.html:119 templates/bills/search.html:195
 msgid "Approved bills"
@@ -311,7 +311,7 @@ msgstr "Páginas de búsqueda"
 
 #: templates/bills/search.html:234
 msgid "Page"
-msgstr "Pagina"
+msgstr "Página"
 
 #: templates/bills/search.html:247
 msgid "Previous"
@@ -392,11 +392,11 @@ msgstr "Proyectos de ley presentados"
 
 #: templates/congress/congress_detail.html:53
 msgid "Approval bill rate"
-msgstr "Tasa de aprobacion de proyectos"
+msgstr "Tasa de aprobación de proyectos"
 
 #: templates/congress/congress_detail.html:61
 msgid "Recent Bills Authored (Last 5)"
-msgstr "Proyectos de ley recientes presentados (ultimos 5)"
+msgstr "Proyectos de ley recientes presentados (últimos 5)"
 
 #: templates/congress/congress_detail.html:88
 msgid "No authored bills found."
@@ -426,7 +426,7 @@ msgstr "Región"
 
 #: templates/congress/search.html:38 templates/congress/search.html:66
 msgid "Commission"
-msgstr "Comision"
+msgstr "Comisión"
 
 #: templates/congress/search.html:95
 msgid "No matching congresspeople found."
@@ -443,7 +443,7 @@ msgid ""
 "period, review who authored them, see how congress members voted, and "
 "compare changes between different versions of each bill."
 msgstr ""
-"Open Congress reune informacion publica del Congreso peruano en un solo "
+"Open Congress reune información pública del Congreso peruano en un solo "
 "lugar. Explora proyectos de ley del periodo congresal 2021-2026, revisa "
 "quienes los presentaron, observa como votaron los congresistas y compara "
 "cambios entre distintas versiones de cada proyecto."
@@ -458,7 +458,7 @@ msgstr "Logo de Open Congress"
 
 #: templates/landing/index.html:31
 msgid "Transparency and accountability for a stronger democracy"
-msgstr "Transparencia y rendicion de cuentas para una democracia mas fuerte"
+msgstr "Transparencia y rendición de cuentas para una democracia más fuerte"
 
 #: templates/landing/index.html:41
 msgid ""
@@ -468,7 +468,7 @@ msgid ""
 "            processes them, and organizes them into a structured, \n"
 "            clean relational database."
 msgstr ""
-"Open Congress esta construido como un pipeline publico de datos para "
+"Open Congress esta construido como un repositorio publico de datos para "
 "informacion legislativa. Recopila registros publicos oficiales del "
 "Congreso peruano, los procesa y los organiza en una base de datos "
 "relacional estructurada y limpia."
@@ -480,7 +480,7 @@ msgid ""
 "and \n"
 "            is developed by a six-student team from the program."
 msgstr ""
-"La plataforma nacio como parte del programa Master of Computational "
+"La plataforma nació como parte del programa Master of Computational "
 "Analysis and Public Policy de la Universidad de Chicago y es desarrollada"
 " por un equipo de seis estudiantes del programa."
 
@@ -492,7 +492,7 @@ msgid ""
 "            bills, votes, congressmembers, political groups, and text \n"
 "            changes across the legislative process."
 msgstr ""
-"Esta escrita principalmente en Python y usa SQLAlchemy, PostgreSQL, "
+"Esta desarrollada principalmente en Python y usa PostgreSQL, "
 "OCR/procesamiento de documentos y pruebas automatizadas para seguir "
 "proyectos de ley, votos, congresistas, grupos politicos y cambios de "
 "texto a lo largo del proceso legislativo."

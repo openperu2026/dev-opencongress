@@ -14,7 +14,7 @@ scrape-leyes:
 	uv run -m backend --scrape --skip-processing --only-leyes
 
 scrape-documents:
-	uv run -m backend --scrape --skip-processing --scrape-documents
+	uv run -m backend --scrape --skip-processing --scrape-documents --upload-s3
 
 process-first-summary:
 	uv run -m backend --only-bills --first-summary

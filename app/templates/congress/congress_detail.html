@@ -29,7 +29,11 @@
                     <ul class="committee-membership-list">
                         {% for membership in memberships %}
                             <li>
-                                <span>{{ membership.org_name }}</span>
+                                {% if membership.org_short_name %}
+                                    <span>{{ membership.org_short_name }}</span>
+                                {% else %}
+                                    <span>{{ membership.org_name }}</span>
+                                {% endif %}
                                 <strong>{{ membership.role }}</strong>
                             </li>
                         {% endfor %}
@@ -79,7 +83,7 @@
                     {% for bill in bills_authored %}
                         <tr>
                             <td>{{ loop.index }}</td>
-                            <td>{{ bill.id }}</td>
+                            <td>{{ bill.pley_id }}</td>
                             <td>{{ bill.title }}</td>
                             <td>{{ bill.presentation_date.strftime('%d-%m-%Y') }}</td>
                             <td>

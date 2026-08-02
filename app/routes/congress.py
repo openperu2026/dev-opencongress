@@ -223,6 +223,7 @@ def congress_detail(congresista_id):
                     Organization.org_name,
                     Organization.org_type,
                     Organization.org_subtype,
+                    Organization.org_short_name,
                 )
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
