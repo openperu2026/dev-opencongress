@@ -1,0 +1,244 @@
+{
+  "type": "object",
+  "properties": {
+    "file_name": { "type": "string" },
+    "sessions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Session" }
+    },
+    "_uncertain_fields": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/UncertainField" }
+    }
+  },
+  "required": ["file_name", "sessions", "_uncertain_fields"],
+  "additionalProperties": false,
+  "$defs": {
+    "UncertainField": {
+      "type": "object",
+      "properties": {
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "raw_text": { "type": ["string", "null"] }
+      },
+      "required": ["location", "description", "raw_text"],
+      "additionalProperties": false
+    },
+    "AttendanceCode": {
+      "type": ["string", "null"],
+      "enum": ["PRE", "aus", "LO", "LE", "LP", "Sus", "F", "presiding", null]
+    },
+    "VoteCode": {
+      "type": ["string", "null"],
+      "enum": ["SI+++", "NO---", "Abst.", "SinRes", "aus", "LO", "LE", "LP", "Sus", "F", "presiding", null]
+    },
+    "RosterEntry": {
+      "type": "object",
+      "properties": {
+        "party": { "type": "string" },
+        "full_name": { "type": "string" },
+        "status": { "$ref": "#/$defs/AttendanceCode" }
+      },
+      "required": ["party", "full_name", "status"],
+      "additionalProperties": false
+    },
+    "AttendanceTotals": {
+      "type": "object",
+      "properties": {
+        "presentes": { "type": ["integer", "null"] },
+        "ausentes": { "type": ["integer", "null"] },
+        "licencia_oficial": { "type": ["integer", "null"] },
+        "licencia_enfermedad": { "type": ["integer", "null"] },
+        "licencia_personal": { "type": ["integer", "null"] },
+        "comision_ordinaria": { "type": ["integer", "null"] },
+        "comision_ext_internacional": { "type": ["integer", "null"] },
+        "junta_portavoces": { "type": ["integer", "null"] },
+        "bancada": { "type": ["integer", "null"] },
+        "suspendidos": { "type": ["integer", "null"] },
+        "fallecidos": { "type": ["integer", "null"] },
+        "asistencia_para_quorum": { "type": ["integer", "null"] },
+        "quorum_alcanzado": { "type": ["boolean", "null"] }
+      },
+      "required": [
+        "presentes", "ausentes", "licencia_oficial", "licencia_enfermedad",
+        "licencia_personal", "comision_ordinaria", "comision_ext_internacional",
+        "junta_portavoces", "bancada", "suspendidos", "fallecidos",
+        "asistencia_para_quorum", "quorum_alcanzado"
+      ],
+      "additionalProperties": false
+    },
+    "AttendancePartySummary": {
+      "type": "object",
+      "properties": {
+        "party": { "type": "string" },
+        "party_full_name": { "type": "string" },
+        "presente": { "type": ["integer", "null"] },
+        "ausente": { "type": ["integer", "null"] },
+        "licencias": { "type": ["integer", "null"] },
+        "susp": { "type": ["integer", "null"] },
+        "otros": { "type": ["integer", "null"] }
+      },
+      "required": ["party", "party_full_name", "presente", "ausente", "licencias", "susp", "otros"],
+      "additionalProperties": false
+    },
+    "AttendanceClarification": {
+      "type": "object",
+      "properties": {
+        "member_name": { "type": "string" },
+        "note": { "type": "string" },
+        "roster_value": { "$ref": "#/$defs/AttendanceCode" },
+        "clarified_value": { "$ref": "#/$defs/AttendanceCode" }
+      },
+      "required": ["member_name", "note", "roster_value", "clarified_value"],
+      "additionalProperties": false
+    },
+    "Attendance": {
+      "type": "object",
+      "properties": {
+        "record_datetime": { "type": "string" },
+        "subject": { "type": ["string", "null"] },
+        "n_proyecto_ley": { "type": ["string", "null"] },
+        "roster": { "type": "array", "items": { "$ref": "#/$defs/RosterEntry" } },
+        "overall_totals": { "$ref": "#/$defs/AttendanceTotals" },
+        "party_summary": { "type": "array", "items": { "$ref": "#/$defs/AttendancePartySummary" } },
+        "clarifications": { "type": "array", "items": { "$ref": "#/$defs/AttendanceClarification" } }
+      },
+      "required": ["record_datetime", "subject", "n_proyecto_ley", "roster", "overall_totals", "party_summary", "clarifications"],
+      "additionalProperties": false
+    },
+    "RollEntry": {
+      "type": "object",
+      "properties": {
+        "party": { "type": "string" },
+        "full_name": { "type": "string" },
+        "vote": { "$ref": "#/$defs/VoteCode" }
+      },
+      "required": ["party", "full_name", "vote"],
+      "additionalProperties": false
+    },
+    "VotingTotals": {
+      "type": "object",
+      "properties": {
+        "si": { "type": ["integer", "null"] },
+        "no": { "type": ["integer", "null"] },
+        "abstenciones": { "type": ["integer", "null"] },
+        "sin_respuesta": { "type": ["integer", "null"] },
+        "ausentes": { "type": ["integer", "null"] },
+        "licencia_oficial": { "type": ["integer", "null"] },
+        "licencia_enfermedad": { "type": ["integer", "null"] },
+        "licencia_personal": { "type": ["integer", "null"] },
+        "comision_ordinaria": { "type": ["integer", "null"] },
+        "comision_ext_internacional": { "type": ["integer", "null"] },
+        "junta_portavoces": { "type": ["integer", "null"] },
+        "bancada": { "type": ["integer", "null"] },
+        "suspendidos": { "type": ["integer", "null"] },
+        "fallecidos": { "type": ["integer", "null"] }
+      },
+      "required": [
+        "si", "no", "abstenciones", "sin_respuesta", "ausentes",
+        "licencia_oficial", "licencia_enfermedad", "licencia_personal",
+        "comision_ordinaria", "comision_ext_internacional", "junta_portavoces",
+        "bancada", "suspendidos", "fallecidos"
+      ],
+      "additionalProperties": false
+    },
+    "VotingPartySummary": {
+      "type": "object",
+      "properties": {
+        "party": { "type": "string" },
+        "party_full_name": { "type": "string" },
+        "si": { "type": ["integer", "null"] },
+        "no": { "type": ["integer", "null"] },
+        "abst": { "type": ["integer", "null"] },
+        "sinresp": { "type": ["integer", "null"] }
+      },
+      "required": ["party", "party_full_name", "si", "no", "abst", "sinresp"],
+      "additionalProperties": false
+    },
+    "VotingClarification": {
+      "type": "object",
+      "properties": {
+        "member_name": { "type": "string" },
+        "source": { "type": "string", "enum": ["president_note", "member_letter"] },
+        "note": { "type": "string" },
+        "roll_value": { "$ref": "#/$defs/VoteCode" },
+        "clarified_value": { "$ref": "#/$defs/VoteCode" }
+      },
+      "required": ["member_name", "source", "note", "roll_value", "clarified_value"],
+      "additionalProperties": false
+    },
+    "Voting": {
+      "type": "object",
+      "properties": {
+        "record_datetime": { "type": "string" },
+        "president": { "type": ["string", "null"] },
+        "subject": { "type": "string" },
+        "n_proyecto_ley": { "type": ["string", "null"] },
+        "roll": { "type": "array", "items": { "$ref": "#/$defs/RollEntry" } },
+        "overall_totals": { "$ref": "#/$defs/VotingTotals" },
+        "party_summary": { "type": "array", "items": { "$ref": "#/$defs/VotingPartySummary" } },
+        "clarifications": { "type": "array", "items": { "$ref": "#/$defs/VotingClarification" } }
+      },
+      "required": ["record_datetime", "president", "subject", "n_proyecto_ley", "roll", "overall_totals", "party_summary", "clarifications"],
+      "additionalProperties": false
+    },
+    "MinutesEvent": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "reconsideracion",
+            "cuestion_previa",
+            "primera_votacion",
+            "segunda_votacion",
+            "exoneracion_segunda_votacion",
+            "otro"
+          ]
+        },
+        "description": { "type": "string" },
+        "favor": { "type": ["integer", "null"] },
+        "contra": { "type": ["integer", "null"] },
+        "abstenciones": { "type": ["integer", "null"] }
+      },
+      "required": ["type", "description", "favor", "contra", "abstenciones"],
+      "additionalProperties": false
+    },
+    "Minutes": {
+      "type": "object",
+      "properties": {
+        "raw_text": { "type": "string" },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/MinutesEvent" } }
+      },
+      "required": ["raw_text", "events"],
+      "additionalProperties": false
+    },
+    "MemberLetter": {
+      "type": "object",
+      "properties": {
+        "member_name": { "type": "string" },
+        "n_proyecto_ley": { "type": "string" },
+        "party": { "type": ["string", "null"] },
+        "letter_date": { "type": ["string", "null"] },
+        "subject_reference": { "type": "string" },
+        "requested_attendance": { "$ref": "#/$defs/AttendanceCode" },
+        "requested_vote": { "$ref": "#/$defs/VoteCode" }
+      },
+      "required": ["member_name", "n_proyecto_ley", "party", "letter_date", "subject_reference", "requested_attendance", "requested_vote"],
+      "additionalProperties": false
+    },
+    "Session": {
+      "type": "object",
+      "properties": {
+        "legislature": { "type": "string" },
+        "session_date": { "type": "string" },
+        "attendance": { "type": "array", "items": { "$ref": "#/$defs/Attendance" } },
+        "votings": { "type": "array", "items": { "$ref": "#/$defs/Voting" } },
+        "minutes": { "type": "array", "items": { "$ref": "#/$defs/Minutes" } },
+        "member_letters": { "type": "array", "items": { "$ref": "#/$defs/MemberLetter" } }
+      },
+      "required": ["legislature", "session_date", "attendance", "votings", "minutes", "member_letters"],
+      "additionalProperties": false
+    }
+  }
+}
