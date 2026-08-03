@@ -265,7 +265,7 @@ def get_last_id(entity: str) -> int:
         if config["method"] == "POST":
             if entity == "Motions":
                 payload = {
-                    "codTipoParl": 2021,
+                    "codTipoParl": "C",
                     "pageSize": 10,
                     "rowStart": 0,
                 }
