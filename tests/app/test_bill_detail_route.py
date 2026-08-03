@@ -1,9 +1,8 @@
 """Tests for the bill detail page's per-step ``View changes`` link.
 
-The link should only appear for steps whose ``BillDifference`` row carries
-content the user can actually see (``modified`` or ``incomparable``).
-Steps with no diff row, ``no_change``, ``unavailable``, or ``first_version``
-must not surface the link.
+The link should only appear when the bill-level ``bill_diff`` flag is true,
+the step is ``Revisión o cambio de texto``, and the ``BillDifference`` row
+carries content the user can actually see (``modified`` or ``incomparable``).
 """
 
 from __future__ import annotations
@@ -14,7 +13,7 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.core.enums import Proponents
+from backend.core.enums import Proponents, TypeBillStep, TypeOrganization
 from backend.database.models import (
     Base,
     Bill,
@@ -25,7 +24,6 @@ from backend.database.models import (
     Organization,
     PartyMembership,
 )
-from backend.core.enums import TypeOrganization
 
 
 @pytest.fixture()
@@ -49,7 +47,7 @@ def client(monkeypatch, session_factory):
     return flask_app.test_client()
 
 
-def _seed(session_factory, *, steps_with_diff_types):
+def _seed(session_factory, *, steps_with_diff_types, bill_diff=True):
     """Seed a bill with one step per entry; each entry is (step_id, diff_type | None)."""
     bill_id = "2021_1234"
     with session_factory() as db:
@@ -64,6 +62,7 @@ def _seed(session_factory, *, steps_with_diff_types):
                 bill_approved=False,
                 summary_oc="",
                 pley_id=bill_id,
+                bill_diff=bill_diff,
             )
         )
         for step_id, step_type, diff_type in steps_with_diff_types:
@@ -166,27 +165,44 @@ def _seed_author_affiliations(session_factory):
         db.commit()
 
 
-def test_view_changes_link_only_for_modified_and_incomparable(client, session_factory):
+def test_view_changes_link_only_for_revision_steps_with_bill_diff(
+    client, session_factory
+):
     _seed(
         session_factory,
         steps_with_diff_types=[
-            (1, "Revisión o cambio de texto", "modified"),
+            (1, TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION, "modified"),
             (2, "Votación", "no_change"),
             (3, "En Comisión", "unavailable"),
             (4, "Presentado", "first_version"),
             (5, "En Agenda del Pleno", "incomparable"),
-            (6, "En Agenda del Pleno", None),  # no BillDifference row
+            (6, TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION, None),
         ],
     )
 
     body = client.get("/bills/2021_1234").get_data(as_text=True)
 
-    assert "/bills/2021_1234/difference/1" in body  # modified → linked
-    assert "/bills/2021_1234/difference/5" in body  # incomparable → linked
-    assert "/bills/2021_1234/difference/2" not in body  # no_change → hidden
-    assert "/bills/2021_1234/difference/3" not in body  # unavailable → hidden
-    assert "/bills/2021_1234/difference/4" not in body  # first_version → hidden
-    assert "/bills/2021_1234/difference/6" not in body  # missing row → hidden
+    assert "/bills/2021_1234/difference/1" in body
+    assert "/bills/2021_1234/difference/5" not in body
+    assert "/bills/2021_1234/difference/2" not in body
+    assert "/bills/2021_1234/difference/3" not in body
+    assert "/bills/2021_1234/difference/4" not in body
+    assert "/bills/2021_1234/difference/6" not in body
+
+
+def test_view_changes_link_hidden_when_bill_diff_is_false(client, session_factory):
+    _seed(
+        session_factory,
+        bill_diff=False,
+        steps_with_diff_types=[
+            (1, TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION, "modified"),
+            (2, TypeBillStep.PRESENTADO, None),
+        ],
+    )
+
+    body = client.get("/bills/2021_1234").get_data(as_text=True)
+
+    assert "/bills/2021_1234/difference/1" not in body
 
 
 def test_detail_page_shows_author_party_and_committee(client, session_factory):
@@ -196,3 +212,5 @@ def test_detail_page_shows_author_party_and_committee(client, session_factory):
 
     assert "Author:" in body
     assert "Ana Perez" in body
+    assert "Party:" in body
+    assert "Partido Verde" in body

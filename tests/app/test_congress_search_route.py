@@ -7,9 +7,11 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from backend.core.enums import TypeOrganization
+from backend.core.enums import Proponents, TypeOrganization
 from backend.database.models import (
     Base,
+    Bill,
+    BillOrganization,
     ChamberMembership,
     CommitteeMembership,
     Congresista,
@@ -145,7 +147,7 @@ def _seed_congress_search_data(session_factory) -> None:
                     start_date=date(2021, 1, 1),
                     end_date=date(2026, 12, 31),
                     condicion=None,
-                    votes_in_election=None,
+                    votes_in_election=1000,
                     dist_electoral="Lima",
                 ),
                 ChamberMembership(
@@ -205,3 +207,40 @@ def test_search_filters_by_selected_commission(client, session_factory):
     assert "Ana Perez" in body
     assert "Beatriz Gomez" not in body
     assert "Commission: Comisión de Economía" in body
+
+
+def test_congress_detail_shows_bill_pley_id(client, session_factory):
+    _seed_congress_search_data(session_factory)
+
+    with session_factory() as db:
+        db.add_all(
+            [
+                Bill(
+                    id="2021_0001",
+                    pley_id="0001/2021-CR",
+                    title="Bill with visible pley id",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=1,
+                    bill_approved=False,
+                    summary_oc="",
+                ),
+                BillOrganization(
+                    bill_id="2021_0001",
+                    org_id=1,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=date(2024, 1, 10),
+                    decision_date=None,
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get("/congress/1")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "0001/2021-CR" in body
+    assert "Bill with visible pley id" in body

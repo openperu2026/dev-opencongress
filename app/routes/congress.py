@@ -162,6 +162,7 @@ def congress_detail(congresista_id):
         bills_authored = [
             SimpleNamespace(
                 id=bill.id,
+                pley_id=bill.pley_id,
                 title=bill.title,
                 presentation_date=presentation_date,
             )

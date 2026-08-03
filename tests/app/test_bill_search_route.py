@@ -104,6 +104,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     bill_approved=False,
                     summary_oc="",
                     pley_id="2021_0001",
+                    bill_diff=True,
                 ),
                 Bill(
                     id="2021_0002",
@@ -298,6 +299,10 @@ def test_search_form_includes_new_filters(client):
     assert 'name="presentation_date_to_day"' in body
     assert 'name="author_party_q"' in body
     assert 'name="organization_name_q"' in body
+    assert 'name="bill_diff_q"' in body
+    assert "Tiene diferencia de versiones" in body
+    assert 'value="yes"' in body
+    assert 'value="no"' in body
     assert "Presentation date" in body
     assert "From" in body
     assert "To" in body
@@ -355,6 +360,26 @@ def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
     assert response.status_code == 200
     assert "Bill without author" in body
     assert Proponents.CONGRESO.value in body
+
+
+def test_search_filters_by_bill_diff(client, session_factory):
+    _seed_bill_search_data(session_factory)
+
+    yes_response = client.get("/bills", query_string={"bill_diff_q": "yes"})
+    yes_body = yes_response.get_data(as_text=True)
+
+    assert yes_response.status_code == 200
+    assert "Showing 1-1 of 1 bills" in yes_body
+    assert "2021_0001" in yes_body
+    assert "2021_0002" not in yes_body
+
+    no_response = client.get("/bills", query_string={"bill_diff_q": "no"})
+    no_body = no_response.get_data(as_text=True)
+
+    assert no_response.status_code == 200
+    assert "2021_0002" in no_body
+    assert "2021_0003" in no_body
+    assert "2021_0001" not in no_body
 
 
 def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_factory):

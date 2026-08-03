@@ -294,6 +294,19 @@ main {
   color: #333333;
 }
 
+.bill-search-form .search-diff-panel {
+  display: grid;
+  grid-template-columns: max-content minmax(120px, 180px);
+  gap: 16px;
+  align-items: center;
+  justify-content: start;
+  margin-top: 18px;
+}
+
+.bill-search-form .search-diff-select {
+  width: 180px;
+}
+
 .bill-search-form .search-date-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -488,8 +501,13 @@ main {
 @media (max-width: 500px) {
   .bill-search-form .search-row--primary,
   .bill-search-form .search-row--secondary,
+  .bill-search-form .search-diff-panel,
   .bill-search-form .search-date-grid {
     grid-template-columns: 1fr;
+  }
+
+  .bill-search-form .search-diff-select {
+    width: 100%;
   }
 
   .bill-search-form .search-icon-button {

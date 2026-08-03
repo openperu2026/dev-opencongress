@@ -65,9 +65,13 @@
                     </select>
                 </div>
 
-                <div class="searching-container">
+            </div>
+
+            <div class="search-diff-panel">
+                <div class="search-date-title">{{ _('Tiene diferencia de versiones') }}</div>
+                <div class="searching-container search-diff-select">
                     <select name="bill_diff_q">
-                        <option value="">{{ _('Tiene diferencia de versiones') }}</option>
+                        <option value="">{{ _('All') }}</option>
                         <option value="yes" {% if bill_diff_q == "yes" %}selected{% endif %}>{{ _('SI') }}</option>
                         <option value="no" {% if bill_diff_q == "no" %}selected{% endif %}>{{ _('NO') }}</option>
                     </select>

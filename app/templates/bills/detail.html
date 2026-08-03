@@ -68,7 +68,7 @@
                   <a href="/bills/{{ bill.id }}/votes/{{ step.vote_event_id }}">{{ _('View details') }}</a>
                   -->
                 {% endif %}
-                {% if diff_types.get(step.step_id) in ('modified', 'incomparable') %}
+                {% if step.step_id in view_change_step_ids %}
                   <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('View changes')}}</a>
                 {% endif %}
               </div>

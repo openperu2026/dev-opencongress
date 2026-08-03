@@ -39,7 +39,7 @@ from backend.database.models import (
     VoteCounts,
     VoteEvent,
 )
-from backend.core.enums import TypeOrganization, VoteOption
+from backend.core.enums import TypeBillStep, TypeOrganization, VoteOption
 from .processed_session import SessionProcessed
 from .utils import create_party_option, create_committee_option, latest_org_name
 import json
@@ -806,16 +806,26 @@ def bill_detail(bill_id):
 
         all_steps, latest_step = extract_steps(db, bill_id)
 
-        # Only the types that actually carry comparable content; the others
-        # (no_change, unavailable, first_version, missing row) shouldn't get
-        # a "View changes" link.
-        diff_types = dict(
-            db.execute(
-                select(BillDifference.step_id, BillDifference.difference_type).where(
-                    BillDifference.bill_id == bill_id
-                )
-            ).all()
-        )
+        view_change_step_ids = set()
+        if bill.bill_diff:
+            view_change_step_ids = set(
+                db.execute(
+                    select(BillDifference.step_id)
+                    .join(
+                        BillStep,
+                        (BillStep.bill_id == BillDifference.bill_id)
+                        & (BillStep.step_id == BillDifference.step_id),
+                    )
+                    .where(
+                        BillDifference.bill_id == bill_id,
+                        BillDifference.difference_type.in_(
+                            ("modified", "incomparable")
+                        ),
+                        BillStep.step_type
+                        == TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION,
+                    )
+                ).scalars()
+            )
 
         author_id = bill.author_id
 
@@ -862,7 +872,7 @@ def bill_detail(bill_id):
             bill=bill,
             latest_step=latest_step,
             all_steps=all_steps,
-            diff_types=diff_types,
+            view_change_step_ids=view_change_step_ids,
             bill_is_approved=bill.bill_approved,
             bill_status=bill_status,
             author=author,
