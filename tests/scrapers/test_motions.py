@@ -160,7 +160,7 @@ def test_scrape_motion_appends_raw_motion(monkeypatch, session):
 
     def fake_get_url_text(url):
         # validate URL
-        assert url == f"{BASE_URL}/mocion/2021/7"
+        assert url == f"{BASE_URL}/mocion/C/2021/7"
         return json.dumps(
             {
                 "data": {
