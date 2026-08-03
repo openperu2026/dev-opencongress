@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from datetime import date
 from flask import Blueprint, render_template, request
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from backend.database.models import (
     Bill,
     ChamberMembership,
@@ -163,15 +163,15 @@ def congress_detail(congresista_id):
             SimpleNamespace(
                 id=bill.id,
                 title=bill.title,
-                pley_id=bill.pley_id,
+                presentation_date=presentation_date,
             )
-            for bill in db.execute(
-                select(Bill)
+            for bill, presentation_date in db.execute(
+                select(Bill, latest_bill_dates.c.latest_presentation_date)
                 .join(latest_bill_dates, latest_bill_dates.c.bill_id == Bill.id)
                 .where(Bill.author_id == congresista.id)
                 .order_by(latest_bill_dates.c.latest_presentation_date.desc())
                 .limit(5)
-            ).scalars()
+            ).all()
         ]
 
         bills_authored_count = db.execute(
@@ -188,6 +188,31 @@ def congress_detail(congresista_id):
                 Bill.bill_approved.is_(True),
             )
         ).scalar_one()
+
+        approval_rate_rows = db.execute(
+            select(
+                Bill.author_id,
+                func.count(Bill.id).label("total_bills"),
+                func.sum(case((Bill.bill_approved.is_(True), 1), else_=0)).label(
+                    "approved_bills"
+                ),
+            )
+            .where(Bill.author_id.is_not(None))
+            .group_by(Bill.author_id)
+        ).all()
+        average_success_rate = (
+            round(
+                sum(
+                    100 * (approved_bills / total_bills)
+                    for _, total_bills, approved_bills in approval_rate_rows
+                    if total_bills
+                )
+                / len(approval_rate_rows),
+                1,
+            )
+            if approval_rate_rows
+            else 0
+        )
 
         memberships = (
             db.execute(
@@ -226,6 +251,7 @@ def congress_detail(congresista_id):
                     else 0
                 )
             } %",
+            "average_success_rate": f"{average_success_rate} %",
             "successful_bills": successful_bills_count,
         }
 

@@ -263,11 +263,18 @@ def get_last_id(entity: str) -> int:
 
     with httpx.Client(headers=headers, timeout=30) as client:
         if config["method"] == "POST":
-            payload = {
-                "perParId": 2021,
-                "pageSize": 10,
-                "rowStart": 0,
-            }
+            if entity == "Motions":
+                payload = {
+                    "codTipoParl": "C",
+                    "pageSize": 10,
+                    "rowStart": 0,
+                }
+            else:
+                payload = {
+                    "perParId": 2021,
+                    "pageSize": 10,
+                    "rowStart": 0,
+                }
             r = client.post(config["url"], json=payload)
 
         else:
