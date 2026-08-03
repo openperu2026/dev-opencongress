@@ -24,28 +24,45 @@ esac
 mkdir -p "$log_dir"
 
 log_file="$log_dir/${target}.log"
+json_file="$log_dir/${target}.json"
 
-start_time=$(date -Iseconds)
+started_at=$(date -Iseconds)
 start_epoch=$(date +%s)
+
+status="success"
+exit_code=0
 
 {
     echo "========================================"
-    echo "${start_time} starting ${target}"
+    echo "$(date -Iseconds) starting ${target}"
 
     if make "$target"; then
-        status=0
         echo "$(date -Iseconds) finished ${target} successfully"
     else
-        status=$?
-        echo "$(date -Iseconds) failed ${target} with exit code ${status}"
+        exit_code=$?
+        status="failed"
+        echo "$(date -Iseconds) failed ${target} with exit code ${exit_code}"
     fi
 
-    end_epoch=$(date +%s)
-    duration=$((end_epoch - start_epoch))
+    finished_at=$(date -Iseconds)
+
+    duration=$(( $(date +%s) - start_epoch ))
+
+    cat > "$json_file" <<EOF
+{
+  "job": "$target",
+  "started_at": "$started_at",
+  "finished_at": "$finished_at",
+  "status": "$status",
+  "exit_code": $exit_code,
+  "duration_seconds": $duration
+}
+EOF
 
     echo "duration_seconds=${duration}"
     echo "========================================"
     echo
 
-    exit "$status"
+    exit "$exit_code"
+
 } >> "$log_file" 2>&1
