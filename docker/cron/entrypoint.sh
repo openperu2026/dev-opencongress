@@ -2,7 +2,6 @@
 set -eu
 
 mkdir -p /app/logs
-touch /app/logs/cron.log
 
 python - <<'PY' > /app/.cron-env
 import os
@@ -13,4 +12,5 @@ for key, value in sorted(os.environ.items()):
 PY
 
 crontab /app/docker/cron/crontab
+
 exec cron -f
