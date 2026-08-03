@@ -46,7 +46,7 @@ class RawMotionScraper:
         Returns tuple with result of scrape, error message if relevant
         """
 
-        motion_url = f"{BASE_URL}/mocion/{year}/{motion_number}"
+        motion_url = f"{BASE_URL}/mocion/C/{year}/{motion_number}"
         response = get_url_text(motion_url)
 
         if response:
