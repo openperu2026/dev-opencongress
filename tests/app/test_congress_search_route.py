@@ -212,7 +212,7 @@ def test_search_filters_by_selected_region(client, session_factory):
     assert response.status_code == 200
     assert "Ana Perez" in body
     assert "Beatriz Gomez" not in body
-    assert "Region: Lima" in body
+    assert "Región: Lima" in body
 
 
 def test_search_filters_by_selected_commission(client, session_factory):
@@ -227,7 +227,7 @@ def test_search_filters_by_selected_commission(client, session_factory):
     assert response.status_code == 200
     assert "Ana Perez" in body
     assert "Beatriz Gomez" not in body
-    assert "Commission: Comisión de Economía" in body
+    assert "Comisión: Comisión de Economía" in body
 
 
 def test_search_filters_by_selected_special_committee(client, session_factory):
@@ -242,7 +242,7 @@ def test_search_filters_by_selected_special_committee(client, session_factory):
     assert response.status_code == 200
     assert "Ana Perez" not in body
     assert "Beatriz Gomez" in body
-    assert "Special Committee: Special Test" in body
+    assert "Comisión especial: Special Test" in body
 
 
 def test_congress_detail_shows_bill_pley_id(client, session_factory):

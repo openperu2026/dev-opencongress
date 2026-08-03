@@ -210,7 +210,7 @@ def test_detail_page_shows_author_party_and_committee(client, session_factory):
 
     body = client.get("/bills/2021_1234").get_data(as_text=True)
 
-    assert "Author:" in body
+    assert "Autor:" in body
     assert "Ana Perez" in body
-    assert "Party:" in body
+    assert "Partido:" in body
     assert "Partido Verde" in body

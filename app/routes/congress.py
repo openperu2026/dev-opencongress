@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from datetime import date
 from flask import Blueprint, render_template, request
+from flask_babel import gettext as _
 from sqlalchemy import case, func, or_, select
 from backend.core.enums import TypeCommittee, TypeOrganization
 from backend.database.models import (
@@ -50,7 +51,7 @@ def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
             chamber_membership.dist_electoral if chamber_membership else None
         ),
         condicion=(
-            chamber_membership.condicion if chamber_membership else "Not available"
+            chamber_membership.condicion if chamber_membership else _("No disponible")
         ),
         votes_in_election=(
             chamber_membership.votes_in_election if chamber_membership else 0
@@ -278,14 +279,18 @@ def congress_detail(congresista_id):
 
         recent_votes = [
             {
-                "position": "In favor",
-                "bill": "Bill N 32014",
-                "description": "Vote data is not available yet. This is placeholder content for the congressperson detail view.",
+                "position": _("A favor"),
+                "bill": "Proyecto de ley N 32014",
+                "description": _(
+                    "Los datos de votación aún no están disponibles. Este es contenido temporal para la vista de detalle del congresista."
+                ),
             },
             {
-                "position": "Against",
-                "bill": "Bill N 32074",
-                "description": "Vote data is not available yet. This is placeholder content for the congressperson detail view.",
+                "position": _("En contra"),
+                "bill": "Proyecto de ley N 32074",
+                "description": _(
+                    "Los datos de votación aún no están disponibles. Este es contenido temporal para la vista de detalle del congresista."
+                ),
             },
         ]
 

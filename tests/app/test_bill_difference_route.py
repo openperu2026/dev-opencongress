@@ -271,7 +271,7 @@ def test_no_change_path_does_not_render_diff(client, session_factory):
     resp = client.get("/bills/2021_1234/difference/1")
     body = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    assert "No changes between versions." in body
+    assert "No hay cambios entre las versiones." in body
 
 
 def test_unavailable_path_renders_status_message(client, session_factory):
@@ -289,7 +289,7 @@ def test_unavailable_path_renders_status_message(client, session_factory):
     resp = client.get("/bills/2021_1234/difference/1")
     body = resp.get_data(as_text=True)
     assert resp.status_code == 200
-    assert "Text could not be extracted for comparison." in body
+    assert "No se pudo extraer el texto para comparar." in body
     assert "diff-tok-delete" not in body
 
 
@@ -313,7 +313,7 @@ def test_malformed_json_falls_through_cleanly(client, session_factory):
 
     resp = client.get("/bills/2021_1234/difference/1")
     assert resp.status_code == 200
-    assert "No difference data available." in resp.get_data(as_text=True)
+    assert "No hay datos de diferencias disponibles." in resp.get_data(as_text=True)
 
 
 def test_renderer_exception_falls_through_cleanly(client, session_factory, monkeypatch):
@@ -330,4 +330,4 @@ def test_renderer_exception_falls_through_cleanly(client, session_factory, monke
 
     resp = client.get("/bills/2021_1234/difference/1")
     assert resp.status_code == 200
-    assert "No difference data available." in resp.get_data(as_text=True)
+    assert "No hay datos de diferencias disponibles." in resp.get_data(as_text=True)

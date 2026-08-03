@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ session.get('lang') or request.args.get('lang') or 'es' }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -16,22 +16,22 @@
 <body>
     <nav class="site-navbar">
         <input type="checkbox" id="nav-toggle" class="nav-toggle">
-        <label for="nav-toggle" class="menu-toggle" aria-label="{{ _('Open navigation menu') }}">&#9776;</label>
+        <label for="nav-toggle" class="menu-toggle" aria-label="{{ _('Abrir menú de navegación') }}">&#9776;</label>
 
         <ul class="nav-links" id="menu">
             <li class="menu-close">
-                <label for="nav-toggle" aria-label="{{ _('Close navigation menu') }}">X</label>
+                <label for="nav-toggle" aria-label="{{ _('Cerrar menú de navegación') }}">X</label>
                 <a href="#" aria-hidden="true">X</a>
             </li>
-            <li><a href="{{ url_for('landing.index') }}">{{ _('Home') }}</a></li>
-            <li><a href="{{ url_for('landing.index', _anchor='about') }}">{{ _('About') }}</a></li>
-            <li><a href="{{ url_for('bills.index') }}">{{ _('Bills') }}</a></li>
-            <li><a href="{{ url_for('congress.index') }}">{{ _('Congressmember') }}</a></li>
+            <li><a href="{{ url_for('landing.index') }}">{{ _('Inicio') }}</a></li>
+            <li><a href="{{ url_for('landing.index', _anchor='about') }}">{{ _('Acerca de') }}</a></li>
+            <li><a href="{{ url_for('bills.index') }}">{{ _('Proyectos de ley') }}</a></li>
+            <li><a href="{{ url_for('congress.index') }}">{{ _('Congresista') }}</a></li>
         </ul>
 
-        <div class="language-links" role="group" aria-label="{{ _('Language') }}">
-            <a href="{{ url_for('i18n.set_lang', lang='en') }}">{{ _('English') }}</a>
-            <a href="{{ url_for('i18n.set_lang', lang='es') }}">{{ _('Spanish') }}</a>
+        <div class="language-links" role="group" aria-label="{{ _('Idioma') }}">
+            <a href="{{ url_for('i18n.set_lang', lang='en') }}">{{ _('Inglés') }}</a>
+            <a href="{{ url_for('i18n.set_lang', lang='es') }}">{{ _('Español') }}</a>
         </div>
     </nav>
 
@@ -44,10 +44,10 @@
     <footer class="footer">
         <div class="container footer-row">
             <ul class="footer-links">
-                <li><a href="{{ url_for('landing.index', _anchor='about') }}">{{ _('About') }}</a></li>
-                <li><a href="#">{{ _('Terms of Service') }}</a></li>
-                <li><a href="#">{{ _('Privacy') }}</a></li>
-                <li><a href="#">{{ _('Contact') }}</a></li>
+                <li><a href="{{ url_for('landing.index', _anchor='about') }}">{{ _('Acerca de') }}</a></li>
+                <li><a href="#">{{ _('Términos de servicio') }}</a></li>
+                <li><a href="#">{{ _('Privacidad') }}</a></li>
+                <li><a href="#">{{ _('Contacto') }}</a></li>
             </ul>
         </div>
     </footer>

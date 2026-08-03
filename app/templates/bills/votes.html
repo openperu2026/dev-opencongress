@@ -25,11 +25,11 @@
 
       <div class="bill-heading-meta">
         <span>
-          <strong>{{_('Presentation date')}}:</strong>
+          <strong>{{_('Fecha de presentación')}}:</strong>
           {% if presentation_date %}
             {{ presentation_date.strftime('%d-%m-%Y') }}
           {% else %}
-            {{ _('Not available') }}
+            {{ _('No disponible') }}
           {% endif %}
         </span>
       </div>
@@ -37,21 +37,21 @@
   </section>
 
   <div class="bill-meta">
-    <p><strong>{{_('Vote date')}}:</strong> {{ vote_date.strftime('%d-%m-%Y') }}</p>
-    <p><strong>{{_('Organization')}}:</strong> {{ organization_name or _('Not available') }}</p>
+    <p><strong>{{_('Fecha de votacion')}}:</strong> {{ vote_date.strftime('%d-%m-%Y') }}</p>
+    <p><strong>{{_('Organización')}}:</strong> {{ organization_name or _('No disponible') }}</p>
   </div>
 
   <div class="vote-results">
-    <h2>{{_('Voting Results')}}</h2>
+    <h2>{{_('Resultados de votación')}}</h2>
     
     <div class="vote-summary">
       <table class="vote-table">
         <thead>
           <tr>
-            <th>{{_('IN FAVOR')}}</th>
-            <th>{{_('AGAINST')}}</th>
-            <th>{{_('ABSTAIN')}}</th>
-            <th>{{_('OTHERS')}}</th>
+            <th>{{_('A FAVOR')}}</th>
+            <th>{{_('EN CONTRA')}}</th>
+            <th>{{_('ABSTENCIÓN')}}</th>
+            <th>{{_('OTROS')}}</th>
           </tr>
         </thead>
         <tbody>
@@ -74,14 +74,14 @@
   </div>
 
   <div class="vote-legend">
-    <div class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>{{_('In favor')}}</div>
-    <div class="legend-item"><span class="legend-swatch legend-swatch--no"></span>{{_('Against')}}</div>
-    <div class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>{{_('Abstain')}}</div>
-    <div class="legend-item"><span class="legend-swatch legend-swatch--others"></span>{{_('Others')}}</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--yes"></span>{{_('A favor')}}</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--no"></span>{{_('En contra')}}</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--abstain"></span>{{_('Abstención')}}</div>
+    <div class="legend-item"><span class="legend-swatch legend-swatch--others"></span>{{_('Otros')}}</div>
   </div>
 
   <div class="bancada-chart">
-    <h3 class="bancada-chart-title">{{ _('Results by bancada') }}</h3>
+    <h3 class="bancada-chart-title">{{ _('Resultados por bancada') }}</h3>
     {% if bancada_rows %}
     <svg id="bancadaSvg" viewBox="0 0 760 {{ bancada_chart_height }}" preserveAspectRatio="xMidYMin meet">
       {% for row in bancada_rows %}
@@ -108,20 +108,20 @@
       <table class="table table-striped table-bordered align-middle vote-members-table" id="voteMembersTable">
         <thead>
           <tr>
-            <th><button type="button" class="vote-sort-button" data-sort-key="member">{{ _('Congressmember') }}</button></th>
-            <th><button type="button" class="vote-sort-button" data-sort-key="party">{{ _('Party') }}</button></th>
-            <th><button type="button" class="vote-sort-button" data-sort-key="vote">{{ _('Vote') }}</button></th>
+            <th><button type="button" class="vote-sort-button" data-sort-key="member">{{ _('Congresista') }}</button></th>
+            <th><button type="button" class="vote-sort-button" data-sort-key="party">{{ _('Partido') }}</button></th>
+            <th><button type="button" class="vote-sort-button" data-sort-key="vote">{{ _('Voto') }}</button></th>
           </tr>
         </thead>
         <tbody>
           {% for vote_row in vote_rows %}
-            <tr data-member="{{ vote_row.full_name|lower }}" data-party="{{ (vote_row.party_name or _('Not available'))|lower }}" data-vote-order="{{ {'yes': 1, 'no': 2, 'abstain': 3, 'others': 4}[vote_row.vote_key] }}">
+            <tr data-member="{{ vote_row.full_name|lower }}" data-party="{{ (vote_row.party_name or _('No disponible'))|lower }}" data-vote-order="{{ {'yes': 1, 'no': 2, 'abstain': 3, 'others': 4}[vote_row.vote_key] }}">
               <td>
                 <a href="{{ url_for('congress.congress_detail', congresista_id=vote_row.id) }}">
                   {{ vote_row.full_name }}
                 </a>
               </td>
-              <td>{{ vote_row.party_name or _('Not available') }}</td>
+              <td>{{ vote_row.party_name or _('No disponible') }}</td>
               <td>{{ vote_row.vote_label }}</td>
             </tr>
           {% endfor %}

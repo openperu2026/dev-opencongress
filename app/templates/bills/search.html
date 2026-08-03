@@ -2,54 +2,54 @@
 
 {% block content %}
 <form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
-    <h1 class="search-title">{{_('Search the bill by:')}}</h1>
+    <h1 class="search-title">{{_('Busca el proyecto de ley por:')}}</h1>
     <div class="bar-search">
         <div class="search-row search-row--primary">
             <div class="searching-container">
-                <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="{{_('Title')}}">
+                <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="{{_('Título')}}">
             </div>
 
             <div class="searching-container">
-                <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="{{_('Author')}}">
+                <input type="text" name="author_q" value="{{ author_q or '' }}" placeholder="{{_('Autor')}}">
             </div>
 
             <div class="searching-container">
                 <select name="organization_name_q">
-                    <option value="" {% if not organization_name_q %}selected{% endif %} disabled hidden>{{ _('Ordinary Committee') }}</option>
+                    <option value="" {% if not organization_name_q %}selected{% endif %} disabled hidden>{{ _('Comisión ordinaria') }}</option>
                     {% for organization_option in organization_name_options or [] %}
                         <option value="{{ organization_option }}" {% if organization_name_q == organization_option %}selected{% endif %}>{{ organization_option }}</option>
                     {% endfor %}
                 </select>
             </div>
 
-            <button type="submit" class="search-icon-button" aria-label="{{ _('Search') }}">
+            <button type="submit" class="search-icon-button" aria-label="{{ _('Buscar') }}">
                 <i class="fa-solid fa-magnifying-glass"></i>
             </button>
 
             <a href="{{ url_for('bills.index') }}" class="clear-button bill-clean-button">
-                {{ _('Clean') }}
+                {{ _('Limpiar') }}
             </a>
         </div>
 
         <details class="advanced-search" {% if pley_id_q or bill_id_q or law_id_q or current_step_q or author_party_q or special_committee_q or bill_diff_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
             <summary class="search-section-title">
-                <span>{{ _('Advanced Search Options:') }}</span>
+                <span>{{ _('Opciones de búsqueda avanzada:') }}</span>
                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
             </summary>
 
             <div class="search-row search-row--secondary">
                 <div class="searching-container">
                     <input type="hidden" name="bill_id_q" value="">
-                    <input type="text" name="pley_id_q" value="{{ pley_id_q or bill_id_q or '' }}" placeholder="{{ _('Bill ID') }}">
+                    <input type="text" name="pley_id_q" value="{{ pley_id_q or bill_id_q or '' }}" placeholder="{{ _('Número de Proyecto de ley') }}">
                 </div>
 
                 <div class="searching-container">
-                    <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="{{ _('Law ID') }}">
+                    <input type="text" name="law_id_q" value="{{ law_id_q or '' }}" placeholder="{{ _('Número de la ley') }}">
                 </div>
 
                 <div class="searching-container">
                     <select name="current_step_q">
-                        <option value="">{{ _('Current Step') }}</option>
+                        <option value="">{{ _('Etapa actual') }}</option>
                         {% for step_option in current_step_options or [] %}
                             <option value="{{ step_option }}" {% if current_step_q == step_option %}selected{% endif %}>{{ step_option }}</option>
                         {% endfor %}
@@ -58,7 +58,7 @@
 
                 <div class="searching-container">
                     <select name="author_party_q">
-                        <option value="">{{ _('Author party') }}</option>
+                        <option value="">{{ _('Partido del autor') }}</option>
                         {% for party_option in author_party_options or [] %}
                             <option value="{{ party_option }}" {% if author_party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
                         {% endfor %}
@@ -67,7 +67,7 @@
 
                 <div class="searching-container">
                     <select name="special_committee_q">
-                        <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Special Committee') }}</option>
+                        <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Comisión especial') }}</option>
                         {% for organization_option in special_committee_options or [] %}
                             <option value="{{ organization_option }}" {% if special_committee_q == organization_option %}selected{% endif %}>{{ organization_option }}</option>
                         {% endfor %}
@@ -77,25 +77,25 @@
             </div>
 
             <div class="search-date-panel">
-                <div class="search-date-title">{{ _('Presentation date') }}</div>
+                <div class="search-date-title">{{ _('Fecha de presentación') }}</div>
                 <div class="search-date-grid">
                     <div class="search-date-group">
-                        <span class="search-date-label">{{ _('From') }}</span>
+                        <span class="search-date-label">{{ _('Desde') }}</span>
                         <div class="search-date-selects">
                             <select name="presentation_date_from_year">
-                                <option value="" {% if presentation_date_from_year is none %}selected{% endif %}>{{ _('Year') }}</option>
+                                <option value="" {% if presentation_date_from_year is none %}selected{% endif %}>{{ _('Año') }}</option>
                                 {% for year_option in presentation_date_from_year_options or [] %}
                                     <option value="{{ year_option }}" {% if presentation_date_from_year == year_option %}selected{% endif %}>{{ year_option }}</option>
                                 {% endfor %}
                             </select>
                             <select name="presentation_date_from_month">
-                                <option value="" {% if presentation_date_from_month is none %}selected{% endif %}>{{ _('Month') }}</option>
+                                <option value="" {% if presentation_date_from_month is none %}selected{% endif %}>{{ _('Mes') }}</option>
                                 {% for month_option in presentation_date_from_month_options or [] %}
                                     <option value="{{ month_option }}" {% if presentation_date_from_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
                                 {% endfor %}
                             </select>
                             <select name="presentation_date_from_day" data-selected-day="{{ presentation_date_from_day or '' }}">
-                                <option value="" {% if presentation_date_from_day is none %}selected{% endif %}>{{ _('Day') }}</option>
+                                <option value="" {% if presentation_date_from_day is none %}selected{% endif %}>{{ _('Día') }}</option>
                                 {% for day_option in presentation_date_from_day_options or [] %}
                                     <option value="{{ day_option }}" {% if presentation_date_from_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
                                 {% endfor %}
@@ -104,22 +104,22 @@
                     </div>
 
                     <div class="search-date-group">
-                        <span class="search-date-label">{{ _('To') }}</span>
+                        <span class="search-date-label">{{ _('Hasta') }}</span>
                         <div class="search-date-selects">
                             <select name="presentation_date_to_year">
-                                <option value="" {% if presentation_date_to_year is none %}selected{% endif %}>{{ _('Year') }}</option>
+                                <option value="" {% if presentation_date_to_year is none %}selected{% endif %}>{{ _('Año') }}</option>
                                 {% for year_option in presentation_date_to_year_options or [] %}
                                     <option value="{{ year_option }}" {% if presentation_date_to_year == year_option %}selected{% endif %}>{{ year_option }}</option>
                                 {% endfor %}
                             </select>
                             <select name="presentation_date_to_month">
-                                <option value="" {% if presentation_date_to_month is none %}selected{% endif %}>{{ _('Month') }}</option>
+                                <option value="" {% if presentation_date_to_month is none %}selected{% endif %}>{{ _('Mes') }}</option>
                                 {% for month_option in presentation_date_to_month_options or [] %}
                                     <option value="{{ month_option }}" {% if presentation_date_to_month == month_option %}selected{% endif %}>{{ '%02d'|format(month_option) }}</option>
                                 {% endfor %}
                             </select>
                             <select name="presentation_date_to_day" data-selected-day="{{ presentation_date_to_day or '' }}">
-                                <option value="" {% if presentation_date_to_day is none %}selected{% endif %}>{{ _('Day') }}</option>
+                                <option value="" {% if presentation_date_to_day is none %}selected{% endif %}>{{ _('Día') }}</option>
                                 {% for day_option in presentation_date_to_day_options or [] %}
                                     <option value="{{ day_option }}" {% if presentation_date_to_day == day_option %}selected{% endif %}>{{ '%02d'|format(day_option) }}</option>
                                 {% endfor %}
@@ -141,24 +141,24 @@
                 </div>
                 <div class="searching-container search-diff-select">
                     <select name="bill_diff_q">
-                        <option value="">{{ _('All') }}</option>
-                        <option value="yes" {% if bill_diff_q == "yes" %}selected{% endif %}>{{ _('SI') }}</option>
-                        <option value="no" {% if bill_diff_q == "no" %}selected{% endif %}>{{ _('NO') }}</option>
+                        <option value="">{{ _('Todos') }}</option>
+                        <option value="yes" {% if bill_diff_q == "yes" %}selected{% endif %}>{{ _('Sí') }}</option>
+                        <option value="no" {% if bill_diff_q == "no" %}selected{% endif %}>{{ _('No') }}</option>
                     </select>
                 </div>
             </div>
 
             <div class="radio-container">
                 <label>
-                    <input type="radio" name="status" value="all" {% if radio_status == "all" %}checked{% endif %}>{{_('All bills')}}
+                    <input type="radio" name="status" value="all" {% if radio_status == "all" %}checked{% endif %}>{{_('Todos')}}
                 </label>
 
                 <label>
-                    <input type="radio" name="status" value="approved" {% if radio_status == "approved" %}checked{% endif %}>{{_('Approved bills')}}
+                    <input type="radio" name="status" value="approved" {% if radio_status == "approved" %}checked{% endif %}>{{_('Proyectos de ley aprobados')}}
                 </label>
 
                 <label>
-                    <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Not approved bills')}}
+                    <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Proyectos de ley no aprobados')}}
                 </label>
             </div>
         </details>
@@ -168,7 +168,7 @@
 
 {% if recent_bills and not search_requested %}
     <div class="search-results-summary recent-bills-heading">
-        <p>{{ _('Recent bills') }}</p>
+        <p>{{ _('Proyectos de ley recientes') }}</p>
     </div>
 
     <table class="table table-striped search-results-table recent-bills-table">
@@ -176,11 +176,11 @@
             <tr>
                 <th>#</th>
                 <th>{{ _('ID') }}</th>
-                <th>{{ _('Title') }}</th>
-                <th>{{ _('Author') }}</th>
-                <th>{{ _('First presentation date') }}</th>
-                <th>{{ _('Status') }}</th>
-                <th>{{ _('Detail') }}</th>
+                <th>{{ _('Título') }}</th>
+                <th>{{ _('Autor') }}</th>
+                <th>{{ _('Primera fecha de presentacion') }}</th>
+                <th>{{ _('Estado') }}</th>
+                <th>{{ _('Detalle') }}</th>
             </tr>
         </thead>
         <tbody>
@@ -198,7 +198,7 @@
                 <td>{{ bill.status }}</td>
                 <td>
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
-                        {{_('View details')}}
+                        {{_('Ver detalles')}}
                     </a>
                 </td>
             </tr>
@@ -209,47 +209,47 @@
 
 {% if bills %}
     <div class = "search-criteria">
-        <h3>{{_('Search Criteria')}}</h3>
+        <h3>{{_('Criterios de búsqueda')}}</h3>
         {% if title_q %}
-            <span>{{_('Title')}}: {{title_q}}</span>
+            <span>{{_('Título')}}: {{title_q}}</span>
         {% endif %}
         {% if author_display %}
-            <span>{{_('Author')}}: {{author_display}}</span>
+            <span>{{_('Autor')}}: {{author_display}}</span>
         {% elif author_q %}
-            <span>{{_('Author')}}: {{author_q}}</span>
+            <span>{{_('Autor')}}: {{author_q}}</span>
         {% endif %}
         {% if pley_id_q or bill_id_q %}
-            <span>{{ _('Bill ID') }}: {{ pley_id_q or bill_id_q }}</span>
+            <span>{{ _('Número de Proyecto de ley') }}: {{ pley_id_q or bill_id_q }}</span>
         {% endif %}
         {% if law_id_q %}
-            <span>{{ _('Law ID') }}: {{law_id_q}}</span>
+            <span>{{ _('Número de la ley') }}: {{law_id_q}}</span>
         {% endif %}
         {% if current_step_q %}
-            <span>{{_('Current Step')}}: {{current_step_q}}</span>
+            <span>{{_('Etapa actual')}}: {{current_step_q}}</span>
         {% endif %}
         {% if author_party_q %}
-            <span>{{_('Author party')}}: {{author_party_q}}</span>
+            <span>{{_('Partido del autor')}}: {{author_party_q}}</span>
         {% endif %}
         {% if bill_diff_q %}
-            <span>{{ _('Tiene diferencia de versiones') }}: {{ _('SI') if bill_diff_q == 'yes' else _('NO') }}</span>
+            <span>{{ _('Tiene diferencia de versiones') }}: {{ _('Sí') if bill_diff_q == 'yes' else _('No') }}</span>
         {% endif %}
         {% if presentation_date_from and presentation_date_to %}
-            <span>{{_('Presentation Date')}}: {{ '%04d-%02d-%02d'|format(presentation_date_from_year, presentation_date_from_month, presentation_date_from_day) }} - {{ '%04d-%02d-%02d'|format(presentation_date_to_year, presentation_date_to_month, presentation_date_to_day) }}</span>
+            <span>{{_('Fecha de presentación')}}: {{ '%04d-%02d-%02d'|format(presentation_date_from_year, presentation_date_from_month, presentation_date_from_day) }} - {{ '%04d-%02d-%02d'|format(presentation_date_to_year, presentation_date_to_month, presentation_date_to_day) }}</span>
         {% endif %}
         {% if organization_name_q %}
-            <span>{{_('Organization')}}: {{organization_name_q}}</span>
+            <span>{{_('Organización')}}: {{organization_name_q}}</span>
         {% endif %}
         {% if special_committee_q %}
-            <span>{{ _('Special Committee') }}: {{ special_committee_q }}</span>
+            <span>{{ _('Comisión especial') }}: {{ special_committee_q }}</span>
         {% endif %}
         {% if radio_status != 'all' %}
-            <span>{{_('Status')}}: {{_('Approved bills') if radio_status == 'approved' else _('Not approved bills')}}</span>
+            <span>{{_('Estado')}}: {{_('Proyectos de ley aprobados') if radio_status == 'approved' else _('Proyectos de ley no aprobados')}}</span>
         {% endif %}
     </div>
 
     {% if total_count_display is not none %}
         <div class="search-results-summary">
-            <p>{{ _('Showing %(start)s-%(end)s of %(count)s bills', start=results_start, end=results_end, count=total_count_display) }}</p>
+            <p>{{ _('Mostrando %(start)s-%(end)s de %(count)s proyectos de ley', start=results_start, end=results_end, count=total_count_display) }}</p>
         </div>
     {% endif %}
 
@@ -258,11 +258,11 @@
             <tr>
                 <th>#</th>
                 <th>{{ _('ID') }}</th>
-                <th>{{ _('Title') }}</th>
-                <th>{{ _('Author') }}</th>
-                <th>{{ _('Presentation date') }}</th>
-                <th>{{ _('Status') }}</th>
-                <th>{{ _('Detail') }}</th>
+                <th>{{ _('Título') }}</th>
+                <th>{{ _('Autor') }}</th>
+                <th>{{ _('Fecha de presentación') }}</th>
+                <th>{{ _('Estado') }}</th>
+                <th>{{ _('Detalle') }}</th>
             </tr>
         </thead>
         <tbody>
@@ -276,7 +276,7 @@
                 <td>{{ bill.status }}</td>
                 <td>
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
-                        {{_('View details')}}
+                        {{_('Ver detalles')}}
                     </a>
                 </td>
             </tr>
@@ -285,8 +285,8 @@
     </table>
 
     {% if pagination_pages %}
-        <nav class="search-pagination" aria-label="{{ _('Search pages') }}">
-            <div class="search-pagination-label">{{ _('Page') }}</div>
+        <nav class="search-pagination" aria-label="{{ _('Páginas de búsqueda') }}">
+            <div class="search-pagination-label">{{ _('Página') }}</div>
             <div class="pagination-tabs">
                 {% for page_item in pagination_pages %}
                     {% if page_item.current %}
@@ -299,17 +299,17 @@
 
             <div class="pagination-controls">
                 {% if prev_page_url %}
-                    <a class="pagination-prev" href="{{ prev_page_url }}">←{{ _('Previous') }}</a>
+                    <a class="pagination-prev" href="{{ prev_page_url }}">←{{ _('Anterior') }}</a>
                 {% endif %}
 
                 {% if next_page_url %}
-                    <a class="pagination-next" href="{{ next_page_url }}">{{ _('Next') }}→</a>
+                    <a class="pagination-next" href="{{ next_page_url }}">{{ _('Siguiente') }}→</a>
                 {% endif %}
             </div>
         </nav>
     {% endif %}
 {% elif search_requested %}
-    <p>{{_('No matching bills found.')}}</p>
+    <p>{{_('No se encontraron proyectos de ley.')}}</p>
 {% endif %}
 
 <script>
@@ -328,7 +328,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const refreshDays = () => {
             const selectedYear = Number(yearSelect.value);
             const selectedMonth = Number(monthSelect.value);
-            daySelect.innerHTML = `<option value="">{{ _('Day') }}</option>`;
+            daySelect.innerHTML = `<option value="">{{ _('Día') }}</option>`;
 
             if (!selectedYear || !selectedMonth) {
                 return;

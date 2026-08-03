@@ -248,11 +248,11 @@ def _vote_option_key(option) -> str:
 def _vote_option_label(option) -> str:
     value = getattr(option, "value", option)
     labels = {
-        VoteOption.SI.value: _("In favor"),
-        VoteOption.NO.value: _("Against"),
-        VoteOption.ABSTENCION.value: _("Abstain"),
+        VoteOption.SI.value: _("A favor"),
+        VoteOption.NO.value: _("En contra"),
+        VoteOption.ABSTENCION.value: _("Abstención"),
     }
-    return labels.get(value, _("Others"))
+    return labels.get(value, _("Otros"))
 
 
 def _build_vote_summary_counts(vote_event: VoteEvent) -> dict[str, int]:
@@ -874,9 +874,9 @@ def bill_detail(bill_id):
         )
 
         # Approved and time since presentation/time for approval
-        bill_status = _("Not approved")
+        bill_status = _("No aprobado")
         if bill.bill_approved:
-            bill_status = _("Approved")
+            bill_status = _("Aprobado")
 
             stmt = (
                 select(BillStep.step_date)
@@ -960,9 +960,9 @@ def votes(bill_id, vote_event_id):
 
         bancada_rows, bancada_chart_height = _build_vote_bancada_rows(db, vote_event_id)
 
-        bill_status = _("Not approved")
+        bill_status = _("No aprobado")
         if bill.bill_approved:
-            bill_status = _("Approved")
+            bill_status = _("Aprobado")
 
         presentation_date = db.scalar(
             select(BillStep.step_date).where(

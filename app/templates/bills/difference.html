@@ -5,7 +5,7 @@
   <section class="bill-hero">
     <div class="bill-content">
       <div class="bill-topline">
-        <span class="bill-code">{{ _('Bill') }} Nº {{ bill.pley_id }}</span>
+        <span class="bill-code">{{ _('Proyecto de ley') }} Nº {{ bill.pley_id }}</span>
       </div>
 
       <h1 class="bill-heading">
@@ -13,36 +13,36 @@
       </h1>
 
       <div class="bill-heading-meta">
-        <span><strong>{{_('Step')}}:</strong> {{ step.step_type.value }}</span>
+        <span><strong>{{_('Paso')}}:</strong> {{ step.step_type.value }}</span>
       </div>
     </div>
   </section>
-  <a class="diff-back-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">← {{_('Back to bill')}}</a>
+  <a class="diff-back-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">← {{_('Volver al proyecto de ley')}}</a>
 </div>
 
 {% if difference_type == 'no_change' %}
-  <p class="diff-status diff-status-equal">{{_('No changes between versions.')}}</p>
+  <p class="diff-status diff-status-equal">{{_('No hay cambios entre las versiones.')}}</p>
 
 {% elif difference_type == 'first_version' %}
-  <p class="diff-status diff-status-info">{{_('This is the first version — no previous text to compare.')}}</p>
+  <p class="diff-status diff-status-info">{{_('Esta es la primera versión — no hay texto previo para comparar.')}}</p>
 
 {% elif difference_type == 'incomparable' %}
   <p class="diff-status diff-status-warning">
-    {{_('Versions differ in length by more than 10× — probably mismatched document types.')}}
+    {{_('Las versiones difieren en longitud en más de 10× — probablemente son tipos de documento distintos.')}}
   </p>
 
 {% elif difference_type == 'unavailable' %}
-  <p class="diff-status diff-status-warning">{{_('Text could not be extracted for comparison.')}}</p>
+  <p class="diff-status diff-status-warning">{{_('No se pudo extraer el texto para comparar.')}}</p>
 
 {% elif old_diff_html or new_diff_html %}
 
   <section class="diff-summary-card">
     <div class="diff-summary-card-heading">
       <span class="material-symbols-outlined" style="color: var(--color-highlight);">auto_awesome</span>
-      {{ _('AI Impact Summary') }}
+      {{ _('Resumen de impacto con IA') }}
     </div>
     <p class="diff-summary-card-body">
-      {{ _('AI-generated summary coming soon. In the meantime, review the highlighted changes below.') }}
+      {{ _('El resumen generado por IA estará disponible pronto. Mientras tanto, revisa los cambios resaltados abajo.') }}
     </p>
   </section>
 
@@ -51,20 +51,20 @@
   <section class="diff-panel">
     <div class="diff-panel-header">
       <div class="diff-col-header">
-        <span class="diff-col-title">{{ _('Version 1') }}: {{ prev_step.step_type.value if prev_step else '—' }}</span>
+        <span class="diff-col-title">{{ _('Versión 1') }}: {{ prev_step.step_type.value if prev_step else '—' }}</span>
         <span class="diff-col-date">{{ prev_step.step_date if prev_step else '—' }}</span>
         {% if old_doc_available %}
           <a class="diff-doc-link" href="{{ old_doc_url }}" target="_blank" rel="noopener">
-            <span class="material-symbols-outlined">description</span> {{ _('View document') }}
+            <span class="material-symbols-outlined">description</span> {{ _('Ver documento') }}
           </a>
         {% endif %}
       </div>
       <div class="diff-col-header">
-        <span class="diff-col-title">{{ _('Version 2') }}: {{ step.step_type.value }}</span>
+        <span class="diff-col-title">{{ _('Versión 2') }}: {{ step.step_type.value }}</span>
         <span class="diff-col-date">{{ step.step_date }}</span>
         {% if new_doc_available %}
           <a class="diff-doc-link" href="{{ new_doc_url }}" target="_blank" rel="noopener">
-            <span class="material-symbols-outlined">description</span> {{ _('View document') }}
+            <span class="material-symbols-outlined">description</span> {{ _('Ver documento') }}
           </a>
         {% endif %}
       </div>
@@ -72,17 +72,17 @@
     <div class="diff-panel-body">
       <div class="diff-panel-col diff-panel-col-old">
         {% if old_diff_html %}{{ old_diff_html | safe }}
-        {% else %}<p class="diff-unavailable">{{ _('No text available') }}</p>{% endif %}
+        {% else %}<p class="diff-unavailable">{{ _('No hay texto disponible') }}</p>{% endif %}
       </div>
       <div class="diff-panel-col diff-panel-col-new">
         {% if new_diff_html %}{{ new_diff_html | safe }}
-        {% else %}<p class="diff-unavailable">{{ _('No text available') }}</p>{% endif %}
+        {% else %}<p class="diff-unavailable">{{ _('No hay texto disponible') }}</p>{% endif %}
       </div>
     </div>
   </section>
 
 {% else %}
-  <p class="diff-status diff-status-warning">{{_('No difference data available.')}}</p>
+  <p class="diff-status diff-status-warning">{{_('No hay datos de diferencias disponibles.')}}</p>
 {% endif %}
 
 {% endblock %}
