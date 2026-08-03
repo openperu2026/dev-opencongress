@@ -15,7 +15,7 @@
 
             <div class="searching-container">
                 <select name="organization_name_q">
-                    <option value="">{{ _('Committee') }}</option>
+                    <option value="" {% if not organization_name_q %}selected{% endif %} disabled hidden>{{ _('Ordinary Committee') }}</option>
                     {% for organization_option in organization_name_options or [] %}
                         <option value="{{ organization_option }}" {% if organization_name_q == organization_option %}selected{% endif %}>{{ organization_option }}</option>
                     {% endfor %}
@@ -31,7 +31,7 @@
             </a>
         </div>
 
-        <details class="advanced-search" {% if pley_id_q or bill_id_q or law_id_q or current_step_q or author_party_q or bill_diff_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
+        <details class="advanced-search" {% if pley_id_q or bill_id_q or law_id_q or current_step_q or author_party_q or special_committee_q or bill_diff_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
             <summary class="search-section-title">
                 <span>{{ _('Advanced Search Options:') }}</span>
                 <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
@@ -65,17 +65,15 @@
                     </select>
                 </div>
 
-            </div>
-
-            <div class="search-diff-panel">
-                <div class="search-date-title">{{ _('Tiene diferencia de versiones') }}</div>
-                <div class="searching-container search-diff-select">
-                    <select name="bill_diff_q">
-                        <option value="">{{ _('All') }}</option>
-                        <option value="yes" {% if bill_diff_q == "yes" %}selected{% endif %}>{{ _('SI') }}</option>
-                        <option value="no" {% if bill_diff_q == "no" %}selected{% endif %}>{{ _('NO') }}</option>
+                <div class="searching-container">
+                    <select name="special_committee_q">
+                        <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Special Committee') }}</option>
+                        {% for organization_option in special_committee_options or [] %}
+                            <option value="{{ organization_option }}" {% if special_committee_q == organization_option %}selected{% endif %}>{{ organization_option }}</option>
+                        {% endfor %}
                     </select>
                 </div>
+
             </div>
 
             <div class="search-date-panel">
@@ -128,6 +126,25 @@
                             </select>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <div class="search-diff-panel">
+                <div class="search-date-title search-tooltip">
+                    <span>{{ _('Tiene diferencia de versiones') }}</span>
+                    <span class="search-tooltip-icon" tabindex="0" aria-label="{{ _('Refiere a que el proyecto de ley seleccionado tiene la posibilidad de verificar las diferencias entre diferentes versiones del proyecto durante su presentación') }}">
+                        <i class="fa-solid fa-circle-info" aria-hidden="true"></i>
+                    </span>
+                    <span class="search-tooltip-text" role="tooltip">
+                        {{ _('Refiere a que tiene la posibilidad de verificar las diferencias entre diferentes versiones del proyecto durante su presentación') }}
+                    </span>
+                </div>
+                <div class="searching-container search-diff-select">
+                    <select name="bill_diff_q">
+                        <option value="">{{ _('All') }}</option>
+                        <option value="yes" {% if bill_diff_q == "yes" %}selected{% endif %}>{{ _('SI') }}</option>
+                        <option value="no" {% if bill_diff_q == "no" %}selected{% endif %}>{{ _('NO') }}</option>
+                    </select>
                 </div>
             </div>
 
@@ -221,6 +238,9 @@
         {% endif %}
         {% if organization_name_q %}
             <span>{{_('Organization')}}: {{organization_name_q}}</span>
+        {% endif %}
+        {% if special_committee_q %}
+            <span>{{ _('Special Committee') }}: {{ special_committee_q }}</span>
         {% endif %}
         {% if radio_status != 'all' %}
             <span>{{_('Status')}}: {{_('Approved bills') if radio_status == 'approved' else _('Not approved bills')}}</span>

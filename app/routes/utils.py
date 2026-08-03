@@ -1,7 +1,7 @@
 from sqlalchemy import select
 
+from backend.core.enums import TypeCommittee, TypeOrganization
 from backend.database.models import ChamberMembership, Membership, Organization
-from backend.core.enums import TypeOrganization
 
 
 def latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | None:
@@ -38,9 +38,31 @@ def create_committee_option(db):
         for org_name in db.execute(
             select(Organization.org_name)
             .join(Membership, Membership.org_id == Organization.org_id)
-            .where(Organization.org_type == TypeOrganization.COMMITTEE)
+            .where(
+                Organization.org_type == TypeOrganization.COMMITTEE,
+                Organization.org_subtype == TypeCommittee.COM_ORD,
+            )
             .distinct()
             .order_by(Organization.org_name.asc())
+        )
+        .scalars()
+        .all()
+    ]
+
+
+def create_special_committee_option(db):
+    return [
+        org_short_name
+        for org_short_name in db.execute(
+            select(Organization.org_short_name)
+            .join(Membership, Membership.org_id == Organization.org_id)
+            .where(
+                Organization.org_type == TypeOrganization.COMMITTEE,
+                Organization.org_subtype == TypeCommittee.COM_ESP,
+                Organization.org_short_name.is_not(None),
+            )
+            .distinct()
+            .order_by(Organization.org_short_name.asc())
         )
         .scalars()
         .all()

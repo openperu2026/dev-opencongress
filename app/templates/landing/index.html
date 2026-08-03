@@ -37,24 +37,92 @@
 
 <section id="about" class="about-section">
     <div class="about-content">
-        <h2>{{_('About')}}</h2>
-        <p>{{ _('Open Congress is built as a public data pipeline for legislative 
-            information. It collects official public records from the Peruvian Congress, 
-            processes them, and organizes them into a structured, 
-            clean relational database.') }}</p>
-        <p>{{ _('The platform began as part of the University of Chicago\'s 
-            Master of Computational Analysis and Public Policy program and 
-            is developed by a six-student team from the program.') }}</p>
-        <p>{{ _('It is mainly written in Python and uses SQLAlchemy, 
-            PostgreSQL, OCR/document parsing, and automated tests to track 
-            bills, votes, congressmembers, political groups, and text 
-            changes across the legislative process.') }}</p>
+        <h2>About</h2>
+        <p class="about-intro">
+            Open Peru began as a course project in the University of Chicago’s Master 
+            of Computational Analysis and Public Policy program. It has since been developed 
+            as a public data pipeline for legislative information, collecting official 
+            public records from the Peruvian Congress, processing them, and organizing 
+            them into a structured, clean relational database.
+        </p>
+        <p class="about-intro">
+            Use the platform to explore how bills move through Congress, who
+            sponsors them, and when their text changes over time.
+        </p>
+
+        <div class="about-steps">
+            <article class="about-step">
+                <span class="about-step-number">1</span>
+                <h3>Search a bill</h3>
+                <p>
+                    Find bills by title, author, committee, date, status, or whether
+                    they have differences between versions.
+                </p>
+            </article>
+
+            <article class="about-step">
+                <span class="about-step-number">2</span>
+                <h3>Review its path</h3>
+                <p>
+                    Open a bill to see its timeline: presentation, committee review,
+                    votes, archival decisions, approval, and text revisions.
+                </p>
+            </article>
+
+            <article class="about-step">
+                <span class="about-step-number">3</span>
+                <h3>Explore who is behind it</h3>
+                <p>
+                    Move from a bill to its author, party, committee memberships,
+                    recent bills, and approval metrics.
+                </p>
+            </article>
+        </div>
     </div>
 </section>
 
+<section id="whats-next" class="whats-next-section">
+    <div class="whats-next-content">
+        <h2>What’s Next</h2>
+        <p>
+            We are continuing to expand Open Congress as a public infrastructure
+            project for legislative transparency.
+        </p>
+
+        <div class="whats-next-grid">
+            <article>
+                <h3>Public API</h3>
+                <p>Building an API to access the legislative database.</p>
+            </article>
+            <article>
+                <h3>Votes and attendance</h3>
+                <p>Adding vote records and attendance-rate metrics.</p>
+            </article>
+            <article>
+                <h3>Improved version differences</h3>
+                <p>Improving tools to detect and display changes between bill versions.</p>
+            </article>
+            <article>
+                <h3>Next Congress</h3>
+                <p>Preparing the infrastructure for the 2026-2031 congressional period.</p>
+            </article>
+        </div>
+
+        <p class="whats-next-contact">
+            Want to collaborate, use the data, or learn more about the project?
+            Write to openperu@civic.garden.org.
+        </p>
+    </div>
+</section>
+<!--
 <section id="team" class="team-section">
     <div class="team-content">
         <h2>{{_('Know the team')}}</h2>
+        <p class="team-intro">
+            The platform began as part of the University of Chicago's Master of
+            Computational Analysis and Public Policy program and is developed by
+            a six-student team from the program.
+        </p>
         <div class="team-grid">
             {% for member in [
                 {'name': 'Alex', 'image': 'alex.jpg'},
@@ -76,7 +144,7 @@
         </div>
     </div>
 </section>
-
+-->
 
 <section id="contact" class="about-section">
     <div class="about-content">

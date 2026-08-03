@@ -7,11 +7,12 @@
     <h1 class="search-title">{{_('Search a congressmember by:')}}</h1>
     <div class="bar-search">
 
-        <div class="searching-container">
+        <div class="congress-search-grid">
+            <div class="searching-container">
 
-            <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="{{_('Name')}}">
-                
-        </div>
+                <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="{{_('Name')}}">
+                    
+            </div>
 
             <div class="searching-container">
                 <select name="party_q">
@@ -33,16 +34,32 @@
 
         <div class="searching-container">
             <select name="commission_q">
-                <option value="">{{ _('Commission') }}</option>
+                <option value="" {% if not commission_q %}selected{% endif %} disabled hidden>{{ _('Ordinary Committee') }}</option>
                 {% for committee_option in committee_options or [] %}
                     <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <button type="submit" class="search-icon-button" aria-label="{{ _('Search') }}">
-            <i class="fa-solid fa-magnifying-glass"></i>
-        </button>
+            <div class="searching-container">
+                <select name="special_committee_q">
+                    <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Special Committee') }}</option>
+                    {% for committee_option in special_committee_options or [] %}
+                        <option value="{{ committee_option }}" {% if special_committee_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="congress-search-actions">
+            <button type="submit" class="search-icon-button" aria-label="{{ _('Search') }}">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+
+            <a href="{{ url_for('congress.index') }}" class="clear-button congress-clean-button">
+                {{ _('Clean') }}
+            </a>
+        </div>
     </div>
 </form>
 
@@ -60,6 +77,9 @@
             {% endif %}
             {% if commission_q %}
                 <span>{{_('Commission')}}: {{commission_q}}</span>
+            {% endif %}
+            {% if special_committee_q %}
+                <span>{{ _('Special Committee') }}: {{ special_committee_q }}</span>
             {% endif %}
         </div>
 
@@ -87,7 +107,7 @@
             {% endfor %}
             </tbody>
         </table>
-    {% elif name_q or party_q or region_q or commission_q %}
+    {% elif name_q or party_q or region_q or commission_q or special_committee_q %}
         <p>{{_('No matching congresspeople found.')}}</p>
     {% endif %}
 

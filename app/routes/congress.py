@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from datetime import date
 from flask import Blueprint, render_template, request
 from sqlalchemy import case, func, or_, select
+from backend.core.enums import TypeCommittee, TypeOrganization
 from backend.database.models import (
     Bill,
     ChamberMembership,
@@ -9,14 +10,14 @@ from backend.database.models import (
     Congresista,
     Membership,
     Organization,
-    TypeOrganization,
 )
 
 
 from .utils import (
-    create_party_option,
     create_committee_option,
+    create_party_option,
     create_region_option,
+    create_special_committee_option,
     latest_org_name,
 )
 from .processed_session import SessionProcessed
@@ -63,12 +64,14 @@ def index():
     party_q = request.args.get("party_q", "").strip()
     region_q = request.args.get("region_q", "").strip()
     commission_q = request.args.get("commission_q", "").strip()
+    special_committee_q = request.args.get("special_committee_q", "").strip()
 
     congresistas = []
     filters = []
     party_options = []
     region_options = []
     committee_options = []
+    special_committee_options = []
 
     if name_q:
         filters.append(
@@ -105,7 +108,21 @@ def index():
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
                     Membership.org_type == TypeOrganization.COMMITTEE,
+                    Organization.org_subtype == TypeCommittee.COM_ORD,
                     Organization.org_name == commission_q,
+                )
+            )
+        )
+
+    if special_committee_q:
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.org_type == TypeOrganization.COMMITTEE,
+                    Organization.org_subtype == TypeCommittee.COM_ESP,
+                    Organization.org_short_name == special_committee_q,
                 )
             )
         )
@@ -114,6 +131,7 @@ def index():
         party_options = create_party_option(db)
         region_options = create_region_option(db)
         committee_options = create_committee_option(db)
+        special_committee_options = create_special_committee_option(db)
 
         if filters:
             rows = db.execute(
@@ -130,10 +148,12 @@ def index():
         party_q=party_q,
         region_q=region_q,
         commission_q=commission_q,
+        special_committee_q=special_committee_q,
         congresistas=congresistas,
         party_options=party_options,
         region_options=region_options,
         committee_options=committee_options,
+        special_committee_options=special_committee_options,
     )
 
 

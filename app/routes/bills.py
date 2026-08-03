@@ -39,9 +39,14 @@ from backend.database.models import (
     VoteCounts,
     VoteEvent,
 )
-from backend.core.enums import TypeBillStep, TypeOrganization, VoteOption
+from backend.core.enums import TypeBillStep, TypeCommittee, TypeOrganization, VoteOption
 from .processed_session import SessionProcessed
-from .utils import create_party_option, create_committee_option, latest_org_name
+from .utils import (
+    create_committee_option,
+    create_party_option,
+    create_special_committee_option,
+    latest_org_name,
+)
 import json
 import os
 import sqlite3
@@ -402,6 +407,7 @@ def index():
     law_id_q = request.args.get("law_id_q", "").strip()
     current_step_q = request.args.get("current_step_q", "").strip()
     organization_name_q = request.args.get("organization_name_q", "").strip()
+    special_committee_q = request.args.get("special_committee_q", "").strip()
     bill_diff_q = request.args.get("bill_diff_q", "").strip()
     page = request.args.get("page", 1, type=int)
     page = page if page and page > 0 else 1
@@ -452,6 +458,7 @@ def index():
             presentation_date_from is not None,
             presentation_date_to is not None,
             organization_name_q,
+            special_committee_q,
             bill_diff_q,
         ]
     )
@@ -464,6 +471,7 @@ def index():
         law_id_q=law_id_q,
         current_step_q=current_step_q,
         organization_name_q=organization_name_q,
+        special_committee_q=special_committee_q,
         bill_diff_q=bill_diff_q,
     )
     if has_pley_id_q:
@@ -577,7 +585,21 @@ def index():
             .where(
                 BillOrganization.bill_id == Bill.id,
                 Organization.org_type == TypeOrganization.COMMITTEE,
+                Organization.org_subtype == TypeCommittee.COM_ORD,
                 Organization.org_name == organization_name_q,
+            )
+            .exists()
+        )
+
+    if special_committee_q:
+        filters.append(
+            select(Organization.org_id)
+            .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+            .where(
+                BillOrganization.bill_id == Bill.id,
+                Organization.org_type == TypeOrganization.COMMITTEE,
+                Organization.org_subtype == TypeCommittee.COM_ESP,
+                Organization.org_short_name == special_committee_q,
             )
             .exists()
         )
@@ -602,6 +624,7 @@ def index():
     current_step_options = []
     author_party_options = []
     organization_name_options = []
+    special_committee_options = []
 
     with SessionProcessed() as db:
         if author_id_int is not None:
@@ -619,6 +642,7 @@ def index():
         # Create a list of dropdown options from the database.
         author_party_options = create_party_option(db)
         organization_name_options = create_committee_option(db)
+        special_committee_options = create_special_committee_option(db)
 
         if search_requested:
             latest_bill_dates = (
@@ -769,6 +793,7 @@ def index():
         presentation_date_to_month=presentation_date_to_picker["month_value"],
         presentation_date_to_day=presentation_date_to_picker["day_value"],
         organization_name_q=organization_name_q,
+        special_committee_q=special_committee_q,
         bills=bills,
         recent_bills=recent_bills,
         radio_status=status,
@@ -793,6 +818,7 @@ def index():
         presentation_date_to_month_options=presentation_date_to_picker["month_options"],
         presentation_date_to_day_options=presentation_date_to_picker["day_options"],
         organization_name_options=organization_name_options,
+        special_committee_options=special_committee_options,
         search_requested=search_requested,
     )
 

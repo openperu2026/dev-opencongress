@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from backend.core.enums import Proponents, TypeOrganization
+from backend.core.enums import Proponents, TypeCommittee, TypeOrganization
 from backend.database.models import (
     Base,
     Bill,
@@ -89,7 +89,7 @@ def _seed_congress_search_data(session_factory) -> None:
                     org_id=1,
                     org_name="Comisión de Economía",
                     org_type=TypeOrganization.COMMITTEE,
-                    org_subtype=None,
+                    org_subtype=TypeCommittee.COM_ORD,
                     org_link=None,
                     parent_org_id=None,
                     date_founding=None,
@@ -99,7 +99,18 @@ def _seed_congress_search_data(session_factory) -> None:
                     org_id=2,
                     org_name="Comisión de Justicia",
                     org_type=TypeOrganization.COMMITTEE,
-                    org_subtype=None,
+                    org_subtype=TypeCommittee.COM_ORD,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=4,
+                    org_name="Comisión Especial de Test",
+                    org_short_name="Special Test",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ESP,
                     org_link=None,
                     parent_org_id=None,
                     date_founding=None,
@@ -134,6 +145,14 @@ def _seed_congress_search_data(session_factory) -> None:
                 CommitteeMembership(
                     person_id=2,
                     org_id=2,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=date(2021, 1, 1),
+                    end_date=date(2026, 12, 31),
+                ),
+                CommitteeMembership(
+                    person_id=2,
+                    org_id=4,
                     leg_period="2021-2026",
                     role="member",
                     start_date=date(2021, 1, 1),
@@ -174,9 +193,11 @@ def test_search_form_uses_selects_for_party_and_commission(client):
     assert '<select name="party_q">' in body
     assert '<select name="region_q">' in body
     assert '<select name="commission_q">' in body
+    assert '<select name="special_committee_q">' in body
     assert 'name="party_q" value=' not in body
     assert 'name="region_q" value=' not in body
     assert 'name="commission_q" value=' not in body
+    assert 'name="special_committee_q" value=' not in body
 
 
 def test_search_filters_by_selected_region(client, session_factory):
@@ -207,6 +228,21 @@ def test_search_filters_by_selected_commission(client, session_factory):
     assert "Ana Perez" in body
     assert "Beatriz Gomez" not in body
     assert "Commission: Comisión de Economía" in body
+
+
+def test_search_filters_by_selected_special_committee(client, session_factory):
+    _seed_congress_search_data(session_factory)
+
+    response = client.get(
+        "/congress",
+        query_string={"special_committee_q": "Special Test"},
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Ana Perez" not in body
+    assert "Beatriz Gomez" in body
+    assert "Special Committee: Special Test" in body
 
 
 def test_congress_detail_shows_bill_pley_id(client, session_factory):
