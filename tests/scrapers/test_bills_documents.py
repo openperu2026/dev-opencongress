@@ -1,5 +1,7 @@
 import base64
 import json
+from io import BytesIO
+from pypdf import PdfWriter
 from datetime import datetime, timezone
 
 import pytest
@@ -377,7 +379,16 @@ def test_upload_s3_persists_key_only_after_success(monkeypatch):
     monkeypatch.setattr(
         scraper,
         "_upload_url_to_s3",
-        lambda url, key: calls.append((url, key)) or True,
+        lambda url, key: (
+            calls.append((url, key))
+            or (
+                True,
+                {
+                    "num_pages": 1,
+                    "size_bytes": 429,
+                },
+            )
+        ),
     )
     pending_doc = scraper.get_docs_pending_s3_upload()[0]
 
@@ -446,11 +457,21 @@ def test_upload_s3_fails_when_database_row_is_missing(monkeypatch):
     assert scraper.upload_s3(missing_doc) is False
 
 
+def create_test_pdf():
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
 def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
     uploaded = []
+    test_pdf = create_test_pdf()
 
     class FakeResponse:
-        content = b"%PDF-test"
+        content = test_pdf
 
         def raise_for_status(self):
             return None
@@ -485,16 +506,20 @@ def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
         "test-bucket",
     )
 
-    assert (
-        RawBillDocumentScraper._upload_url_to_s3(
-            "http://example.com/bill.pdf",
-            "documents/bills/bill.pdf",
-        )
-        is True
+    success, metadata = RawBillDocumentScraper._upload_url_to_s3(
+        "http://example.com/bill.pdf",
+        "documents/bills/bill.pdf",
     )
+
+    assert success is True
+    assert metadata == {
+        "num_pages": 1,
+        "size_bytes": len(test_pdf),
+    }
+
     assert uploaded == [
         (
-            b"%PDF-test",
+            test_pdf,
             bills_documents_module.settings.AWS_S3_BUCKET_NAME,
             "documents/bills/bill.pdf",
         )
