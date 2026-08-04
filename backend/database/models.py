@@ -88,7 +88,7 @@ class Vote(Base):
     voter_id: Mapped[int] = mapped_column(ForeignKey("congresistas.id"), nullable=False)
     option: Mapped[VoteOption] = mapped_column(vote_option_enum, nullable=False)
     bancada_id: Mapped[int] = mapped_column(
-        ForeignKey("organizations.org_id"), nullable=False
+        ForeignKey("organizations.org_id"), nullable=True
     )
 
     __table_args__ = (
@@ -185,14 +185,14 @@ class VoteEvent(Base):
             """,
             name="ck_vote_event_exactly_one_target",
         ),
-        Index(
-            "uq_vote_event_org_bill_date",
-            "org_id",
-            "bill_id",
-            "event_date",
-            unique=True,
-            postgresql_where=text("bill_id IS NOT NULL"),
-        ),
+        # Index(
+        #     "uq_vote_event_org_bill_date",
+        #     "org_id",
+        #     "bill_id",
+        #     "event_date",
+        #     unique=True,
+        #     postgresql_where=text("bill_id IS NOT NULL"),
+        # ),
         Index(
             "uq_vote_event_org_motion_date",
             "org_id",
