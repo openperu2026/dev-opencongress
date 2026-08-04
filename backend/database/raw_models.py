@@ -349,6 +349,8 @@ class RawMotionDocument(RawBase):
     url: Mapped[str] = mapped_column(nullable=False)
     s3_key: Mapped[str] = mapped_column(nullable=True)
     local_path: Mapped[str] = mapped_column(nullable=True)
+    file_size: Mapped[float] = mapped_column(nullable=True)
+    num_pages: Mapped[int] = mapped_column(nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint(

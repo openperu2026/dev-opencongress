@@ -209,8 +209,8 @@ def test_add_documents_to_db_persists(monkeypatch):
     bill_id = "2021_3"
     doc = RawBillDocument(
         bill_id="2021_3",
-        step_id="1",
-        file_id="111",
+        step_id=1,
+        file_id=111,
         step_date=datetime.now(timezone.utc),
         url="http://example.com/a",
         s3_key="some_aws_s3_key",
@@ -226,7 +226,7 @@ def test_add_documents_to_db_persists(monkeypatch):
         assert count == 1
         db_doc = session.query(RawBillDocument).first()
         assert db_doc.bill_id == bill_id
-        assert db_doc.file_id == "111"
+        assert db_doc.file_id == 111
 
 
 def test_add_documents_to_db_asserts_when_empty():
@@ -326,8 +326,8 @@ def test_get_docs_pending_s3_upload_returns_only_null_keys():
             [
                 RawBillDocument(
                     bill_id="2021_10",
-                    step_id="1",
-                    file_id="100",
+                    step_id=1,
+                    file_id=100,
                     step_date=datetime.now(timezone.utc),
                     url="http://example.com/pending.pdf",
                     s3_key=None,
@@ -336,8 +336,8 @@ def test_get_docs_pending_s3_upload_returns_only_null_keys():
                 ),
                 RawBillDocument(
                     bill_id="2021_10",
-                    step_id="2",
-                    file_id="200",
+                    step_id=2,
+                    file_id=200,
                     step_date=datetime.now(timezone.utc),
                     url="http://example.com/uploaded.pdf",
                     s3_key="documents/bills/uploaded.pdf",
@@ -350,7 +350,7 @@ def test_get_docs_pending_s3_upload_returns_only_null_keys():
 
     pending = scraper.get_docs_pending_s3_upload()
 
-    assert [(doc.step_id, doc.file_id) for doc in pending] == [("1", "100")]
+    assert [(doc.step_id, doc.file_id) for doc in pending] == [(1, 100)]
 
 
 def test_upload_s3_persists_key_only_after_success(monkeypatch):
@@ -364,8 +364,8 @@ def test_upload_s3_persists_key_only_after_success(monkeypatch):
         session.add(
             RawBillDocument(
                 bill_id="2021_11",
-                step_id="1",
-                file_id="101",
+                step_id=1,
+                file_id=101,
                 step_date=datetime.now(timezone.utc),
                 url="http://example.com/bill.pdf",
                 s3_key=None,
@@ -398,7 +398,7 @@ def test_upload_s3_persists_key_only_after_success(monkeypatch):
     with SessionLocal() as session:
         stored = session.get(
             RawBillDocument,
-            {"bill_id": "2021_11", "step_id": "1", "file_id": "101"},
+            {"bill_id": "2021_11", "step_id": 1, "file_id": 101},
         )
         assert stored.s3_key == expected_key
 
@@ -413,8 +413,8 @@ def test_upload_s3_failure_leaves_key_null(monkeypatch):
         session.add(
             RawBillDocument(
                 bill_id="2021_12",
-                step_id="1",
-                file_id="102",
+                step_id=1,
+                file_id=102,
                 step_date=datetime.now(timezone.utc),
                 url="http://example.com/failure.pdf",
                 s3_key=None,
@@ -432,7 +432,7 @@ def test_upload_s3_failure_leaves_key_null(monkeypatch):
     with SessionLocal() as session:
         stored = session.get(
             RawBillDocument,
-            {"bill_id": "2021_12", "step_id": "1", "file_id": "102"},
+            {"bill_id": "2021_12", "step_id": 1, "file_id": 102},
         )
         assert stored.s3_key is None
 
@@ -445,8 +445,8 @@ def test_upload_s3_fails_when_database_row_is_missing(monkeypatch):
     monkeypatch.setattr(scraper, "_upload_url_to_s3", lambda url, key: True)
     missing_doc = RawBillDocument(
         bill_id="2021_missing",
-        step_id="1",
-        file_id="999",
+        step_id=1,
+        file_id=999,
         step_date=datetime.now(timezone.utc),
         url="http://example.com/missing.pdf",
         s3_key=None,

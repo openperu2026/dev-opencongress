@@ -1,6 +1,8 @@
 import json
 import base64
 from datetime import datetime, timezone
+from io import BytesIO
+from pypdf import PdfWriter
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -242,8 +244,8 @@ def test_get_docs_pending_s3_upload_returns_only_null_keys():
             [
                 RawMotionDocument(
                     motion_id="2021_10",
-                    step_id="1",
-                    file_id="100",
+                    step_id=1,
+                    file_id=100,
                     step_date=datetime.now(timezone.utc),
                     url="http://example.com/pending.pdf",
                     s3_key=None,
@@ -252,8 +254,8 @@ def test_get_docs_pending_s3_upload_returns_only_null_keys():
                 ),
                 RawMotionDocument(
                     motion_id="2021_10",
-                    step_id="2",
-                    file_id="200",
+                    step_id=2,
+                    file_id=200,
                     step_date=datetime.now(timezone.utc),
                     url="http://example.com/uploaded.pdf",
                     s3_key="documents/motions/uploaded.pdf",
@@ -266,7 +268,7 @@ def test_get_docs_pending_s3_upload_returns_only_null_keys():
 
     pending = scraper.get_docs_pending_s3_upload()
 
-    assert [(doc.step_id, doc.file_id) for doc in pending] == [("1", "100")]
+    assert [(doc.step_id, doc.file_id) for doc in pending] == [(1, 100)]
 
 
 def test_upload_s3_persists_key_only_after_success(monkeypatch):
@@ -280,8 +282,8 @@ def test_upload_s3_persists_key_only_after_success(monkeypatch):
         session.add(
             RawMotionDocument(
                 motion_id="2021_11",
-                step_id="1",
-                file_id="101",
+                step_id=1,
+                file_id=101,
                 step_date=datetime.now(timezone.utc),
                 url="http://example.com/motion.pdf",
                 s3_key=None,
@@ -295,7 +297,16 @@ def test_upload_s3_persists_key_only_after_success(monkeypatch):
     monkeypatch.setattr(
         scraper,
         "_upload_url_to_s3",
-        lambda url, key: calls.append((url, key)) or True,
+        lambda url, key: (
+            calls.append((url, key))
+            or (
+                True,
+                {
+                    "num_pages": 1,
+                    "size_bytes": 429,
+                },
+            )
+        ),
     )
     pending_doc = scraper.get_docs_pending_s3_upload()[0]
 
@@ -305,7 +316,7 @@ def test_upload_s3_persists_key_only_after_success(monkeypatch):
     with SessionLocal() as session:
         stored = session.get(
             RawMotionDocument,
-            {"motion_id": "2021_11", "step_id": "1", "file_id": "101"},
+            {"motion_id": "2021_11", "step_id": 1, "file_id": 101},
         )
         assert stored.s3_key == expected_key
 
@@ -320,8 +331,8 @@ def test_upload_s3_failure_leaves_key_null(monkeypatch):
         session.add(
             RawMotionDocument(
                 motion_id="2021_12",
-                step_id="1",
-                file_id="102",
+                step_id=1,
+                file_id=102,
                 step_date=datetime.now(timezone.utc),
                 url="http://example.com/failure.pdf",
                 s3_key=None,
@@ -339,7 +350,7 @@ def test_upload_s3_failure_leaves_key_null(monkeypatch):
     with SessionLocal() as session:
         stored = session.get(
             RawMotionDocument,
-            {"motion_id": "2021_12", "step_id": "1", "file_id": "102"},
+            {"motion_id": "2021_12", "step_id": 1, "file_id": 102},
         )
         assert stored.s3_key is None
 
@@ -352,8 +363,8 @@ def test_upload_s3_fails_when_database_row_is_missing(monkeypatch):
     monkeypatch.setattr(scraper, "_upload_url_to_s3", lambda url, key: True)
     missing_doc = RawMotionDocument(
         motion_id="2021_missing",
-        step_id="1",
-        file_id="999",
+        step_id=1,
+        file_id=999,
         step_date=datetime.now(timezone.utc),
         url="http://example.com/missing.pdf",
         s3_key=None,
@@ -364,11 +375,21 @@ def test_upload_s3_fails_when_database_row_is_missing(monkeypatch):
     assert scraper.upload_s3(missing_doc) is False
 
 
+def create_test_pdf():
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+
+    buffer = BytesIO()
+    writer.write(buffer)
+    return buffer.getvalue()
+
+
 def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
     uploaded = []
+    test_pdf = create_test_pdf()
 
     class FakeResponse:
-        content = b"%PDF-test"
+        content = test_pdf
 
         def raise_for_status(self):
             return None
@@ -403,16 +424,20 @@ def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
         "test-bucket",
     )
 
-    assert (
-        RawMotionDocumentScraper._upload_url_to_s3(
-            "http://example.com/motion.pdf",
-            "documents/motions/motion.pdf",
-        )
-        is True
+    success, metadata = RawMotionDocumentScraper._upload_url_to_s3(
+        "http://example.com/motion.pdf",
+        "documents/motions/motion.pdf",
     )
+
+    assert success is True
+    assert metadata == {
+        "num_pages": 1,
+        "size_bytes": len(test_pdf),
+    }
+
     assert uploaded == [
         (
-            b"%PDF-test",
+            test_pdf,
             motions_documents_module.settings.AWS_S3_BUCKET_NAME,
             "documents/motions/motion.pdf",
         )
