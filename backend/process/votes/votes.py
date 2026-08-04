@@ -21,7 +21,7 @@ import io
 import json
 import time
 from pathlib import Path
-from backend.config import directories, settings
+from backend.config import directories
 
 import requests
 from openai import OpenAI
@@ -56,7 +56,7 @@ PDF_SOURCES = {
 # system_prompt.md + user_prompt.md are byte-identical on every call (no
 # per-file interpolation), this string identifies one reusable prefix that
 # OpenAI's cache router can key on across models and across batches.
-PROMPT_CACHE_KEY = "congress-extraction-v2"
+PROMPT_CACHE_KEY = "congress-extraction-v3"
 
 # Models that support explicit prompt_cache_breakpoint / prompt_cache_options.
 # Per OpenAI's docs, models BEFORE this family actively REJECT these fields
@@ -81,9 +81,14 @@ OUT_DIR.mkdir(exist_ok=True)
 # ---------------------------------------------------------------------------
 
 
-def upload_pdfs_once(client: OpenAI, sources: dict[str, str]) -> dict[str, str]:
-    """Download each PDF and upload with purpose=user_data. Returns label -> file_id."""
-    file_ids = {}
+def upload_pdfs_once(client: OpenAI, sources: dict[str, dict]) -> dict[str, dict]:
+    """Download each PDF and upload with purpose=user_data.
+
+    Returns label -> {"file_id": ..., "pley_id": ..., "sumilla": ...} so the
+    per-document context travels alongside the uploaded file through to
+    build_request_body.
+    """
+    uploaded_docs = {}
     headers = {
         # Some government APIs block/redirect requests with no browser-like
         # User-Agent (bot checks, consent walls) -- without this you can get
@@ -95,9 +100,9 @@ def upload_pdfs_once(client: OpenAI, sources: dict[str, str]) -> dict[str, str]:
         ),
         "Accept": "application/pdf,*/*",
     }
-    for label, url in sources.items():
+    for label, source in sources.items():
         print(f"Downloading {label} ...")
-        resp = requests.get(url, headers=headers, timeout=60)
+        resp = requests.get(source["url"], headers=headers, timeout=60)
         content_type = resp.headers.get("Content-Type", "")
         pdf_bytes = resp.content
 
@@ -114,8 +119,12 @@ def upload_pdfs_once(client: OpenAI, sources: dict[str, str]) -> dict[str, str]:
         buf = io.BytesIO(pdf_bytes)
         buf.name = f"{label}.pdf"  # openai-python uses this for the filename
         uploaded = client.files.create(file=buf, purpose="user_data")
-        file_ids[label] = uploaded.id
-    return file_ids
+        uploaded_docs[label] = {
+            "file_id": uploaded.id,
+            "pley_id": source["pley_id"],
+            "sumilla": source["sumilla"],
+        }
+    return uploaded_docs
 
 
 # ---------------------------------------------------------------------------
@@ -124,8 +133,18 @@ def upload_pdfs_once(client: OpenAI, sources: dict[str, str]) -> dict[str, str]:
 # ---------------------------------------------------------------------------
 
 
-def build_request_body(model: str, file_id: str) -> dict:
+def build_request_body(model: str, file_id: str, pley_id: str, sumilla: str) -> dict:
     text_block = {"type": "input_text", "text": USER_PROMPT}
+
+    # Deliberately its own content block, AFTER the static text (and its
+    # cache breakpoint, for models that get one) and BEFORE the file. This
+    # is the per-document context (which bill to look for) -- it changes on
+    # every request, so it must sit outside the cached prefix, or every
+    # request would get a different prefix and caching would never hit.
+    context_block = {
+        "type": "input_text",
+        "text": f"Context for this extraction:\npley_id: {pley_id}\nsumilla: {sumilla}",
+    }
 
     body = {
         "model": model,
@@ -136,6 +155,7 @@ def build_request_body(model: str, file_id: str) -> dict:
                 "role": "user",
                 "content": [
                     text_block,
+                    context_block,
                     {"type": "input_file", "file_id": file_id},
                 ],
             }
@@ -152,30 +172,33 @@ def build_request_body(model: str, file_id: str) -> dict:
 
     if model in EXPLICIT_BREAKPOINT_MODELS:
         # GPT-5.6-family models place an implicit breakpoint at the latest
-        # message by default, which here would span BOTH the static text
-        # AND the varying file -- so the cached prefix would differ every
-        # request and never hit. Disabling implicit mode and marking an
-        # explicit breakpoint right after the static text (before the file)
-        # is what makes the shared instructions+prompt prefix reusable
-        # across every document and every batch.
+        # message by default, which here would span the static text, the
+        # per-document context, AND the file -- all three vary or are new
+        # per request in that combination, so the cached prefix would never
+        # match. Disabling implicit mode and marking an explicit breakpoint
+        # right after the static text (before context and file) is what
+        # makes the shared instructions+prompt prefix reusable across every
+        # document, every pley_id, and every batch.
         body["prompt_cache_options"] = {"mode": "explicit"}
         text_block["prompt_cache_breakpoint"] = {"mode": "explicit"}
 
     return body
 
 
-def write_batch_files(file_ids: dict[str, str]) -> dict[str, Path]:
+def write_batch_files(uploaded_docs: dict[str, dict]) -> dict[str, Path]:
     """One .jsonl per model, containing one line per document."""
     paths = {}
     for model in MODELS:
         path = OUT_DIR / f"batch_{model.replace('.', '_')}.jsonl"
         with path.open("w", encoding="utf-8") as f:
-            for label, file_id in file_ids.items():
+            for label, doc in uploaded_docs.items():
                 line = {
                     "custom_id": f"{model}::{label}",
                     "method": "POST",
                     "url": "/v1/responses",
-                    "body": build_request_body(model, file_id),
+                    "body": build_request_body(
+                        model, doc["file_id"], doc["pley_id"], doc["sumilla"]
+                    ),
                 }
                 f.write(json.dumps(line) + "\n")
         paths[model] = path
@@ -416,15 +439,11 @@ def print_cost_summary(results: list[dict]) -> None:
 
 
 if __name__ == "__main__":
-    import time
+    client = OpenAI()
 
-    start = time.time()
-
-    client = OpenAI(api_key=settings.OPENAI_API_KEY)
-
-    file_ids = upload_pdfs_once(client, PDF_SOURCES)
-    if len(file_ids) < len(PDF_SOURCES):
-        missing = set(PDF_SOURCES) - set(file_ids)
+    uploaded_docs = upload_pdfs_once(client, PDF_SOURCES)
+    if len(uploaded_docs) < len(PDF_SOURCES):
+        missing = set(PDF_SOURCES) - set(uploaded_docs)
         print(
             f"\n!! {len(missing)}/{len(PDF_SOURCES)} PDFs failed validation and were "
             f"skipped: {sorted(missing)}"
@@ -432,20 +451,17 @@ if __name__ == "__main__":
         print(
             "   Fix the download for those before continuing, or proceed with the rest.\n"
         )
-    if not file_ids:
+    if not uploaded_docs:
         raise SystemExit("No valid PDFs downloaded -- nothing to submit.")
 
-    batch_paths = write_batch_files(file_ids)
+    batch_paths = write_batch_files(uploaded_docs)
     batch_ids = submit_batches(client, batch_paths)
     done_batches = poll_until_done(client, batch_ids)
     results = collect_results(client, done_batches)
 
-    Path(PROMPTS_DIR / "results.json").write_text(
+    Path("results.json").write_text(
         json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8"
     )
-    end = time.time()
-
-    print(f"Run with success in {(end - start) / 60} minutes")
     print(f"\nWrote {len(results)} results to results.json")
     print_cache_summary(results)
     print_cost_summary(results)

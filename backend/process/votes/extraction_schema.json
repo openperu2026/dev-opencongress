@@ -2,28 +2,23 @@
   "type": "object",
   "properties": {
     "file_name": { "type": "string" },
-    "sessions": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/Session" }
-    },
-    "_uncertain_fields": {
-      "type": "array",
-      "items": { "$ref": "#/$defs/UncertainField" }
-    }
+    "legislature": { "type": "string" },
+    "session_date": { "type": "string" },
+    "requested_pley_id": { "type": "string" },
+    "match_found": { "type": "boolean" },
+    "attendance": { "type": "array", "items": { "$ref": "#/$defs/Attendance" } },
+    "votings": { "type": "array", "items": { "$ref": "#/$defs/Voting" } },
+    "minutes": { "type": "array", "items": { "$ref": "#/$defs/Minutes" } },
+    "member_letters": { "type": "array", "items": { "$ref": "#/$defs/MemberLetter" } },
+    "_uncertain_fields": { "type": "array", "items": { "type": "string" } }
   },
-  "required": ["file_name", "sessions", "_uncertain_fields"],
+  "required": [
+    "file_name", "legislature", "session_date", "requested_pley_id",
+    "match_found", "attendance", "votings", "minutes", "member_letters",
+    "_uncertain_fields"
+  ],
   "additionalProperties": false,
   "$defs": {
-    "UncertainField": {
-      "type": "object",
-      "properties": {
-        "location": { "type": "string" },
-        "description": { "type": "string" },
-        "raw_text": { "type": ["string", "null"] }
-      },
-      "required": ["location", "description", "raw_text"],
-      "additionalProperties": false
-    },
     "AttendanceCode": {
       "type": ["string", "null"],
       "enum": ["PRE", "aus", "LO", "LE", "LP", "Sus", "F", "presiding", null]
@@ -96,14 +91,12 @@
       "type": "object",
       "properties": {
         "record_datetime": { "type": "string" },
-        "subject": { "type": ["string", "null"] },
-        "n_proyecto_ley": { "type": ["string", "null"] },
         "roster": { "type": "array", "items": { "$ref": "#/$defs/RosterEntry" } },
         "overall_totals": { "$ref": "#/$defs/AttendanceTotals" },
         "party_summary": { "type": "array", "items": { "$ref": "#/$defs/AttendancePartySummary" } },
         "clarifications": { "type": "array", "items": { "$ref": "#/$defs/AttendanceClarification" } }
       },
-      "required": ["record_datetime", "subject", "n_proyecto_ley", "roster", "overall_totals", "party_summary", "clarifications"],
+      "required": ["record_datetime", "roster", "overall_totals", "party_summary", "clarifications"],
       "additionalProperties": false
     },
     "RollEntry": {
@@ -173,13 +166,12 @@
         "record_datetime": { "type": "string" },
         "president": { "type": ["string", "null"] },
         "subject": { "type": "string" },
-        "n_proyecto_ley": { "type": ["string", "null"] },
         "roll": { "type": "array", "items": { "$ref": "#/$defs/RollEntry" } },
         "overall_totals": { "$ref": "#/$defs/VotingTotals" },
         "party_summary": { "type": "array", "items": { "$ref": "#/$defs/VotingPartySummary" } },
         "clarifications": { "type": "array", "items": { "$ref": "#/$defs/VotingClarification" } }
       },
-      "required": ["record_datetime", "president", "subject", "n_proyecto_ley", "roll", "overall_totals", "party_summary", "clarifications"],
+      "required": ["record_datetime", "president", "subject", "roll", "overall_totals", "party_summary", "clarifications"],
       "additionalProperties": false
     },
     "MinutesEvent": {
@@ -197,11 +189,15 @@
           ]
         },
         "description": { "type": "string" },
+        "result": {
+          "type": ["string", "null"],
+          "enum": ["aprobado", "rechazado", "no_quorum", null]
+        },
         "favor": { "type": ["integer", "null"] },
         "contra": { "type": ["integer", "null"] },
         "abstenciones": { "type": ["integer", "null"] }
       },
-      "required": ["type", "description", "favor", "contra", "abstenciones"],
+      "required": ["type", "description", "result", "favor", "contra", "abstenciones"],
       "additionalProperties": false
     },
     "Minutes": {
@@ -217,27 +213,13 @@
       "type": "object",
       "properties": {
         "member_name": { "type": "string" },
-        "n_proyecto_ley": { "type": "string" },
         "party": { "type": ["string", "null"] },
         "letter_date": { "type": ["string", "null"] },
         "subject_reference": { "type": "string" },
         "requested_attendance": { "$ref": "#/$defs/AttendanceCode" },
         "requested_vote": { "$ref": "#/$defs/VoteCode" }
       },
-      "required": ["member_name", "n_proyecto_ley", "party", "letter_date", "subject_reference", "requested_attendance", "requested_vote"],
-      "additionalProperties": false
-    },
-    "Session": {
-      "type": "object",
-      "properties": {
-        "legislature": { "type": "string" },
-        "session_date": { "type": "string" },
-        "attendance": { "type": "array", "items": { "$ref": "#/$defs/Attendance" } },
-        "votings": { "type": "array", "items": { "$ref": "#/$defs/Voting" } },
-        "minutes": { "type": "array", "items": { "$ref": "#/$defs/Minutes" } },
-        "member_letters": { "type": "array", "items": { "$ref": "#/$defs/MemberLetter" } }
-      },
-      "required": ["legislature", "session_date", "attendance", "votings", "minutes", "member_letters"],
+      "required": ["member_name", "party", "letter_date", "subject_reference", "requested_attendance", "requested_vote"],
       "additionalProperties": false
     }
   }
