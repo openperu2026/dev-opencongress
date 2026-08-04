@@ -21,7 +21,7 @@ import io
 import json
 import time
 from pathlib import Path
-from backend.config import directories
+from backend.config import directories, settings
 
 import requests
 from openai import OpenAI
@@ -40,16 +40,56 @@ MODELS = [
 # and unique (e.g. the bill/document code) rather than the opaque congreso
 # archive URL.
 PDF_SOURCES = {
-    7315: "https://api.congreso.gob.pe/spley-portal-service//archivo/NzMxNQ==/pdf",
-    9662: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/OTY2Mg==/pdf",
-    47934: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/NDc5MzQ=/pdf",
-    30801: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MzA4MDE=/pdf",
-    30800: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MzA4MDA=/pdf",
-    30799: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MzA3OTk=/pdf",
-    30798: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MzA3OTg=/pdf",
-    55210: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/NTUyMTA=/pdf",
-    30819: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MzA4MTk=/pdf",
-    53237: "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/NTMyMzc=/pdf",
+    "2021_5665": {
+        "url": "https://api.congreso.gob.pe/spley-portal-service//archivo/Mzk0MTc3/pdf",
+        "pley_id": "05665/2023-CR",
+        "sumilla": "PROPONE MODIFICAR LA LEY 29944, LEY DE REFORMA MAGISTERIAL, PARA INCORPORAR EN SUS ALCANCES A LOS PROFESORES DE LAS INSTITUCIONES EDUCATIVAS DE EDUCACIÓN BÁSICA Y TÉCNICO-PRODUCTIVA DE LOS ESTABLECIMIENTOS PENITENCIARIOS ADSCRITOS AL MINISTERIO DE JUSTICIA Y DERECHOS HUMANOS.",
+    },
+    "2021_491": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MTM4MDM=/pdf",
+        "pley_id": "00491/2021-CR",
+        "sumilla": "PROPONE MODIFICAR LA LEY 29158, LEY ORGÁNICA DEL PODER EJECUTIVO RESPECTO DE LA DESIGNACIÓN DE LOS MINISTROS DEL INTERIOR Y DE DEFENSA.",
+    },
+    "2021_2437": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MTU5MzI5/pdf",
+        "pley_id": "02437/2021-CR",
+        "sumilla": "PROPONE AUTORIZAR DE MANERA EXCEPCIONAL Y POR ÚNICA VEZ EL NOMBRAMIENTO DEL PERSONAL DE SALUD ASISTENCIAL SUJETOS AL RÉGIMEN LABORAL CAS EN EL MINISTERIO DE SALUD",
+    },
+    "2021_7822": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MjcwMDM4/pdf",
+        "pley_id": "07822/2023-CR",
+        "sumilla": "PROPONE CREAR E IMPLEMENTA LA UNIVERSIDAD NACIONAL TECNOLÓGICA DEL ALTO MAYO - SORITOR, COMO PERSONA JURÍDICA DE DERECHO PÚBLICO INTERNO, CON SEDE PRINCIPAL EN LA CIUDAD DE SORITOR, PROVINCIA DE MOYOBAMBA, DEPARTAMENTO DE SAN MARTÍN.",
+    },
+    "2021_4428": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MTQzOTcz/pdf",
+        "pley_id": "04428/2022-CR",
+        "sumilla": "PROPONE AGREGAR EL ARTÍCULO 77-A AL REGLAMENTO DEL CONGRESO DE LA REPÚBLICA,",
+    },
+    "2021_2907": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/NjE3ODk=/pdf",
+        "pley_id": "02907/2022-PE",
+        "sumilla": "PRESUPUESTO DEL SECTOR PÚBLICO PARA EL AÑO FISCAL 2023.",
+    },
+    "2021_6015": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MzM0NDY1/pdf",
+        "pley_id": "06015/2023-CR",
+        "sumilla": "PROPONE INCORPORAR A LOS TRABAJADORES DE LA SUPERINTENDENCIA NACIONAL DE REGISTROS PÚBLICOS (SUNARP) QUE SE ENCUENTRE BAJO EL RÉGIMEN DEL CONTRATO ADMINISTRATIVO DE SERVICIOS (CAS), AL RÉGIMEN LABORAL DEL DECRETO LEGISLATIVO 728, CON LA FINALIDAD DE UNIFORMIZAR LAS NORMAS DE APLICACIÓN PARA LAS RELACIONES LABORALES, EN APLICACIÓN DEL DERECHO CONSTITUCIONAL DE IGUALDAD.",
+    },
+    "2021_7174": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MjQ2OTM1/pdf",
+        "pley_id": "07174/2023-CR",
+        "sumilla": "PROPONE INCORPORAR DEL INCISO V) AL ARTÍCULO 130° AL DECRETO LEGISLATIVO N° 1049, DECRETO LEGISLATIVO DEL NOTARIADO.",
+    },
+    "2021_4378": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/MjgxNTA0/pdf",
+        "pley_id": "04378/2022-CR",
+        "sumilla": "PROPONE AUTORIZAR A LOS AFILIADOS EL RETIRO DE HASTA EL 70% DE SUS FONDOS DEL SISTEMA PRIVADO DE ADMINISTRACIÓN DE FONDOS DE PENSIONES.",
+    },
+    "2021_1040": {
+        "url": "https://wb2server.congreso.gob.pe/spley-portal-service//archivo/NDMzNTg=/pdf",
+        "pley_id": "01040/2021-CR",
+        "sumilla": "PROPONE MODIFICAR EL ARTICULO 10 DE LA LEY 28359, LEY DE SITUACIÓN MILITAR DE LOS OFICIALES DE LAS FUERZAS ARMADAS, MODIFICA EL DECRETO LEGISLATIVO 1143.",
+    },
 }
 
 # A fixed prompt_cache_key shared by every request in this test. Because
@@ -439,7 +479,7 @@ def print_cost_summary(results: list[dict]) -> None:
 
 
 if __name__ == "__main__":
-    client = OpenAI()
+    client = OpenAI(api_key=settings.OPENAI_API_KEY)
 
     uploaded_docs = upload_pdfs_once(client, PDF_SOURCES)
     if len(uploaded_docs) < len(PDF_SOURCES):
