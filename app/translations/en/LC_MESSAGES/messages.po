@@ -1,4 +1,4 @@
-# Spanish translations for PROJECT.
+# English translations for PROJECT.
 # Copyright (C) 2026 ORGANIZATION
 # This file is distributed under the same license as the PROJECT project.
 # FIRST AUTHOR <EMAIL@ADDRESS>, 2026.
@@ -8,10 +8,10 @@ msgstr ""
 "Project-Id-Version: PROJECT VERSION\n"
 "Report-Msgid-Bugs-To: EMAIL@ADDRESS\n"
 "POT-Creation-Date: 2026-08-03 17:08-0500\n"
-"PO-Revision-Date: 2026-05-17 15:22-0500\n"
-"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
-"Language: es\n"
-"Language-Team: es <LL@li.org>\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: Open Peru Team\n"
+"Language: en\n"
+"Language-Team: en <LL@li.org>\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=utf-8\n"
@@ -20,35 +20,29 @@ msgstr ""
 
 #: app/routes/bills.py:251 app/routes/congress.py:282
 #: app/templates/bills/votes.html:77
-#, fuzzy
 msgid "A favor"
-msgstr "A FAVOR"
+msgstr "In favor"
 
 #: app/routes/bills.py:252 app/routes/congress.py:289
 #: app/templates/bills/votes.html:78
-#, fuzzy
 msgid "En contra"
-msgstr "Open Congress"
+msgstr "Against"
 
 #: app/routes/bills.py:253 app/templates/bills/votes.html:79
-#, fuzzy
 msgid "Abstención"
-msgstr "ABSTENCIÓN"
+msgstr "Abstain"
 
 #: app/routes/bills.py:255 app/templates/bills/votes.html:80
-#, fuzzy
 msgid "Otros"
-msgstr "OTROS"
+msgstr "Others"
 
 #: app/routes/bills.py:877 app/routes/bills.py:963
-#, fuzzy
 msgid "No aprobado"
-msgstr "No aprobado"
+msgstr "Not approved"
 
 #: app/routes/bills.py:879 app/routes/bills.py:965
-#, fuzzy
 msgid "Aprobado"
-msgstr "Aprobado"
+msgstr "Approved"
 
 #: app/routes/congress.py:54 app/templates/bills/votes.html:32
 #: app/templates/bills/votes.html:41 app/templates/bills/votes.html:118
@@ -56,22 +50,23 @@ msgstr "Aprobado"
 #: app/templates/congress/congress_detail.html:10
 #: app/templates/congress/search.html:99 app/templates/congress/search.html:100
 msgid "No disponible"
-msgstr ""
+msgstr "Not available"
 
 #: app/routes/congress.py:285 app/routes/congress.py:292
 msgid ""
 "Los datos de votación aún no están disponibles. Este es contenido "
 "temporal para la vista de detalle del congresista."
 msgstr ""
+"Vote data is not available yet. This is placeholder content for the "
+"congressperson detail view."
 
 #: app/routes/landing.py:13 app/templates/base.html:28
 msgid "Proyectos de ley"
-msgstr ""
+msgstr "Bills"
 
 #: app/routes/landing.py:14
-#, fuzzy
 msgid "Congresistas"
-msgstr "Congresistas"
+msgstr "Congressmen"
 
 #: app/templates/base.html:6
 msgid "Open Congress"
@@ -79,250 +74,233 @@ msgstr "Open Congress"
 
 #: app/templates/base.html:19
 msgid "Abrir menú de navegación"
-msgstr ""
+msgstr "Open navigation menu"
 
 #: app/templates/base.html:23
 msgid "Cerrar menú de navegación"
-msgstr ""
+msgstr "Close navigation menu"
 
 #: app/templates/base.html:26
 msgid "Inicio"
-msgstr ""
+msgstr "Home"
 
 #: app/templates/base.html:27 app/templates/base.html:47
 #: app/templates/landing/index.html:36
 msgid "Acerca de"
-msgstr ""
+msgstr "About"
 
 #: app/templates/base.html:29 app/templates/bills/votes.html:111
-#, fuzzy
 msgid "Congresista"
-msgstr "Congresistas"
+msgstr "Congressmember"
 
 #: app/templates/base.html:32
 msgid "Idioma"
-msgstr ""
+msgstr "Language"
 
 #: app/templates/base.html:33
-#, fuzzy
 msgid "Inglés"
-msgstr "Inglés"
+msgstr "English"
 
 #: app/templates/base.html:34
 msgid "Español"
-msgstr ""
+msgstr "Spanish"
 
 #: app/templates/base.html:48
-#, fuzzy
 msgid "Términos de servicio"
-msgstr "Términos de servicio"
+msgstr "Terms of Service"
 
 #: app/templates/base.html:49
-#, fuzzy
 msgid "Privacidad"
-msgstr "Privacidad"
+msgstr "Privacy"
 
 #: app/templates/base.html:50 app/templates/landing/index.html:135
-#, fuzzy
 msgid "Contacto"
-msgstr "Contacto"
+msgstr "Contact"
 
 #: app/templates/bills/detail.html:29 app/templates/bills/search.html:80
 #: app/templates/bills/search.html:237 app/templates/bills/search.html:263
 #: app/templates/bills/votes.html:28
-#, fuzzy
 msgid "Fecha de presentación"
-msgstr "Tiempo desde la presentación"
+msgstr "Presentation Date"
 
 #: app/templates/bills/detail.html:31
 msgid "Tiempo hasta la aprobación"
-msgstr ""
+msgstr "Time to approval"
 
 #: app/templates/bills/detail.html:31 app/templates/bills/detail.html:33
-#, fuzzy
 msgid "días"
-msgstr "días"
+msgstr "days"
 
 #: app/templates/bills/detail.html:33
-#, fuzzy
 msgid "Tiempo desde la presentación"
-msgstr "Tiempo desde la presentación"
+msgstr "Time since presentation"
 
 #: app/templates/bills/detail.html:40 app/templates/bills/search.html:52
 #: app/templates/bills/search.html:228
 msgid "Etapa actual"
-msgstr ""
+msgstr "Current Step"
 
 #: app/templates/bills/detail.html:43 app/templates/bills/detail.html:46
 #: app/templates/bills/search.html:13 app/templates/bills/search.html:180
 #: app/templates/bills/search.html:217 app/templates/bills/search.html:219
 #: app/templates/bills/search.html:262
-#, fuzzy
 msgid "Autor"
-msgstr "Autor"
+msgstr "Author"
 
 #: app/templates/bills/detail.html:44 app/templates/bills/votes.html:112
 #: app/templates/congress/search.html:19 app/templates/congress/search.html:73
 #: app/templates/congress/search.html:90
-#, fuzzy
 msgid "Partido"
-msgstr "Partido"
+msgstr "Party"
 
 #: app/templates/bills/detail.html:49
-#, fuzzy
 msgid "Resumen"
-msgstr "Congresistas"
+msgstr "Summary"
 
 #: app/templates/bills/detail.html:66 app/templates/bills/detail.html:68
 #: app/templates/bills/search.html:201 app/templates/bills/search.html:279
 #: app/templates/congress/congress_detail.html:91
 #: app/templates/congress/search.html:103
-#, fuzzy
 msgid "Ver detalles"
-msgstr "Ver detalles"
+msgstr "View details"
 
 #: app/templates/bills/detail.html:72
 msgid "Ver cambios"
-msgstr ""
+msgstr "View changes"
 
 #: app/templates/bills/difference.html:8
 msgid "Proyecto de ley"
-msgstr ""
+msgstr "Bill"
 
 #: app/templates/bills/difference.html:16
 msgid "Paso"
-msgstr ""
+msgstr "Step"
 
 #: app/templates/bills/difference.html:20
 msgid "Volver al proyecto de ley"
-msgstr ""
+msgstr "Back to bill"
 
 #: app/templates/bills/difference.html:24
-#, fuzzy
 msgid "No hay cambios entre las versiones."
-msgstr "No hay cambios entre las versiones."
+msgstr "No changes between versions."
 
 #: app/templates/bills/difference.html:27
 msgid "Esta es la primera versión — no hay texto previo para comparar."
-msgstr ""
+msgstr "This is the first version — no previous text to compare."
 
 #: app/templates/bills/difference.html:31
-#, fuzzy
 msgid ""
 "Las versiones difieren en longitud en más de 10× — probablemente son "
 "tipos de documento distintos."
 msgstr ""
-"Las versiones difieren en longitud en más de 10× — probablemente son "
-"tipos de documento distintos."
+"Versions differ in length by more than 10× — probably mismatched document"
+" types."
 
 #: app/templates/bills/difference.html:35
 msgid "No se pudo extraer el texto para comparar."
-msgstr ""
+msgstr "Text could not be extracted for comparison."
 
 #: app/templates/bills/difference.html:42
 msgid "Resumen de impacto con IA"
-msgstr ""
+msgstr "AI Impact Summary"
 
 #: app/templates/bills/difference.html:45
 msgid ""
 "El resumen generado por IA estará disponible pronto. Mientras tanto, "
 "revisa los cambios resaltados abajo."
 msgstr ""
+"AI-generated summary coming soon. In the meantime, review the highlighted"
+" changes below."
 
 #: app/templates/bills/difference.html:54
-#, fuzzy
 msgid "Versión 1"
-msgstr "Versión 1"
+msgstr "Version 1"
 
 #: app/templates/bills/difference.html:58
 #: app/templates/bills/difference.html:67
 msgid "Ver documento"
-msgstr ""
+msgstr "View document"
 
 #: app/templates/bills/difference.html:63
-#, fuzzy
 msgid "Versión 2"
-msgstr "Versión 2"
+msgstr "Version 2"
 
 #: app/templates/bills/difference.html:75
 #: app/templates/bills/difference.html:79
-#, fuzzy
 msgid "No hay texto disponible"
-msgstr "No hay texto disponible"
+msgstr "No text available"
 
 #: app/templates/bills/difference.html:85
 msgid "No hay datos de diferencias disponibles."
-msgstr ""
+msgstr "No difference data available."
 
 #: app/templates/bills/search.html:5
 msgid "Busca el proyecto de ley por:"
-msgstr ""
+msgstr "Search the bill by:"
 
 #: app/templates/bills/search.html:9 app/templates/bills/search.html:179
 #: app/templates/bills/search.html:214 app/templates/bills/search.html:261
 #: app/templates/congress/congress_detail.html:77
 msgid "Título"
-msgstr ""
+msgstr "Title"
 
 #: app/templates/bills/search.html:18 app/templates/congress/search.html:37
 msgid "Comisión ordinaria"
-msgstr ""
+msgstr "Ordinary Committee"
 
 #: app/templates/bills/search.html:25 app/templates/congress/search.html:55
 msgid "Buscar"
-msgstr ""
+msgstr "Search"
 
 #: app/templates/bills/search.html:30 app/templates/congress/search.html:60
 msgid "Limpiar"
-msgstr ""
+msgstr "Clean"
 
 #: app/templates/bills/search.html:36
 msgid "Opciones de búsqueda avanzada:"
-msgstr ""
+msgstr "Advanced Search Options:"
 
 #: app/templates/bills/search.html:43 app/templates/bills/search.html:222
 msgid "Número de Proyecto de ley"
-msgstr ""
+msgstr "Bill ID"
 
 #: app/templates/bills/search.html:47 app/templates/bills/search.html:225
 msgid "Número de la ley"
-msgstr ""
+msgstr "Law ID"
 
 #: app/templates/bills/search.html:61 app/templates/bills/search.html:231
 msgid "Partido del autor"
-msgstr ""
+msgstr "Author party"
 
 #: app/templates/bills/search.html:70 app/templates/bills/search.html:243
 #: app/templates/congress/search.html:46 app/templates/congress/search.html:82
 msgid "Comisión especial"
-msgstr ""
+msgstr "Special Committee"
 
 #: app/templates/bills/search.html:83
 msgid "Desde"
-msgstr ""
+msgstr "From"
 
 #: app/templates/bills/search.html:86 app/templates/bills/search.html:110
 msgid "Año"
-msgstr ""
+msgstr "Year"
 
 #: app/templates/bills/search.html:92 app/templates/bills/search.html:116
 msgid "Mes"
-msgstr ""
+msgstr "Month"
 
 #: app/templates/bills/search.html:98 app/templates/bills/search.html:122
 #: app/templates/bills/search.html:331
-#, fuzzy
 msgid "Día"
-msgstr "Día"
+msgstr "Day"
 
 #: app/templates/bills/search.html:107
-#, fuzzy
 msgid "Hasta"
-msgstr "ABSTENCIÓN"
+msgstr "To"
 
 #: app/templates/bills/search.html:134 app/templates/bills/search.html:234
 msgid "Tiene diferencia de versiones"
-msgstr ""
+msgstr "Has version differences"
 
 #: app/templates/bills/search.html:135
 msgid ""
@@ -330,36 +308,40 @@ msgid ""
 "verificar las diferencias entre diferentes versiones del proyecto durante"
 " su presentación"
 msgstr ""
+"Indicates that the selected bill can be used to verify differences "
+"between versions during its presentation."
 
 #: app/templates/bills/search.html:139
 msgid ""
 "Refiere a que tiene la posibilidad de verificar las diferencias entre "
 "diferentes versiones del proyecto durante su presentación"
 msgstr ""
+"Indicates that it is possible to verify differences between versions of "
+"the bill during its presentation."
 
 #: app/templates/bills/search.html:144 app/templates/bills/search.html:153
 msgid "Todos"
-msgstr ""
+msgstr "All bills"
 
 #: app/templates/bills/search.html:145 app/templates/bills/search.html:234
 msgid "Sí"
-msgstr ""
+msgstr "Yes"
 
 #: app/templates/bills/search.html:146 app/templates/bills/search.html:234
 msgid "No"
-msgstr ""
+msgstr "No"
 
 #: app/templates/bills/search.html:157 app/templates/bills/search.html:246
 msgid "Proyectos de ley aprobados"
-msgstr ""
+msgstr "Approved bills"
 
 #: app/templates/bills/search.html:161 app/templates/bills/search.html:246
 msgid "Proyectos de ley no aprobados"
-msgstr ""
+msgstr "Not approved bills"
 
 #: app/templates/bills/search.html:171
 msgid "Proyectos de ley recientes"
-msgstr ""
+msgstr "Recent bills"
 
 #: app/templates/bills/search.html:178 app/templates/bills/search.html:260
 #: app/templates/congress/congress_detail.html:76
@@ -367,185 +349,171 @@ msgid "ID"
 msgstr "ID"
 
 #: app/templates/bills/search.html:181
-#, fuzzy
 msgid "Primera fecha de presentacion"
-msgstr "Tiempo desde la presentación"
+msgstr "First presentation date"
 
 #: app/templates/bills/search.html:182 app/templates/bills/search.html:246
 #: app/templates/bills/search.html:264
 msgid "Estado"
-msgstr ""
+msgstr "Status"
 
 #: app/templates/bills/search.html:183 app/templates/bills/search.html:265
 #: app/templates/congress/congress_detail.html:79
 #: app/templates/congress/search.html:92
-#, fuzzy
 msgid "Detalle"
-msgstr "Detalle"
+msgstr "Detail"
 
 #: app/templates/bills/search.html:212 app/templates/congress/search.html:68
 msgid "Criterios de búsqueda"
-msgstr ""
+msgstr "Search Criteria"
 
 #: app/templates/bills/search.html:240 app/templates/bills/votes.html:41
-#, fuzzy
 msgid "Organización"
-msgstr "Organización"
+msgstr "Organization"
 
 #: app/templates/bills/search.html:252
-#, fuzzy, python-format
+#, python-format
 msgid "Mostrando %(start)s-%(end)s de %(count)s proyectos de ley"
-msgstr "Mostrando %(start)s-%(end)s de %(count)s proyectos de ley"
+msgstr "Showing %(start)s-%(end)s of %(count)s bills"
 
 #: app/templates/bills/search.html:288
 msgid "Páginas de búsqueda"
-msgstr ""
+msgstr "Search pages"
 
 #: app/templates/bills/search.html:289
 msgid "Página"
-msgstr ""
+msgstr "Page"
 
 #: app/templates/bills/search.html:302
 msgid "Anterior"
-msgstr ""
+msgstr "Previous"
 
 #: app/templates/bills/search.html:306
 msgid "Siguiente"
-msgstr ""
+msgstr "Next"
 
 #: app/templates/bills/search.html:312
 #: app/templates/congress/congress_detail.html:99
 msgid "No se encontraron proyectos de ley."
-msgstr ""
+msgstr "No authored bills found."
 
 #: app/templates/bills/votes.html:40
 msgid "Fecha de votacion"
-msgstr ""
+msgstr "Vote date"
 
 #: app/templates/bills/votes.html:45
 msgid "Resultados de votación"
-msgstr ""
+msgstr "Voting Results"
 
 #: app/templates/bills/votes.html:51
-#, fuzzy
 msgid "A FAVOR"
-msgstr "A FAVOR"
+msgstr "IN FAVOR"
 
 #: app/templates/bills/votes.html:52
-#, fuzzy
 msgid "EN CONTRA"
-msgstr "Open Congress"
+msgstr "AGAINST"
 
 #: app/templates/bills/votes.html:53
-#, fuzzy
 msgid "ABSTENCIÓN"
-msgstr "ABSTENCIÓN"
+msgstr "ABSTAIN"
 
 #: app/templates/bills/votes.html:54
-#, fuzzy
 msgid "OTROS"
-msgstr "OTROS"
+msgstr "OTHERS"
 
 #: app/templates/bills/votes.html:84
-#, fuzzy
 msgid "Resultados por bancada"
-msgstr "Resultados por bancada"
+msgstr "Results by bancada"
 
 #: app/templates/bills/votes.html:113
-#, fuzzy
 msgid "Voto"
-msgstr "Voto"
+msgstr "Vote"
 
 #: app/templates/congress/congress_detail.html:12
-#, fuzzy, python-format
+#, python-format
 msgid "%(count)s votos obtenidos"
-msgstr "%(count)s votos obtenidos"
+msgstr "%(count)s votes obtained"
 
 #: app/templates/congress/congress_detail.html:22
-#, fuzzy, python-format
+#, python-format
 msgid "Foto de %(name)s"
-msgstr "Foto de %(name)s"
+msgstr "Photo of %(name)s"
 
 #: app/templates/congress/congress_detail.html:27
 msgid "Membresía en comisiones"
-msgstr ""
+msgstr "Committee Membership"
 
 #: app/templates/congress/congress_detail.html:42
 msgid "No se encontraron registros de membresía en comisiones."
-msgstr ""
+msgstr "No committee membership records found."
 
 #: app/templates/congress/congress_detail.html:49
 msgid "Tasa de asistencia"
-msgstr ""
+msgstr "Attendance Rate"
 
 #: app/templates/congress/congress_detail.html:51
 msgid "En construcción"
-msgstr ""
+msgstr "Building"
 
 #: app/templates/congress/congress_detail.html:54
 msgid "Proyectos de ley presentados"
-msgstr ""
+msgstr "Bills Authored"
 
 #: app/templates/congress/congress_detail.html:60
 msgid ""
 "Representa el porcentaje de proyectos de ley aprobados sobre el total de "
 "proyectos presentados"
-msgstr ""
+msgstr "Represents the percentage of approved bills out of all bills presented"
 
 #: app/templates/congress/congress_detail.html:60
-#, fuzzy
 msgid "Promedio de congresistas"
-msgstr "Bienvenido a Open Congress"
+msgstr "Congressmember average"
 
 #: app/templates/congress/congress_detail.html:62
 msgid "Tasa de aprobación de proyectos"
-msgstr ""
+msgstr "Approval bill rate"
 
 #: app/templates/congress/congress_detail.html:70
 msgid "Proyectos de ley recientes presentados (últimos 5)"
-msgstr ""
+msgstr "Recent Bills Authored (Last 5)"
 
 #: app/templates/congress/congress_detail.html:78
 msgid "Fecha"
-msgstr ""
+msgstr "Date"
 
 #: app/templates/congress/congress_detail.html:105
 msgid "Ver todos los proyectos de ley presentados"
-msgstr ""
+msgstr "View all bills authored"
 
 #: app/templates/congress/congress_detail.html:112
 msgid "Perfil oficial del congresista"
-msgstr ""
+msgstr "Official congress profile"
 
 #: app/templates/congress/search.html:7
-#, fuzzy
 msgid "Busca al congresista por:"
-msgstr "Perfil oficial del congresista"
+msgstr "Search a congressmember by:"
 
 #: app/templates/congress/search.html:13 app/templates/congress/search.html:70
 #: app/templates/congress/search.html:89
-#, fuzzy
 msgid "Nombre"
-msgstr "Nombre"
+msgstr "Name"
 
 #: app/templates/congress/search.html:28 app/templates/congress/search.html:76
 #: app/templates/congress/search.html:91
-#, fuzzy
 msgid "Región"
-msgstr "Región"
+msgstr "Region"
 
 #: app/templates/congress/search.html:79
-#, fuzzy
 msgid "Comisión"
-msgstr "Comisión"
+msgstr "Commission"
 
 #: app/templates/congress/search.html:111
 msgid "No se encontraron congresistas."
-msgstr ""
+msgstr "No matching congresspeople found."
 
 #: app/templates/landing/index.html:7
 msgid "Bienvenido a Open Peru"
-msgstr ""
+msgstr "Welcome to Open Peru"
 
 #: app/templates/landing/index.html:10
 msgid ""
@@ -554,19 +522,22 @@ msgid ""
 "quiénes los presentaron, observa cómo votaron los congresistas y compara "
 "cambios entre distintas versiones de cada proyecto."
 msgstr ""
+"Open Peru brings together public information from the Peruvian Congress "
+"in one place. Explore bills from the 2021-2026 congressional period, "
+"review who authored them, see how congress members voted, and compare "
+"changes between different versions of each bill."
 
 #: app/templates/landing/index.html:11
 msgid "Haz clic abajo para empezar a explorar:"
-msgstr ""
+msgstr "Click below to start exploring:"
 
 #: app/templates/landing/index.html:27
-#, fuzzy
 msgid "Logo de Open Congress"
-msgstr "Open Congress"
+msgstr "Open Congress logo"
 
 #: app/templates/landing/index.html:29
 msgid "Transparencia y rendición de cuentas para una democracia más fuerte"
-msgstr ""
+msgstr "Transparency and accountability for a stronger democracy"
 
 #: app/templates/landing/index.html:38
 msgid ""
@@ -577,6 +548,11 @@ msgid ""
 "procesa y los organiza en una base de datos relacional estructurada y "
 "limpia."
 msgstr ""
+"Open Peru began as a course project in the University of Chicago's Master"
+" of Computational Analysis and Public Policy program. It has since been "
+"developed as a public data platform for legislative information, "
+"collecting official public records from the Peruvian Congress, processing"
+" them, and organizing them into a structured, clean relational database."
 
 #: app/templates/landing/index.html:41
 msgid ""
@@ -584,20 +560,24 @@ msgid ""
 "Congreso, quiénes los presentan y cuándo cambia su texto a lo largo del "
 "tiempo."
 msgstr ""
+"Use the platform to explore how bills move through Congress, who sponsors"
+" them, and when their text changes over time."
 
 #: app/templates/landing/index.html:47
 msgid "Busca un proyecto de ley"
-msgstr ""
+msgstr "Search a bill"
 
 #: app/templates/landing/index.html:49
 msgid ""
 "Encuentra proyectos por título, autor, comisión, fecha, estado o si "
 "tienen diferencias entre versiones."
 msgstr ""
+"Find bills by title, author, committee, date, status, or whether they "
+"have differences between versions."
 
 #: app/templates/landing/index.html:55
 msgid "Revisa su recorrido"
-msgstr ""
+msgstr "Review its path"
 
 #: app/templates/landing/index.html:57
 msgid ""
@@ -605,71 +585,78 @@ msgid ""
 "comisiones, votaciones, decisiones de archivo, aprobación y revisiones de"
 " texto."
 msgstr ""
+"Open a bill to see its timeline: presentation, committee review, votes, "
+"archival decisions, approval, and text revisions."
 
 #: app/templates/landing/index.html:63
 msgid "Explora quién está detrás"
-msgstr ""
+msgstr "Explore who is behind it"
 
 #: app/templates/landing/index.html:65
 msgid ""
 "Pasa de un proyecto a su autor, partido, membresías en comisiones, "
 "proyectos recientes y métricas de aprobación."
 msgstr ""
+"Move from a bill to its author, party, committee memberships, recent "
+"bills, and approval metrics."
 
 #: app/templates/landing/index.html:74
 msgid "Qué sigue"
-msgstr ""
+msgstr "What's Next"
 
 #: app/templates/landing/index.html:76
 msgid ""
 "Seguimos ampliando Open Peru como un proyecto de infraestructura pública "
 "para la transparencia legislativa."
 msgstr ""
+"We are continuing to expand Open Peru as a public infrastructure project "
+"for legislative transparency."
 
 #: app/templates/landing/index.html:81
 msgid "API pública"
-msgstr ""
+msgstr "Public API"
 
 #: app/templates/landing/index.html:82
 msgid "Estamos construyendo una API para acceder a la base de datos legislativa."
-msgstr ""
+msgstr "Building an API to access the legislative database."
 
 #: app/templates/landing/index.html:85
 msgid "Votos y asistencia"
-msgstr ""
+msgstr "Votes and attendance"
 
 #: app/templates/landing/index.html:86
 msgid "Estamos agregando registros de votación y métricas de asistencia."
-msgstr ""
+msgstr "Adding vote records and attendance-rate metrics."
 
 #: app/templates/landing/index.html:89
 msgid "Diferencias de versiones mejoradas"
-msgstr ""
+msgstr "Improved version differences"
 
 #: app/templates/landing/index.html:90
 msgid ""
 "Estamos mejorando las herramientas para detectar y mostrar cambios entre "
 "versiones de proyectos de ley."
-msgstr ""
+msgstr "Improving tools to detect and display changes between bill versions."
 
 #: app/templates/landing/index.html:93
-#, fuzzy
 msgid "Próximo Congreso"
-msgstr "Open Congress"
+msgstr "Next Congress"
 
 #: app/templates/landing/index.html:94
 msgid "Estamos preparando la infraestructura para el periodo congresal 2026-2031."
-msgstr ""
+msgstr "Preparing the infrastructure for the 2026-2031 congressional period."
 
 #: app/templates/landing/index.html:99
 msgid ""
 "¿Quieres colaborar, usar los datos o conocer más sobre el proyecto? "
 "Escribe a openperu@civic.garden.org."
 msgstr ""
+"Want to collaborate, use the data, or learn more about the project? Write"
+" to openperu@civic.garden.org."
 
 #: app/templates/landing/index.html:106
 msgid "Conoce al equipo"
-msgstr ""
+msgstr "Know the team"
 
 #: app/templates/landing/index.html:108
 msgid ""
@@ -677,318 +664,15 @@ msgid ""
 "Analysis and Public Policy de la Universidad de Chicago y es desarrollada"
 " por un equipo de seis estudiantes del programa."
 msgstr ""
+"The platform began as part of the University of Chicago's Master of "
+"Computational Analysis and Public Policy program and is developed by a "
+"six-student team from the program."
 
 #: app/templates/landing/index.html:136
 msgid ""
 "Si deseas mayor información o ponerte en contacto con el equipo escribe a"
 " openperu@civic.garden.org"
 msgstr ""
-
-#~ msgid "Bill Status"
-#~ msgstr "Estado"
-
-#~ msgid "Election Votes"
-#~ msgstr "Votos obtenidos"
-
-#~ msgid "Rate of Successful"
-#~ msgstr "Tasa de éxito"
-
-#~ msgid "Clear"
-#~ msgstr "Limpiar"
-
-#~ msgid ""
-#~ "Select the information about the "
-#~ "peruvian congress that you want to "
-#~ "explore"
-#~ msgstr "Selecciona la información del Congreso peruano quieres explorar"
-
-#~ msgid ""
-#~ "Open Congress brings together public "
-#~ "information from the Peruvian Congress "
-#~ "so bills,\n"
-#~ "            congress members, political "
-#~ "groups, and legislative activity can be"
-#~ " explored in one place."
-#~ msgstr ""
-#~ "Open Congress reúne información pública "
-#~ "del Congreso peruano para que los "
-#~ "proyectos de ley, los congresistas, los"
-#~ " grupos políticos y la actividad "
-#~ "legislativa puedan explorarse en un solo"
-#~ " lugar."
-
-#~ msgid "Last Votings"
-#~ msgstr "Últimas votaciones"
-
-#~ msgid "Data"
-#~ msgstr "Datos"
-
-#~ msgid "In favor"
-#~ msgstr "A favor"
-
-#~ msgid "Against"
-#~ msgstr "En contra"
-
-#~ msgid "Abstain"
-#~ msgstr "Abstención"
-
-#~ msgid "Others"
-#~ msgstr "Otros"
-
-#~ msgid "Bills"
-#~ msgstr "Proyectos de ley"
-
-#~ msgid "Open navigation menu"
-#~ msgstr ""
-
-#~ msgid "Close navigation menu"
-#~ msgstr ""
-
-#~ msgid "Home"
-#~ msgstr "Inicio"
-
-#~ msgid "About"
-#~ msgstr "Acerca de"
-
-#~ msgid "Congressmember"
-#~ msgstr "Congresista"
-
-#~ msgid "Language"
-#~ msgstr "Idioma"
-
-#~ msgid "Spanish"
-#~ msgstr "Español"
-
-#~ msgid "Presentation date"
-#~ msgstr "Fecha de presentación"
-
-#~ msgid "Time to approval"
-#~ msgstr "Tiempo hasta la aprobación"
-
-#~ msgid "Current Step"
-#~ msgstr "Etapa actual"
-
-#~ msgid "Summary"
-#~ msgstr "Resumen"
-
-#~ msgid "View changes"
-#~ msgstr "Ver cambios"
-
-#~ msgid "Bill"
-#~ msgstr "Proyecto de ley"
-
-#~ msgid "Step"
-#~ msgstr "Paso"
-
-#~ msgid "Back to bill"
-#~ msgstr "Volver al proyecto de ley"
-
-#~ msgid "Differences"
-#~ msgstr "Diferencias"
-
-#~ msgid "This is the first version — no previous text to compare."
-#~ msgstr "Esta es la primera versión — no hay texto previo para comparar."
-
-#~ msgid "Text could not be extracted for comparison."
-#~ msgstr "No se pudo extraer el texto para comparar."
-
-#~ msgid "No difference data available."
-#~ msgstr "No hay datos de diferencias disponibles."
-
-#~ msgid "Search the bill by:"
-#~ msgstr "Busca el proyecto de ley por:"
-
-#~ msgid "Title"
-#~ msgstr "Título"
-
-#~ msgid "Committee"
-#~ msgstr "Comité"
-
-#~ msgid "Search"
-#~ msgstr "Buscar"
-
-#~ msgid "Advanced Search Options:"
-#~ msgstr "Opciones de búsqueda avanzada:"
-
-#~ msgid "Bill ID"
-#~ msgstr "Número de Proyecto de ley"
-
-#~ msgid "Law ID"
-#~ msgstr "Número de la ley"
-
-#~ msgid "Author party"
-#~ msgstr "Partido del autor"
-
-#~ msgid "From"
-#~ msgstr "Desde"
-
-#~ msgid "Year"
-#~ msgstr "Año"
-
-#~ msgid "Month"
-#~ msgstr "Mes"
-
-#~ msgid "To"
-#~ msgstr "Hasta"
-
-#~ msgid "All bills"
-#~ msgstr "Todos"
-
-#~ msgid "Approved bills"
-#~ msgstr "Proyectos de ley aprobados"
-
-#~ msgid "Not approved bills"
-#~ msgstr "Proyectos de ley no aprobados"
-
-#~ msgid "Recent bills"
-#~ msgstr "Proyectos de ley recientes"
-
-#~ msgid "First presentation date"
-#~ msgstr "Primera fecha de presentacion"
-
-#~ msgid "Search Criteria"
-#~ msgstr "Criterios de búsqueda"
-
-#~ msgid "Presentation Date"
-#~ msgstr "Fecha de presentación"
-
-#~ msgid "Status"
-#~ msgstr "Estado"
-
-#~ msgid "Search pages"
-#~ msgstr "Páginas de búsqueda"
-
-#~ msgid "Page"
-#~ msgstr "Página"
-
-#~ msgid "Previous"
-#~ msgstr "Anterior"
-
-#~ msgid "Next"
-#~ msgstr "Siguiente"
-
-#~ msgid "No matching bills found."
-#~ msgstr "No se encontraron proyectos de ley."
-
-#~ msgid "Not available"
-#~ msgstr "No disponible"
-
-#~ msgid "Vote date"
-#~ msgstr "Fecha de votacion"
-
-#~ msgid "Voting Results"
-#~ msgstr "Resultados de votación"
-
-#~ msgid "AGAINST"
-#~ msgstr "EN CONTRA"
-
-#~ msgid "Committee Membership"
-#~ msgstr "Membresía en comisiones"
-
-#~ msgid "No committee membership records found."
-#~ msgstr "No se encontraron registros de membresía en comisiones."
-
-#~ msgid "Attendance Rate"
-#~ msgstr "Tasa de asistencia"
-
-#~ msgid "Bills Authored"
-#~ msgstr "Proyectos de ley presentados"
-
-#~ msgid "Approval bill rate"
-#~ msgstr "Tasa de aprobación de proyectos"
-
-#~ msgid "Recent Bills Authored (Last 5)"
-#~ msgstr "Proyectos de ley recientes presentados (últimos 5)"
-
-#~ msgid "No authored bills found."
-#~ msgstr "No se encontraron proyectos de ley."
-
-#~ msgid "View all bills authored"
-#~ msgstr "Ver todos los proyectos de ley presentados"
-
-#~ msgid "Search a congressmember by:"
-#~ msgstr "Busca al congresista por:"
-
-#~ msgid "No matching congresspeople found."
-#~ msgstr "No se encontraron congresistas."
-
-#~ msgid ""
-#~ "Open Congress brings together public "
-#~ "information from the Peruvian Congress "
-#~ "in one place. Explore bills from "
-#~ "the 2021-2026 congressional period, review "
-#~ "who authored them, see how congress "
-#~ "members voted, and compare changes "
-#~ "between different versions of each bill."
-#~ msgstr ""
-#~ "Open Congress reune información pública "
-#~ "del Congreso peruano en un solo "
-#~ "lugar. Explora proyectos de ley del "
-#~ "periodo congresal 2021-2026, revisa quienes"
-#~ " los presentaron, observa como votaron "
-#~ "los congresistas y compara cambios entre"
-#~ " distintas versiones de cada proyecto."
-
-#~ msgid "Click below to start exploring:"
-#~ msgstr "Haz clic abajo para empezar a explorar:"
-
-#~ msgid "Open Congress logo"
-#~ msgstr "Logo de Open Congress"
-
-#~ msgid "Transparency and accountability for a stronger democracy"
-#~ msgstr "Transparencia y rendición de cuentas para una democracia más fuerte"
-
-#~ msgid ""
-#~ "Open Congress is built as a public data pipeline for legislative \n"
-#~ "            information. It collects official"
-#~ " public records from the Peruvian "
-#~ "Congress, \n"
-#~ "            processes them, and organizes them into a structured, \n"
-#~ "            clean relational database."
-#~ msgstr ""
-#~ "Open Congress esta construido como un"
-#~ " repositorio publico de datos para "
-#~ "informacion legislativa. Recopila registros "
-#~ "publicos oficiales del Congreso peruano, "
-#~ "los procesa y los organiza en una"
-#~ " base de datos relacional estructurada "
-#~ "y limpia."
-
-#~ msgid ""
-#~ "The platform began as part of the University of Chicago's \n"
-#~ "            Master of Computational Analysis"
-#~ " and Public Policy program and \n"
-#~ "            is developed by a six-student team from the program."
-#~ msgstr ""
-#~ "La plataforma nació como parte del "
-#~ "programa Master of Computational Analysis "
-#~ "and Public Policy de la Universidad "
-#~ "de Chicago y es desarrollada por "
-#~ "un equipo de seis estudiantes del "
-#~ "programa."
-
-#~ msgid ""
-#~ "It is mainly written in Python and uses SQLAlchemy, \n"
-#~ "            PostgreSQL, OCR/document parsing, "
-#~ "and automated tests to track \n"
-#~ "            bills, votes, congressmembers, "
-#~ "political groups, and text \n"
-#~ "            changes across the legislative process."
-#~ msgstr ""
-#~ "Esta desarrollada principalmente en Python "
-#~ "y usa PostgreSQL, OCR/procesamiento de "
-#~ "documentos y pruebas automatizadas para "
-#~ "seguir proyectos de ley, votos, "
-#~ "congresistas, grupos politicos y cambios "
-#~ "de texto a lo largo del proceso"
-#~ " legislativo."
-
-#~ msgid "Know the team"
-#~ msgstr "Conoce al equipo"
-
-#~ msgid ""
-#~ "Seguimos ampliando Open Congress como un"
-#~ " proyecto de infraestructura pública para"
-#~ " la transparencia legislativa."
-#~ msgstr ""
+"If you want more information or to contact the team, write to "
+"openperu@civic.garden.org"
 

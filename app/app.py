@@ -15,7 +15,7 @@ def get_locale():
         lang = request.args.get("lang")
     if lang:
         return lang
-    return request.accept_languages.best_match(["en", "es"]) or "en"
+    return "es"
 
 
 def create_app():
@@ -28,7 +28,7 @@ def create_app():
 
     app.secret_key = "secret"
 
-    app.config["BABEL_DEFAULT_LOCALE"] = "en"
+    app.config["BABEL_DEFAULT_LOCALE"] = "es"
     babel.init_app(app, locale_selector=get_locale)
 
     return app

@@ -26,27 +26,27 @@
         </div>
 
         <div class="bill-heading-meta">
-          <span> <strong>{{_('Presentation date')}}:</strong> {{ presentation_date.strftime('%d-%m-%Y') }}</span>
+          <span> <strong>{{_('Fecha de presentación')}}:</strong> {{ presentation_date.strftime('%d-%m-%Y') }}</span>
           {% if bill_status == 'Approved' %}
-            <span class="time-approval"> <strong>{{_('Time to approval')}}:</strong> {{ days_since_presentation }} {{_('days')}}</span>
+            <span class="time-approval"> <strong>{{_('Tiempo hasta la aprobación')}}:</strong> {{ days_since_presentation }} {{_('días')}}</span>
           {% else %}
-            <span class="time-presented"><strong>{{_('Time since presentation')}}:</strong> {{ days_since_presentation }} {{_('days')}}</span>
+            <span class="time-presented"><strong>{{_('Tiempo desde la presentación')}}:</strong> {{ days_since_presentation }} {{_('días')}}</span>
           {% endif %}
         </div>
       </div>
     </section>
     <div class="bill-meta">
       {% if latest_step %}
-          <p><strong>{{_('Current Step')}}:</strong> {{ latest_step.step_type.value }}</p>
+          <p><strong>{{_('Etapa actual')}}:</strong> {{ latest_step.step_type.value }}</p>
       {% endif %}
       {% if author %}
-        <p><strong>{{_('Author')}}:</strong> <a href=" /congress/{{author.id}} ">{{ author.full_name }}</a></p>
-        <p><strong>{{_('Party')}}:</strong> {{ party_name }}</p>
+        <p><strong>{{_('Autor')}}:</strong> <a href=" /congress/{{author.id}} ">{{ author.full_name }}</a></p>
+        <p><strong>{{_('Partido')}}:</strong> {{ party_name }}</p>
       {% else %}
-        <p><strong>{{_('Author')}}:</strong> <a>{{ bill.proponent.value }}</a></p>
+        <p><strong>{{_('Autor')}}:</strong> <a>{{ bill.proponent.value }}</a></p>
 
       {% endif %}
-      <p class="summary-label"><strong>{{_('Summary')}}:</strong></p>
+      <p class="summary-label"><strong>{{_('Resumen')}}:</strong></p>
       <p class="summary-text">{{ bill.summary_oc }}</p>
 
     </div>
@@ -63,13 +63,13 @@
                   <p class="step-detail"> {{ step.step_detail }}</p>
                 {% if step.vote_step and step.vote_event_id %}
                   <!-- mock data -->
-                  <!-- <a href = "/bills/{{bill.id}}/mock_votes">{{_('View details')}}</a> -->
+                  <!-- <a href = "/bills/{{bill.id}}/mock_votes">{{_('Ver detalles')}}</a> -->
                   <!-- This is the button for view details of votes v
-                  <a href="/bills/{{ bill.id }}/votes/{{ step.vote_event_id }}">{{ _('View details') }}</a>
+                  <a href="/bills/{{ bill.id }}/votes/{{ step.vote_event_id }}">{{ _('Ver detalles') }}</a>
                   -->
                 {% endif %}
-                {% if diff_types.get(step.step_id) in ('modified', 'incomparable') %}
-                  <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('View changes')}}</a>
+                {% if step.step_id in view_change_step_ids %}
+                  <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('Ver cambios')}}</a>
                 {% endif %}
               </div>
             </div>
