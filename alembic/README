@@ -1,1 +1,179 @@
-Generic single-database configuration.
+# Database Migrations (Alembic)
+
+This project uses [Alembic](https://alembic.sqlalchemy.org/) to manage schema
+migrations for our PostgreSQL database. This document explains how migrations
+are set up, how to work with them day-to-day, and the safety rules we follow
+since our database contains **real, production data**.
+
+---
+
+## Setup
+
+Migrations live in the `alembic/` directory:
+
+```
+alembic/
+  versions/       # individual migration files
+  env.py          # Alembic runtime config (imports our models)
+alembic.ini       # Alembic settings
+```
+
+We run everything through `uv run` (not `uvx`), because Alembic needs to
+import our actual project code (SQLAlchemy models) to compare against the
+live database schema:
+
+```bash
+uv run alembic <command>
+```
+
+Using `uvx alembic ...` will fail with `ModuleNotFoundError` for project
+dependencies (e.g. `pgvector`), since `uvx` runs in an isolated environment
+that doesn't have our project's packages installed.
+
+The database connection string is pulled from `backend.config.settings.DB_URL`
+inside `alembic/env.py` — no credentials are hardcoded in `alembic.ini`.
+
+### Model registration
+
+Our models are split across `backend/database/models.py` and
+`backend/database/raw_models.py`, but they share a **single** `Base`
+(`raw_models.py` imports `Base` from `models.py`). `env.py` imports both
+modules so all tables register on `Base.metadata` before Alembic reads it:
+
+```python
+from backend.database.models import Base
+import backend.database.raw_models  # noqa: F401 — registers its tables on Base.metadata
+
+target_metadata = Base.metadata
+```
+
+If you add a new models file, make sure it's imported in `env.py` too, or
+its tables will be invisible to `--autogenerate`.
+
+---
+
+## Day-to-day workflow
+
+1. Change a SQLAlchemy model.
+2. Generate a migration:
+   ```bash
+   uv run alembic revision --autogenerate -m "add email column to users"
+   ```
+3. **Open and read the generated file in `alembic/versions/`.** Autogenerate
+   is a starting point, not a final answer — see [Safety rules](#safety-rules-non-negotiable) below.
+4. Apply it:
+   ```bash
+   uv run alembic upgrade head
+   ```
+5. Roll back the last migration if needed:
+   ```bash
+   uv run alembic downgrade -1
+   ```
+
+### Useful commands
+
+| Command | Purpose |
+|---|---|
+| `uv run alembic revision --autogenerate -m "msg"` | Generate a migration from the model/DB diff |
+| `uv run alembic upgrade head` | Apply all pending migrations |
+| `uv run alembic downgrade -1` | Roll back one migration |
+| `uv run alembic current` | Show the DB's current revision |
+| `uv run alembic history` | Show the full migration chain |
+| `uv run alembic stamp head` | Mark the DB as up-to-date without running anything |
+
+---
+
+## Safety rules (non-negotiable)
+
+Our database has real data in it. A wrong migration can silently corrupt or
+destroy data. Before running `alembic upgrade head` against any environment
+with real data:
+
+- **Always back up first.**
+  ```bash
+  pg_dump -F c -d <db_name> -f backup_before_migration.dump
+  ```
+- **Never trust autogenerate blindly.** It can't distinguish a renamed
+  column from a dropped-and-recreated one, and it won't detect required
+  data backfills. Read every generated file before running it.
+- **Column renames** must be written explicitly, not as drop+add:
+  ```python
+  op.alter_column('users', 'old_name', new_column_name='new_name')
+  ```
+- **New NOT NULL columns on tables with existing rows** must be added in
+  stages — add nullable, backfill, then enforce:
+  ```python
+  op.add_column('users', sa.Column('status', sa.String(), nullable=True))
+  op.execute("UPDATE users SET status = 'active' WHERE status IS NULL")
+  op.alter_column('users', 'status', nullable=False)
+  ```
+- **New unique constraints/indexes** must be checked against existing data
+  for violations *before* the migration runs:
+  ```sql
+  SELECT col_a, col_b, count(*)
+  FROM some_table
+  GROUP BY col_a, col_b
+  HAVING count(*) > 1;
+  ```
+  If duplicates exist, resolve them in a data-cleanup step first — don't let
+  the migration fail (or worse, don't let a careless cleanup delete data
+  that's actually needed elsewhere via foreign keys).
+- **Test every migration against a copy of production data** before running
+  it on the real thing.
+
+---
+
+## The `alembic_version` table
+
+Alembic tracks the database's current migration state in a table called
+`alembic_version`, stored *inside the database itself* — not just in files
+on disk. This means:
+
+- Deleting a migration file manually does **not** undo it from the DB's
+  perspective. If you must remove a migration that was already applied,
+  use `alembic downgrade` first, or manually clear/fix `alembic_version`.
+- If you ever see an error like:
+  ```
+  Can't locate revision identified by '<hash>'
+  ```
+  it means the DB is pointing at a revision that no longer exists on disk.
+  Check the table directly:
+  ```sql
+  SELECT * FROM alembic_version;
+  ```
+  and reconcile it (either restore the missing migration file, or reset the
+  table if you're still establishing a fresh baseline).
+
+---
+
+## Establishing a baseline (existing database)
+
+When Alembic is first introduced to a database that already has tables and
+data, the first migration should be run with extra scrutiny:
+
+```bash
+uv run alembic revision --autogenerate -m "baseline"
+```
+
+- If your models match the live schema exactly, this file should be **empty
+  or near-empty**. That's the ideal baseline.
+- If it contains real changes (new indexes, altered columns, etc.), those
+  represent genuine drift between your models and the live DB. Each one
+  needs to be checked against real data (see [Safety rules](#safety-rules-non-negotiable))
+  before running it — do not assume a "baseline" migration is automatically
+  safe just because it was the first one generated.
+
+Once the baseline is verified safe and applied (or stamped, if no changes
+were needed):
+
+```bash
+uv run alembic stamp head
+```
+
+---
+
+## Questions / issues
+
+If a migration behaves unexpectedly, check `uv run alembic current` and
+`uv run alembic history` first to confirm where the DB actually is before
+making further changes.
