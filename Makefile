@@ -1,6 +1,3 @@
-migration:
-	docker compose run --rm initial-migration
-
 scrape-others:
 	uv run -m backend --scrape --skip-processing --only-others --only-current
 
@@ -23,4 +20,7 @@ process:
 	uv run -m backend
 
 process-bill-documents:
-	uv run -m backend --only-bills --process-documents	
+	uv run -m backend --only-bills --process-documents
+
+backfill-docs-metadata:
+	uv run scripts/backfill_docs_metadata.py

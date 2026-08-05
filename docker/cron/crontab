@@ -8,4 +8,5 @@ CRON_TZ=America/Lima
 0 4 * * * /app/docker/cron/run-job.sh scrape-leyes
 0 4 * * * /app/docker/cron/run-job.sh scrape-documents
 0 7 * * * /app/docker/cron/run-job.sh process
-50 17 * * * /app/docker/cron/run-job.sh process-bill-documents
+00 20 * * * /app/docker/cron/run-job.sh process-bill-documents
+00 17 * * * /app/docker/cron/run-job.sh backfill-docs-metadata
