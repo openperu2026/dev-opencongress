@@ -73,6 +73,8 @@ from backend.process.utils import (
     split_and_sort_name,
     replace_www,
 )
+from backend.process.votes import extract as votes_extract, load as votes_load
+from backend.process.votes.config import DEFAULT_MODEL as VOTES_DEFAULT_MODEL
 from backend.scrapers.utils import get_last_id
 from backend.scrapers.congresista_photos import sync_photo as sync_congresista_photo
 
@@ -396,9 +398,13 @@ class OpenPeruOrchestrator:
         process_leyes: bool = True,
         process_others: bool = True,
         process_documents: bool = True,
+        process_votes: bool = False,
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
+        votes_limit: int | None = None,
+        votes_max_pages: int | None = None,
+        votes_model: str = VOTES_DEFAULT_MODEL,
         first_load: bool = False,
     ) -> dict[str, ProcessStats]:
         """
@@ -476,6 +482,27 @@ class OpenPeruOrchestrator:
                 console.info("Starting leyes processing")
                 summary["leyes"] = self._process_leyes(limit=leyes_limit)
                 self._log_stage_summary("leyes", summary["leyes"])
+
+        if process_votes:
+            with log_manager.stage("process", "votes"):
+                for kind in ("bill", "motion"):
+                    console.info(f"Starting vote extraction ({kind})")
+                    key = f"votes_extraction_{kind}"
+                    summary[key] = self._process_vote_extraction(
+                        kind=kind,
+                        model=votes_model,
+                        max_pages=votes_max_pages,
+                        limit=votes_limit,
+                    )
+                    self._log_stage_summary(key, summary[key])
+
+                for kind in ("bill", "motion"):
+                    console.info(f"Starting vote load ({kind})")
+                    key = f"votes_load_{kind}"
+                    summary[key] = self._process_vote_load(
+                        kind=kind, model=votes_model, limit=votes_limit
+                    )
+                    self._log_stage_summary(key, summary[key])
 
         return summary
 
@@ -1634,3 +1661,59 @@ class OpenPeruOrchestrator:
             f"[leyes] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
         return stats
+
+    def _process_vote_extraction(
+        self,
+        *,
+        kind: str,
+        model: str,
+        max_pages: int | None,
+        limit: int | None,
+    ) -> ProcessStats:
+        """Run OpenAI structured extraction over pending vote-related documents."""
+        with self.DBSession() as db:
+            return votes_extract.run_sync_extraction(
+                db, kind=kind, model=model, max_pages=max_pages, limit=limit
+            )
+
+    def _process_vote_load(
+        self, *, kind: str, model: str, limit: int | None
+    ) -> ProcessStats:
+        """Transform pending extraction results into Vote/Attendance/VoteEvent/VoteCounts."""
+        with self.DBSession() as db:
+            return votes_load.run_vote_load(db, kind=kind, model=model, limit=limit)
+
+    def submit_vote_batches(
+        self,
+        *,
+        kind: str,
+        model: str = VOTES_DEFAULT_MODEL,
+        max_pages: int | None = None,
+        limit: int | None = None,
+    ) -> dict:
+        """
+        Submit a Batch API job for historical vote-extraction backfills. Not
+        part of run_processing -- a batch job can take hours, so this is a
+        one-off operator action; pair with collect_vote_batches once the job
+        finishes.
+        """
+        with self.DBSession() as db:
+            return votes_extract.submit_batch_extraction(
+                db, kind=kind, model=model, max_pages=max_pages, limit=limit
+            )
+
+    def collect_vote_batches(
+        self,
+        *,
+        batch_id: str,
+        kind: str,
+        model: str = VOTES_DEFAULT_MODEL,
+    ) -> ProcessStats:
+        """Poll+collect a previously submitted vote-extraction batch, then load it."""
+        with self.DBSession() as db:
+            extraction_stats = votes_extract.collect_batch_extraction(
+                db, batch_id=batch_id, kind=kind, model=model
+            )
+        with self.DBSession() as db:
+            votes_load.run_vote_load(db, kind=kind, model=model, limit=None)
+        return extraction_stats

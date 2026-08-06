@@ -164,6 +164,99 @@ class VoteEvent(PrintableModel):
         return summary
 
 
+class VoteClarification(PrintableModel):
+    """
+    Represents a correction to a member's recorded vote, sourced from either
+    the president's clarification paragraph or a standalone member letter.
+
+    Attributes:
+        vote_event_id (str): The vote event this clarification is about.
+        voter_id (int | None): Resolved congresista, if a match was found.
+        member_name (str): Raw name as printed/extracted.
+        source (str): Either 'president_note' or 'member_letter'.
+        note (str): Verbatim clarification text.
+        roll_value (VoteOption | None): The member's value on the original roll.
+        clarified_value (VoteOption | None): The corrected value.
+    """
+
+    vote_event_id: str
+    voter_id: int | None = None
+    member_name: str
+    source: str
+    note: str
+    roll_value: VoteOption | None = None
+    clarified_value: VoteOption | None = None
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
+
+    @field_validator("source")
+    @classmethod
+    def validate_source(cls, v):
+        if v not in ("president_note", "member_letter"):
+            raise ValueError("source must be 'president_note' or 'member_letter'")
+        return v
+
+
+class AttendanceClarification(PrintableModel):
+    """
+    Represents a correction to a member's recorded attendance, sourced from
+    the president's clarification paragraph.
+
+    Attributes:
+        event_id (str): The vote event this clarification is about.
+        voter_id (int | None): Resolved congresista, if a match was found.
+        member_name (str): Raw name as printed/extracted.
+        note (str): Verbatim clarification text.
+        roster_value (AttendanceStatus | None): The member's value on the original roster.
+        clarified_value (AttendanceStatus | None): The corrected value.
+    """
+
+    event_id: str
+    voter_id: int | None = None
+    member_name: str
+    note: str
+    roster_value: AttendanceStatus | None = None
+    clarified_value: AttendanceStatus | None = None
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
+
+
+class MemberLetter(PrintableModel):
+    """
+    Represents a standalone letter (oficio) from a member registering their
+    intended attendance and/or vote for a specific bill or motion.
+
+    Attributes:
+        bill_id (str | None): Bill this letter is about, if any.
+        motion_id (str | None): Motion this letter is about, if any.
+        voter_id (int | None): Resolved congresista, if a match was found.
+        member_name (str): Raw name as printed/extracted.
+        party (str | None): Party as printed on the letter, if present.
+        letter_date (date | None): Date on the letter.
+        subject_reference (str): The bill/motion subject text referenced by the letter.
+        requested_attendance (AttendanceStatus | None): Attendance status requested, if any.
+        requested_vote (VoteOption | None): Vote option requested, if any.
+    """
+
+    bill_id: str | None = None
+    motion_id: str | None = None
+    voter_id: int | None = None
+    member_name: str
+    party: str | None = None
+    letter_date: date | None = None
+    subject_reference: str
+    requested_attendance: AttendanceStatus | None = None
+    requested_vote: VoteOption | None = None
+
+    model_config = ConfigDict(extra="forbid", use_enum_values=False)
+
+    @model_validator(mode="after")
+    def validate_has_target(self) -> Self:
+        if not self.bill_id and not self.motion_id:
+            raise ValueError("MemberLetter must reference a bill_id or motion_id")
+        return self
+
+
 class Bill(PrintableModel):
     """
     Represents a bill in the peruvian parliament.

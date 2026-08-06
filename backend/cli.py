@@ -61,6 +61,46 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Computes the first processing of summaries for bills",
     )
+    parser.add_argument(
+        "--process-votes",
+        action="store_true",
+        help="Run vote extraction (sync) + load stage for bills and motions",
+    )
+    parser.add_argument(
+        "--votes-limit",
+        type=int,
+        default=None,
+        help="Max documents/pages to process per vote extraction/load call",
+    )
+    parser.add_argument(
+        "--votes-max-pages",
+        type=int,
+        default=None,
+        help="Only extract vote documents with at most this many pages",
+    )
+    parser.add_argument(
+        "--votes-model",
+        default="gpt-5.6-luna",
+        help="OpenAI model to use for vote extraction",
+    )
+    parser.add_argument(
+        "--submit-vote-batches",
+        choices=["bill", "motion"],
+        default=None,
+        help="Submit a historical-backfill Batch API job for vote extraction, then exit",
+    )
+    parser.add_argument(
+        "--collect-vote-batches",
+        metavar="BATCH_ID",
+        default=None,
+        help="Poll+collect a previously submitted vote-extraction batch by id, then exit",
+    )
+    parser.add_argument(
+        "--collect-kind",
+        choices=["bill", "motion"],
+        default="bill",
+        help="Required alongside --collect-vote-batches",
+    )
     return parser
 
 
@@ -69,6 +109,25 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     orchestrator = OpenPeruOrchestrator()
+
+    if args.submit_vote_batches:
+        manifest = orchestrator.submit_vote_batches(
+            kind=args.submit_vote_batches,
+            model=args.votes_model,
+            max_pages=args.votes_max_pages,
+            limit=args.votes_limit,
+        )
+        print(manifest)
+        return
+
+    if args.collect_vote_batches:
+        orchestrator.collect_vote_batches(
+            batch_id=args.collect_vote_batches,
+            kind=args.collect_kind,
+            model=args.votes_model,
+        )
+        return
+
     run_bills = True
     run_motions = True
     run_leyes = True
@@ -119,5 +178,9 @@ def main(argv: list[str] | None = None) -> None:
             process_leyes=run_leyes,
             process_others=run_others,
             process_documents=args.process_documents,
+            process_votes=args.process_votes,
+            votes_limit=args.votes_limit,
+            votes_max_pages=args.votes_max_pages,
+            votes_model=args.votes_model,
             first_load=args.first_summary,
         )

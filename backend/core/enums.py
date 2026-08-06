@@ -26,6 +26,11 @@ class VoteOption(str, Enum):
     NO = "No"
     ABSTENCION = "Abstención"
     SIN_RESPUESTA = "Sin respuesta"
+    AUSENTE = "Ausente"
+    LICENCIA = "Con licencia"
+    SUSPENDIDO = "Suspendido"
+    FALLECIDO = "Fallecido"
+    PRESIDING = "Presidiendo"
 
 
 class AttendanceStatus(str, Enum):
@@ -33,6 +38,8 @@ class AttendanceStatus(str, Enum):
     AUSENTE = "Ausente"
     LICENCIA = "Con licencia"
     SUSPENDIDO = "Suspendido"
+    FALLECIDO = "Fallecido"
+    PRESIDING = "Presidiendo"
 
 
 class TypeMotion(str, Enum):
