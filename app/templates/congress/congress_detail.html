@@ -7,9 +7,9 @@
             <h1>{{ congresista.full_name }}</h1>
             <p>
                 {{ congresista.party_name }} &middot; 
-                {{ congresista.dist_electoral or _('Not available') }} &middot; 
+                {{ congresista.dist_electoral or _('No disponible') }} &middot; 
                 {{ congresista.condicion }} &middot;
-                {{ _('%(count)s votes obtained', count="{:,}".format(congresista.votes_in_election)) }}
+                {{ _('%(count)s votos obtenidos', count="{:,}".format(congresista.votes_in_election)) }}
  
             </p>
         </header>
@@ -19,12 +19,12 @@
                 <img
                     class="congress-photo"
                     src="{{ congresista.photo_url.replace('https://www.congreso.gob.pe', 'https://www3.congreso.gob.pe') }}"
-                    alt="{{ _('Photo of %(name)s', name=congresista.full_name) }}"
+                    alt="{{ _('Foto de %(name)s', name=congresista.full_name) }}"
                 >
             </div>
 
             <section class="congress-section congress-committee-panel">
-                <h2>{{_('Committee Membership')}}</h2>
+                <h2>{{_('Membresía en comisiones')}}</h2>
                 {% if memberships %}
                     <ul class="committee-membership-list">
                         {% for membership in memberships %}
@@ -39,19 +39,19 @@
                         {% endfor %}
                     </ul>
                 {% else %}
-                    <p>{{_('No committee membership records found.')}}</p>
+                    <p>{{_('No se encontraron registros de membresía en comisiones.')}}</p>
                 {% endif %}
              </section>
         </div>
 
         <div class="congress-stats">
             <article>
-                <h2>{{_('Attendance Rate')}}</h2>
+                <h2>{{_('Tasa de asistencia')}}</h2>
                 <!---<strong>{{ profile_stats.assistance_rate }}</strong>-->
-                <strong>{{_('Building')}}</strong>
+                <strong>{{_('En construcción')}}</strong>
             </article>
             <article>
-                <h2>{{_('Bills Authored')}}</h2>
+                <h2>{{_('Proyectos de ley presentados')}}</h2>
                 <strong>{{ profile_stats.bills_authored }}</strong>
             </article>
             <article
@@ -59,7 +59,7 @@
                 tabindex="0"
                 data-tooltip="{{ _('Representa el porcentaje de proyectos de ley aprobados sobre el total de proyectos presentados') }}. {{ _('Promedio de congresistas') }}: {{ profile_stats.average_success_rate }}"
             >
-                <h2>{{_('Approval bill rate')}}</h2>
+                <h2>{{_('Tasa de aprobación de proyectos')}}</h2>
                 <strong>{{ profile_stats.success_rate }}</strong>
             </article>
         </div>
@@ -67,16 +67,16 @@
 
 
         <section class="congress-section congress-bills-preview">
-            <h2>{{_('Recent Bills Authored (Last 5)')}}</h2>
+            <h2>{{_('Proyectos de ley recientes presentados (últimos 5)')}}</h2>
             {% if bills_authored %}
                 <table class="table table-striped">
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>{{ _('ID') }}</th>
-                            <th>{{_('Title')}}</th>
-                            <th>{{_('Date')}}</th>
-                            <th>{{_('Detail')}}</th>
+                            <th>{{_('Título')}}</th>
+                            <th>{{_('Fecha')}}</th>
+                            <th>{{_('Detalle')}}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -88,7 +88,7 @@
                             <td>{{ bill.presentation_date.strftime('%d-%m-%Y') }}</td>
                             <td>
                                 <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
-                                    {{_('View details')}}
+                                    {{_('Ver detalles')}}
                                 </a>
                             </td>
                         </tr>
@@ -96,20 +96,20 @@
                     </tbody>
                 </table>
             {% else %}
-                <p>{{_('No authored bills found.')}}</p>
+                <p>{{_('No se encontraron proyectos de ley.')}}</p>
             {% endif %}
         </section>
         <br>
         <p class="congress-action">
             <a href="{{ url_for('bills.index', author_q=congresista.full_name) }}">
-                {{_('View all bills authored')}}
+                {{_('Ver todos los proyectos de ley presentados')}}
             </a>
         </p>
 
 
         <p class="congress-source">
             <a href="{{ congresista.website }}" target="_blank" rel="noopener noreferrer">
-                {{_('Official congress profile')}}
+                {{_('Perfil oficial del congresista')}}
             </a>
         </p>
     </section>

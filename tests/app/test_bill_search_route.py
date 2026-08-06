@@ -4,7 +4,7 @@ from datetime import date as real_date
 import unicodedata
 
 from backend.core.enums import Proponents
-from backend.core.enums import TypeBillStep, TypeOrganization
+from backend.core.enums import TypeBillStep, TypeCommittee, TypeOrganization
 from backend.database.models import (
     Base,
     Bill,
@@ -104,6 +104,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     bill_approved=False,
                     summary_oc="",
                     pley_id="2021_0001",
+                    bill_diff=True,
                 ),
                 Bill(
                     id="2021_0002",
@@ -141,7 +142,7 @@ def _seed_bill_search_data(session_factory) -> None:
                     org_id=1,
                     org_name="Comisión de Economía",
                     org_type=TypeOrganization.COMMITTEE,
-                    org_subtype=None,
+                    org_subtype=TypeCommittee.COM_ORD,
                     org_link=None,
                     parent_org_id=None,
                     date_founding=None,
@@ -151,7 +152,18 @@ def _seed_bill_search_data(session_factory) -> None:
                     org_id=2,
                     org_name="Comisión de Justicia",
                     org_type=TypeOrganization.COMMITTEE,
-                    org_subtype=None,
+                    org_subtype=TypeCommittee.COM_ORD,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=4,
+                    org_name="Comisión Especial de Test",
+                    org_short_name="Special Test",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ESP,
                     org_link=None,
                     parent_org_id=None,
                     date_founding=None,
@@ -238,7 +250,7 @@ def _seed_bill_search_data(session_factory) -> None:
                 ),
                 BillOrganization(
                     bill_id="2021_0003",
-                    org_id=1,
+                    org_id=4,
                     org_type=TypeOrganization.COMMITTEE,
                     presentation_date=real_date(2025, 5, 1),
                     decision_date=None,
@@ -256,7 +268,7 @@ def test_search_results_are_paginated_by_50(client, session_factory):
     first_page = client.get("/bills?title_q=Bill")
     first_body = first_page.get_data(as_text=True)
     assert first_page.status_code == 200
-    assert "Showing 1-50 of 55 bills" in first_body
+    assert "Mostrando 1-50 de 55 proyectos de ley" in first_body
     assert "Bill 0001" in first_body
     assert "Bill 0050" in first_body
     assert "Bill 0051" not in first_body
@@ -265,7 +277,7 @@ def test_search_results_are_paginated_by_50(client, session_factory):
     second_page = client.get("/bills?title_q=Bill&page=2")
     second_body = second_page.get_data(as_text=True)
     assert second_page.status_code == 200
-    assert "Showing 51-55 of 55 bills" in second_body
+    assert "Mostrando 51-55 de 55 proyectos de ley" in second_body
     assert "Bill 0051" in second_body
     assert "Bill 0055" in second_body
     assert "Bill 0001" not in second_body
@@ -279,7 +291,7 @@ def test_search_results_cap_at_500_plus(client, session_factory):
     body = first_page.get_data(as_text=True)
 
     assert first_page.status_code == 200
-    assert "Showing 1-50 of 500+ bills" in body
+    assert "Mostrando 1-50 de 500+ proyectos de ley" in body
 
 
 def test_search_form_includes_new_filters(client):
@@ -287,6 +299,7 @@ def test_search_form_includes_new_filters(client):
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
+    assert "Busca el proyecto de ley por:" in body
     assert 'name="pley_id_q"' in body
     assert 'name="law_id_q"' in body
     assert 'name="current_step_q"' in body
@@ -298,16 +311,32 @@ def test_search_form_includes_new_filters(client):
     assert 'name="presentation_date_to_day"' in body
     assert 'name="author_party_q"' in body
     assert 'name="organization_name_q"' in body
-    assert "Presentation date" in body
-    assert "From" in body
-    assert "To" in body
-    assert "Author party" in body
+    assert 'name="special_committee_q"' in body
+    assert 'name="bill_diff_q"' in body
+    assert "Tiene diferencia de versiones" in body
+    assert 'value="yes"' in body
+    assert 'value="no"' in body
+    assert "Fecha de presentación" in body
+    assert "Desde" in body
+    assert "Hasta" in body
+    assert "Partido del autor" in body
     assert 'name="presentation_date_from_year"' in body and 'value="" selected' in body
     assert 'name="presentation_date_from_month"' in body and 'value="" selected' in body
     assert 'name="presentation_date_from_day"' in body and 'value="" selected' in body
     assert 'name="presentation_date_to_year"' in body and 'value="" selected' in body
     assert 'name="presentation_date_to_month"' in body and 'value="" selected' in body
     assert 'name="presentation_date_to_day"' in body and 'value="" selected' in body
+
+
+def test_search_form_can_render_in_english(client):
+    response = client.get("/bills?lang=en")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert '<html lang="en">' in body
+    assert "Search the bill by:" in body
+    assert "Presentation Date" in body
+    assert "Author party" in body
 
 
 def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
@@ -332,7 +361,7 @@ def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
                     org_id=100,
                     org_name="Comisión Test",
                     org_type=TypeOrganization.COMMITTEE,
-                    org_subtype=None,
+                    org_subtype=TypeCommittee.COM_ORD,
                     org_link=None,
                     parent_org_id=None,
                     date_founding=None,
@@ -357,6 +386,26 @@ def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
     assert Proponents.CONGRESO.value in body
 
 
+def test_search_filters_by_bill_diff(client, session_factory):
+    _seed_bill_search_data(session_factory)
+
+    yes_response = client.get("/bills", query_string={"bill_diff_q": "yes"})
+    yes_body = yes_response.get_data(as_text=True)
+
+    assert yes_response.status_code == 200
+    assert "Mostrando 1-1 de 1 proyectos de ley" in yes_body
+    assert "2021_0001" in yes_body
+    assert "2021_0002" not in yes_body
+
+    no_response = client.get("/bills", query_string={"bill_diff_q": "no"})
+    no_body = no_response.get_data(as_text=True)
+
+    assert no_response.status_code == 200
+    assert "2021_0002" in no_body
+    assert "2021_0003" in no_body
+    assert "2021_0001" not in no_body
+
+
 def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_factory):
     _seed_bill_search_data(session_factory)
 
@@ -379,13 +428,29 @@ def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_f
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert "Showing 1-1 of 1 bills" in body
+    assert "Mostrando 1-1 de 1 proyectos de ley" in body
     assert "2021_0001" in body
     assert "2021_0002" not in body
-    assert "Law ID: L-001" in body
-    assert "Current Step: Votación" in body
-    assert "Author party: Partido Verde" in body
+    assert "Número de la ley: L-001" in body
+    assert "Etapa actual: Votación" in body
+    assert "Partido del autor: Partido Verde" in body
     assert "2024-01-01 - 2024-01-31" in body
+
+
+def test_search_filters_by_special_committee(client, session_factory):
+    _seed_bill_search_data(session_factory)
+
+    response = client.get(
+        "/bills",
+        query_string={"special_committee_q": "Special Test"},
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Mostrando 1-1 de 1 proyectos de ley" in body
+    assert "2021_0003" in body
+    assert "2021_0001" not in body
+    assert "Comisión especial: Special Test" in body
 
 
 def test_search_ignores_spanish_accents_for_text_filters(client, session_factory):

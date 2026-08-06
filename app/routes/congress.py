@@ -1,7 +1,9 @@
 from types import SimpleNamespace
 from datetime import date
 from flask import Blueprint, render_template, request
+from flask_babel import gettext as _
 from sqlalchemy import case, func, or_, select
+from backend.core.enums import TypeCommittee, TypeOrganization
 from backend.database.models import (
     Bill,
     ChamberMembership,
@@ -9,14 +11,14 @@ from backend.database.models import (
     Congresista,
     Membership,
     Organization,
-    TypeOrganization,
 )
 
 
 from .utils import (
-    create_party_option,
     create_committee_option,
+    create_party_option,
     create_region_option,
+    create_special_committee_option,
     latest_org_name,
 )
 from .processed_session import SessionProcessed
@@ -49,7 +51,7 @@ def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
             chamber_membership.dist_electoral if chamber_membership else None
         ),
         condicion=(
-            chamber_membership.condicion if chamber_membership else "Not available"
+            chamber_membership.condicion if chamber_membership else _("No disponible")
         ),
         votes_in_election=(
             chamber_membership.votes_in_election if chamber_membership else 0
@@ -63,12 +65,14 @@ def index():
     party_q = request.args.get("party_q", "").strip()
     region_q = request.args.get("region_q", "").strip()
     commission_q = request.args.get("commission_q", "").strip()
+    special_committee_q = request.args.get("special_committee_q", "").strip()
 
     congresistas = []
     filters = []
     party_options = []
     region_options = []
     committee_options = []
+    special_committee_options = []
 
     if name_q:
         filters.append(
@@ -105,7 +109,21 @@ def index():
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
                     Membership.org_type == TypeOrganization.COMMITTEE,
+                    Organization.org_subtype == TypeCommittee.COM_ORD,
                     Organization.org_name == commission_q,
+                )
+            )
+        )
+
+    if special_committee_q:
+        filters.append(
+            Congresista.id.in_(
+                select(Membership.person_id)
+                .join(Organization, Organization.org_id == Membership.org_id)
+                .where(
+                    Membership.org_type == TypeOrganization.COMMITTEE,
+                    Organization.org_subtype == TypeCommittee.COM_ESP,
+                    Organization.org_short_name == special_committee_q,
                 )
             )
         )
@@ -114,6 +132,7 @@ def index():
         party_options = create_party_option(db)
         region_options = create_region_option(db)
         committee_options = create_committee_option(db)
+        special_committee_options = create_special_committee_option(db)
 
         if filters:
             rows = db.execute(
@@ -130,10 +149,12 @@ def index():
         party_q=party_q,
         region_q=region_q,
         commission_q=commission_q,
+        special_committee_q=special_committee_q,
         congresistas=congresistas,
         party_options=party_options,
         region_options=region_options,
         committee_options=committee_options,
+        special_committee_options=special_committee_options,
     )
 
 
@@ -162,6 +183,7 @@ def congress_detail(congresista_id):
         bills_authored = [
             SimpleNamespace(
                 id=bill.id,
+                pley_id=bill.pley_id,
                 title=bill.title,
                 presentation_date=presentation_date,
             )
@@ -257,14 +279,18 @@ def congress_detail(congresista_id):
 
         recent_votes = [
             {
-                "position": "In favor",
-                "bill": "Bill N 32014",
-                "description": "Vote data is not available yet. This is placeholder content for the congressperson detail view.",
+                "position": _("A favor"),
+                "bill": "Proyecto de ley N 32014",
+                "description": _(
+                    "Los datos de votación aún no están disponibles. Este es contenido temporal para la vista de detalle del congresista."
+                ),
             },
             {
-                "position": "Against",
-                "bill": "Bill N 32074",
-                "description": "Vote data is not available yet. This is placeholder content for the congressperson detail view.",
+                "position": _("En contra"),
+                "bill": "Proyecto de ley N 32074",
+                "description": _(
+                    "Los datos de votación aún no están disponibles. Este es contenido temporal para la vista de detalle del congresista."
+                ),
             },
         ]
 

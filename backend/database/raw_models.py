@@ -145,12 +145,14 @@ class RawBillDocument(RawBase):
     __tablename__ = "raw_bill_documents"
 
     bill_id: Mapped[str] = mapped_column(nullable=False)
-    step_id: Mapped[str] = mapped_column(nullable=False)
-    file_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
+    file_id: Mapped[int] = mapped_column(nullable=False)
     step_date: Mapped[datetime] = mapped_column(nullable=False)
     url: Mapped[str] = mapped_column(nullable=False)
     s3_key: Mapped[str] = mapped_column(nullable=True)
     local_path: Mapped[str] = mapped_column(nullable=True)
+    file_size: Mapped[float] = mapped_column(nullable=True)
+    num_pages: Mapped[int] = mapped_column(nullable=True)
 
     __table_args__ = (
         Index(
@@ -172,8 +174,8 @@ class RawBillPage(RawBase):
     __tablename__ = "raw_bill_pages"
 
     bill_id: Mapped[str] = mapped_column(nullable=False)
-    step_id: Mapped[str] = mapped_column(nullable=False)
-    file_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
+    file_id: Mapped[int] = mapped_column(nullable=False)
     page_num: Mapped[int] = mapped_column(nullable=False)
     text: Mapped[str] = mapped_column(nullable=False)
     ocr_model: Mapped[str] = mapped_column(nullable=False)
@@ -341,12 +343,14 @@ class RawMotionDocument(RawBase):
     __tablename__ = "raw_motion_documents"
 
     motion_id: Mapped[str] = mapped_column(nullable=False)
-    step_id: Mapped[str] = mapped_column(nullable=False)
-    file_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
+    file_id: Mapped[int] = mapped_column(nullable=False)
     step_date: Mapped[datetime] = mapped_column(nullable=False)
     url: Mapped[str] = mapped_column(nullable=False)
     s3_key: Mapped[str] = mapped_column(nullable=True)
     local_path: Mapped[str] = mapped_column(nullable=True)
+    file_size: Mapped[float] = mapped_column(nullable=True)
+    num_pages: Mapped[int] = mapped_column(nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint(
@@ -371,8 +375,8 @@ class RawMotionPage(RawBase):
     __tablename__ = "raw_motion_pages"
 
     motion_id: Mapped[str] = mapped_column(nullable=False)
-    step_id: Mapped[str] = mapped_column(nullable=False)
-    file_id: Mapped[str] = mapped_column(nullable=False)
+    step_id: Mapped[int] = mapped_column(nullable=False)
+    file_id: Mapped[int] = mapped_column(nullable=False)
     page_num: Mapped[int] = mapped_column(nullable=False)
     text: Mapped[str] = mapped_column(nullable=False)
     ocr_model: Mapped[str] = mapped_column(nullable=False)

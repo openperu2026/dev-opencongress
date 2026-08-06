@@ -4,13 +4,12 @@
 
 <div class="hero">
     <div class="hero-container hero-text">
-        <h1 class="hero-title">{{ _('Welcome to Open Peru') }}</h1>
+        <h1 class="hero-title">{{ _('Bienvenido a Open Peru') }}</h1>
 
         <p class="hero-description">
-            {{ _('Open Peru brings together public information from the Peruvian Congress in one place. Explore bills from the 2021-2026 congressional period, review who authored them, see how congress members voted, and compare changes between different versions of each bill.') }}
-            {{ _('Click below to start exploring:') }}
+            {{ _('Open Peru reúne información pública del Congreso peruano en un solo lugar. Explora proyectos de ley del periodo congresal 2021-2026, revisa quiénes los presentaron, observa cómo votaron los congresistas y compara cambios entre distintas versiones de cada proyecto.') }}
+            {{ _('Haz clic abajo para empezar a explorar:') }}
             <br><br>
-
         </p>
 
         <div class="menu-landing">
@@ -22,39 +21,92 @@
                 </div>
             {% endfor %}
         </div>
-      
     </div>
 
     <div class="hero-container">
-        <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="{{ _('Open Congress logo') }}">
+        <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="{{ _('Logo de Open Congress') }}">
         <p class="page-subtitle">
-            {{_('Transparency and accountability for a stronger democracy')}}
+            {{ _('Transparencia y rendición de cuentas para una democracia más fuerte') }}
         </p>
-
     </div>
-
 </div>
 
 <section id="about" class="about-section">
     <div class="about-content">
-        <h2>{{_('About')}}</h2>
-        <p>{{ _('Open Congress is built as a public data pipeline for legislative 
-            information. It collects official public records from the Peruvian Congress, 
-            processes them, and organizes them into a structured, 
-            clean relational database.') }}</p>
-        <p>{{ _('The platform began as part of the University of Chicago\'s 
-            Master of Computational Analysis and Public Policy program and 
-            is developed by a six-student team from the program.') }}</p>
-        <p>{{ _('It is mainly written in Python and uses SQLAlchemy, 
-            PostgreSQL, OCR/document parsing, and automated tests to track 
-            bills, votes, congressmembers, political groups, and text 
-            changes across the legislative process.') }}</p>
+        <h2>{{ _('Acerca de') }}</h2>
+        <p class="about-intro">
+            {{ _('Open Peru nació como un proyecto de curso en el programa Master of Computational Analysis and Public Policy de la Universidad de Chicago. Desde entonces se ha desarrollado como una plataforma pública de datos legislativos que recopila registros oficiales del Congreso peruano, los procesa y los organiza en una base de datos relacional estructurada y limpia.') }}
+        </p>
+        <p class="about-intro">
+            {{ _('Usa la plataforma para explorar cómo avanzan los proyectos de ley en el Congreso, quiénes los presentan y cuándo cambia su texto a lo largo del tiempo.') }}
+        </p>
+
+        <div class="about-steps">
+            <article class="about-step">
+                <span class="about-step-number">1</span>
+                <h3>{{ _('Busca un proyecto de ley') }}</h3>
+                <p>
+                    {{ _('Encuentra proyectos por título, autor, comisión, fecha, estado o si tienen diferencias entre versiones.') }}
+                </p>
+            </article>
+
+            <article class="about-step">
+                <span class="about-step-number">2</span>
+                <h3>{{ _('Revisa su recorrido') }}</h3>
+                <p>
+                    {{ _('Abre un proyecto para ver su línea de tiempo: presentación, revisión en comisiones, votaciones, decisiones de archivo, aprobación y revisiones de texto.') }}
+                </p>
+            </article>
+
+            <article class="about-step">
+                <span class="about-step-number">3</span>
+                <h3>{{ _('Explora quién está detrás') }}</h3>
+                <p>
+                    {{ _('Pasa de un proyecto a su autor, partido, membresías en comisiones, proyectos recientes y métricas de aprobación.') }}
+                </p>
+            </article>
+        </div>
     </div>
 </section>
 
+<section id="whats-next" class="whats-next-section">
+    <div class="whats-next-content">
+        <h2>{{ _('Qué sigue') }}</h2>
+        <p>
+            {{ _('Seguimos ampliando Open Peru como un proyecto de infraestructura pública para la transparencia legislativa.') }}
+        </p>
+
+        <div class="whats-next-grid">
+            <article>
+                <h3>{{ _('API pública') }}</h3>
+                <p>{{ _('Estamos construyendo una API para acceder a la base de datos legislativa.') }}</p>
+            </article>
+            <article>
+                <h3>{{ _('Votos y asistencia') }}</h3>
+                <p>{{ _('Estamos agregando registros de votación y métricas de asistencia.') }}</p>
+            </article>
+            <article>
+                <h3>{{ _('Diferencias de versiones mejoradas') }}</h3>
+                <p>{{ _('Estamos mejorando las herramientas para detectar y mostrar cambios entre versiones de proyectos de ley.') }}</p>
+            </article>
+            <article>
+                <h3>{{ _('Próximo Congreso') }}</h3>
+                <p>{{ _('Estamos preparando la infraestructura para el periodo congresal 2026-2031.') }}</p>
+            </article>
+        </div>
+
+        <p class="whats-next-contact">
+            {{ _('¿Quieres colaborar, usar los datos o conocer más sobre el proyecto? Escribe a openperu@civic.garden.org.') }}
+        </p>
+    </div>
+</section>
+<!--
 <section id="team" class="team-section">
     <div class="team-content">
-        <h2>{{_('Know the team')}}</h2>
+        <h2>{{ _('Conoce al equipo') }}</h2>
+        <p class="team-intro">
+            {{ _('La plataforma nació como parte del programa Master of Computational Analysis and Public Policy de la Universidad de Chicago y es desarrollada por un equipo de seis estudiantes del programa.') }}
+        </p>
         <div class="team-grid">
             {% for member in [
                 {'name': 'Alex', 'image': 'alex.jpg'},
@@ -76,14 +128,13 @@
         </div>
     </div>
 </section>
-
+-->
 
 <section id="contact" class="about-section">
     <div class="about-content">
-        <h2>{{_('Contact')}}</h2>
-        <p>{{ _('Si deseas mayor información o ponerte en contacto con el equipo
-            escribe a openperu@civic.garden.org') }}</p>
-        </div>
+        <h2>{{ _('Contacto') }}</h2>
+        <p>{{ _('Si deseas mayor información o ponerte en contacto con el equipo escribe a openperu@civic.garden.org') }}</p>
+    </div>
 </section>
 
 {% endblock %}

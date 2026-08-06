@@ -228,22 +228,22 @@ def test_vote_page_uses_real_vote_data(client, session_factory):
     body = client.get("/bills/2021_0001/votes/VE-1").get_data(as_text=True)
 
     assert "Bill with votes" in body
-    assert "Vote date:" in body
+    assert "Fecha de votacion:" in body
     assert "15-01-2024" in body
-    assert "Organization:" in body
+    assert "Organización:" in body
     assert "Comisión de Economía" in body
-    assert "Results by bancada" in body
+    assert "Resultados por bancada" in body
     assert "vote-members-table-wrap" in body
     assert body.count('<button type="button" class="vote-sort-button"') == 3
     assert "legend-swatch--others" in body
-    assert "Others" in body
+    assert "Otros" in body
     assert "vote-members-table" in body
     assert "Ana Perez" in body
     assert "/congress/1" in body
     assert "Partido Azul" in body
-    assert "In favor" in body
-    assert "Against" in body
-    assert "Abstain" in body
+    assert "A favor" in body
+    assert "En contra" in body
+    assert "Abstención" in body
 
 
 def test_generate_seats_adds_gray_others_without_labels():

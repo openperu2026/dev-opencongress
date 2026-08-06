@@ -4,18 +4,19 @@
 
 <form class="congress-search-form" method="get" action="{{ url_for('congress.index') }}">
    
-    <h1 class="search-title">{{_('Search a congressmember by:')}}</h1>
+    <h1 class="search-title">{{_('Busca al congresista por:')}}</h1>
     <div class="bar-search">
 
-        <div class="searching-container">
+        <div class="congress-search-grid">
+            <div class="searching-container">
 
-            <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="{{_('Name')}}">
-                
-        </div>
+                <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="{{_('Nombre')}}">
+                    
+            </div>
 
             <div class="searching-container">
                 <select name="party_q">
-                    <option value="">{{ _('Party') }}</option>
+                    <option value="">{{ _('Partido') }}</option>
                     {% for party_option in party_options or [] %}
                         <option value="{{ party_option }}" {% if party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
                     {% endfor %}
@@ -24,7 +25,7 @@
 
         <div class="searching-container">
             <select name="region_q">
-                <option value="">{{ _('Region') }}</option>
+                <option value="">{{ _('Región') }}</option>
                 {% for region_option in region_options or [] %}
                     <option value="{{ region_option }}" {% if region_q == region_option %}selected{% endif %}>{{ region_option }}</option>
                 {% endfor %}
@@ -33,62 +34,81 @@
 
         <div class="searching-container">
             <select name="commission_q">
-                <option value="">{{ _('Commission') }}</option>
+                <option value="" {% if not commission_q %}selected{% endif %} disabled hidden>{{ _('Comisión ordinaria') }}</option>
                 {% for committee_option in committee_options or [] %}
                     <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
                 {% endfor %}
             </select>
         </div>
 
-        <button type="submit" class="search-icon-button" aria-label="{{ _('Search') }}">
-            <i class="fa-solid fa-magnifying-glass"></i>
-        </button>
+            <div class="searching-container">
+                <select name="special_committee_q">
+                    <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Comisión especial') }}</option>
+                    {% for committee_option in special_committee_options or [] %}
+                        <option value="{{ committee_option }}" {% if special_committee_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <div class="congress-search-actions">
+            <button type="submit" class="search-icon-button" aria-label="{{ _('Buscar') }}">
+                <i class="fa-solid fa-magnifying-glass"></i>
+            </button>
+
+            <a href="{{ url_for('congress.index') }}" class="clear-button congress-clean-button">
+                {{ _('Limpiar') }}
+            </a>
+        </div>
     </div>
 </form>
 
  {% if congresistas %}
         <div class="search-criteria">
-            <h3>{{_('Search Criteria')}}</h3>
+            <h3>{{_('Criterios de búsqueda')}}</h3>
             {% if name_q %}
-                <span>{{_('Name')}}: {{name_q}}</span>
+                <span>{{_('Nombre')}}: {{name_q}}</span>
             {% endif %}
             {% if party_q %}
-                <span>{{_('Party')}}: {{party_q}}</span>
+                <span>{{_('Partido')}}: {{party_q}}</span>
             {% endif %}
             {% if region_q %}
-                <span>{{_('Region')}}: {{region_q}}</span>
+                <span>{{_('Región')}}: {{region_q}}</span>
             {% endif %}
             {% if commission_q %}
-                <span>{{_('Commission')}}: {{commission_q}}</span>
+                <span>{{_('Comisión')}}: {{commission_q}}</span>
+            {% endif %}
+            {% if special_committee_q %}
+                <span>{{ _('Comisión especial') }}: {{ special_committee_q }}</span>
             {% endif %}
         </div>
 
         <table class="table table-striped search-results-table">
             <thead>
                 <tr>
-                    <th>{{_('Name')}}</th>
-                    <th>{{_('Party')}}</th>
-                    <th>{{_('Region')}}</th>
-                    <th>{{_('Detail')}}</th>
+                    <th>{{_('Nombre')}}</th>
+                    <th>{{_('Partido')}}</th>
+                    <th>{{_('Región')}}</th>
+                    <th>{{_('Detalle')}}</th>
                 </tr>
             </thead>
             <tbody>
             {% for congresista in congresistas %}
                 <tr>
                     <td>{{ congresista.full_name }}</td>
-                    <td>{{ congresista.party_name or _('Not available') }}</td>
-                    <td>{{ congresista.dist_electoral or _('Not available') }}</td>
+                    <td>{{ congresista.party_name or _('No disponible') }}</td>
+                    <td>{{ congresista.dist_electoral or _('No disponible') }}</td>
                     <td>
                         <a href="{{ url_for('congress.congress_detail', congresista_id=congresista.id) }}" class="btn btn-primary btn-sm">
-                            {{_('View details')}}
+                            {{_('Ver detalles')}}
                         </a>
                     </td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
-    {% elif name_q or party_q or region_q or commission_q %}
-        <p>{{_('No matching congresspeople found.')}}</p>
+    {% elif name_q or party_q or region_q or commission_q or special_committee_q %}
+        <p>{{_('No se encontraron congresistas.')}}</p>
     {% endif %}
 
 {% endblock %}
