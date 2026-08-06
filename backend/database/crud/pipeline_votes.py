@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import json
+from datetime import datetime
 from typing import Literal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, delete, func, case, literal, or_, and_
 
@@ -18,6 +21,7 @@ from backend import (
 )
 from backend.database import models as db_models
 from backend.database.raw_models import (
+    ModelCostLedger,
     RawBillDocument,
     RawBillPage,
     RawMotionDocument,
@@ -574,6 +578,68 @@ def clear_member_letters(
     else:
         raise ValueError("Must provide bill_id or motion_id")
     db.execute(stmt)
+
+
+def get_total_cost_usd(db: Session, model: str) -> float:
+    """Real cumulative spend recorded for this model so far."""
+    row = db.get(ModelCostLedger, model)
+    return row.total_cost_usd if row is not None else 0.0
+
+
+def increment_usage_ledger(
+    db: Session,
+    *,
+    model: str,
+    cost_usd: float | None,
+    provider: str = "openai",
+) -> None:
+    """
+    Atomically add to the model's running total. No-ops on None/zero cost so
+    callers can pass ExtractionResult.cost_usd directly without guarding it.
+    """
+    if not cost_usd:
+        return
+
+    now = datetime.now(ZoneInfo("America/Lima"))
+    existing = db.get(ModelCostLedger, model)
+    if existing is None:
+        db.add(
+            ModelCostLedger(
+                model=model,
+                provider=provider,
+                total_cost_usd=cost_usd,
+                updated_at=now,
+            )
+        )
+    else:
+        existing.total_cost_usd += cost_usd
+        existing.updated_at = now
+    db.flush()
+
+
+def get_average_cost_per_document(db: Session, *, model: str) -> float | None:
+    """
+    Mean of real cost_usd values already stored in page_num=0 sentinel rows
+    for this model, across both bills and motions (same per-document cost
+    profile regardless of kind). None if there's no history yet.
+    """
+    costs: list[float] = []
+    for page_model in (RawBillPage, RawMotionPage):
+        stmt = select(page_model.text).where(
+            page_model.page_num == 0, page_model.ocr_model == model
+        )
+        for text in db.scalars(stmt).all():
+            try:
+                record = json.loads(text)
+            except (ValueError, TypeError):
+                continue
+            cost = record.get("cost_usd")
+            if cost is not None:
+                costs.append(cost)
+
+    if not costs:
+        return None
+    return sum(costs) / len(costs)
 
 
 def upsert_member_letter(

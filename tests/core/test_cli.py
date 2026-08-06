@@ -139,6 +139,7 @@ def test_cli_process_target_runs_all_processing(monkeypatch):
             "votes_limit": None,
             "votes_max_pages": None,
             "votes_model": "gpt-5.6-luna",
+            "votes_max_cost_usd": None,
             "first_load": False,
         }
     ]

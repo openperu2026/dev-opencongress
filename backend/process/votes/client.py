@@ -31,14 +31,17 @@ def build_request_body(
     client.responses.create(**body) path and, wrapped in a jsonl line, by the
     Batch API path).
     """
-    text_block = {"type": "input_text", "text": USER_PROMPTS[kind]}
+    text_block: dict[str, str | dict[str, str]] = {
+        "type": "input_text",
+        "text": USER_PROMPTS[kind],
+    }
 
     # Deliberately its own content block, AFTER the static text (and its
     # cache breakpoint, for models that get one) and BEFORE the file. This
     # is the per-document context -- it changes on every request, so it must
     # sit outside the cached prefix, or every request would get a different
     # prefix and caching would never hit.
-    context_block = {"type": "input_text", "text": context_text}
+    context_block: dict[str, str] = {"type": "input_text", "text": context_text}
 
     body = {
         "model": model,

@@ -405,6 +405,7 @@ class OpenPeruOrchestrator:
         votes_limit: int | None = None,
         votes_max_pages: int | None = None,
         votes_model: str = VOTES_DEFAULT_MODEL,
+        votes_max_cost_usd: float | None = None,
         first_load: bool = False,
     ) -> dict[str, ProcessStats]:
         """
@@ -493,6 +494,7 @@ class OpenPeruOrchestrator:
                         model=votes_model,
                         max_pages=votes_max_pages,
                         limit=votes_limit,
+                        max_cost_usd=votes_max_cost_usd,
                     )
                     self._log_stage_summary(key, summary[key])
 
@@ -1669,11 +1671,17 @@ class OpenPeruOrchestrator:
         model: str,
         max_pages: int | None,
         limit: int | None,
+        max_cost_usd: float | None = None,
     ) -> ProcessStats:
         """Run OpenAI structured extraction over pending vote-related documents."""
         with self.DBSession() as db:
             return votes_extract.run_sync_extraction(
-                db, kind=kind, model=model, max_pages=max_pages, limit=limit
+                db,
+                kind=kind,
+                model=model,
+                max_pages=max_pages,
+                limit=limit,
+                max_cost_usd=max_cost_usd,
             )
 
     def _process_vote_load(
@@ -1690,6 +1698,7 @@ class OpenPeruOrchestrator:
         model: str = VOTES_DEFAULT_MODEL,
         max_pages: int | None = None,
         limit: int | None = None,
+        max_cost_usd: float | None = None,
     ) -> dict:
         """
         Submit a Batch API job for historical vote-extraction backfills. Not
@@ -1699,7 +1708,12 @@ class OpenPeruOrchestrator:
         """
         with self.DBSession() as db:
             return votes_extract.submit_batch_extraction(
-                db, kind=kind, model=model, max_pages=max_pages, limit=limit
+                db,
+                kind=kind,
+                model=model,
+                max_pages=max_pages,
+                limit=limit,
+                max_cost_usd=max_cost_usd,
             )
 
     def collect_vote_batches(

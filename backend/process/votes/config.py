@@ -51,3 +51,10 @@ PRICING_PER_MILLION = {
 # The Batch API discounts every token category (input, cached input, output)
 # by 50% relative to the synchronous rate above.
 BATCH_DISCOUNT = 0.5
+
+# Cold-start fallback for estimating batch submission cost before any real
+# cost_usd history exists for a given model (see get_average_cost_per_document).
+# Deliberately conservative -- a rough per-document ceiling, not a precise
+# estimate -- so a budget cap still does something useful on a model's very
+# first batch run.
+DEFAULT_COST_ESTIMATE_PER_DOC = 0.01

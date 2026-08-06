@@ -24,7 +24,11 @@ from backend.database.raw_models import (
 from backend.process.votes import client as client_mod
 from backend.process.votes import fetch
 from backend.process.votes.client import ExtractionResult
-from backend.process.votes.config import BATCH_JOBS_DIR, DEFAULT_MODEL
+from backend.process.votes.config import (
+    BATCH_JOBS_DIR,
+    DEFAULT_COST_ESTIMATE_PER_DOC,
+    DEFAULT_MODEL,
+)
 
 TERMINAL_BATCH_STATUSES = {"completed", "failed", "expired", "cancelled"}
 
@@ -59,7 +63,7 @@ def build_doc_context(
 
 def store_extraction_result(
     db: Session,
-    doc,
+    doc: RawBillDocument | RawMotionDocument,
     kind: Literal["bill", "motion"],
     model: str,
     result: ExtractionResult,
@@ -95,6 +99,10 @@ def store_extraction_result(
         for key, value in payload.items():
             setattr(existing, key, value)
 
+    crud_votes.increment_usage_ledger(
+        db, model=model, cost_usd=result.cost_usd, provider="openai"
+    )
+
     doc.processed = True
     db.commit()
 
@@ -106,7 +114,14 @@ def run_sync_extraction(
     model: str = DEFAULT_MODEL,
     max_pages: int | None = None,
     limit: int | None = None,
+    max_cost_usd: float | None = None,
 ) -> ProcessStats:
+    """
+    max_cost_usd is a persistent, cumulative budget checked against real
+    spend already recorded for `model` (across ALL prior runs, not just this
+    one) -- a hard ceiling checked before each document, so a run never
+    knowingly calls OpenAI for a document it can't afford.
+    """
     stats = ProcessStats()
     client = client_mod.get_client()
     docs = crud_votes.find_pending_vote_documents(
@@ -114,6 +129,15 @@ def run_sync_extraction(
     )
 
     for doc in tqdm(docs, desc=f"Vote extraction ({kind}, sync)"):
+        if max_cost_usd is not None:
+            spent = crud_votes.get_total_cost_usd(db, model)
+            if spent >= max_cost_usd:
+                logger.warning(
+                    f"Budget cap reached (${spent:.4f} >= ${max_cost_usd:.2f}) for "
+                    f"model={model!r}; stopping after {stats.processed} documents"
+                )
+                break
+
         target_id = _target_id(doc, kind)
         try:
             pdf_bytes = fetch.download_pdf_bytes(doc.url)
@@ -164,6 +188,7 @@ def submit_batch_extraction(
     max_pages: int | None = None,
     limit: int | None = None,
     batch_dir: Path | None = None,
+    max_cost_usd: float | None = None,
 ) -> dict:
     """
     Submit a Batch API job for historical backfills. Does not mark any raw
@@ -171,6 +196,13 @@ def submit_batch_extraction(
     downloads the results, possibly hours later. Operator note: don't submit
     overlapping doc sets concurrently, since pending docs stay
     processed=False until collected.
+
+    max_cost_usd is enforced as an ESTIMATE at submission time, not a real
+    measurement -- true cost isn't known until the batch completes. Real
+    spend already recorded for `model` (persistent, from prior runs) plus a
+    per-document average drawn from that same history (DEFAULT_COST_ESTIMATE_PER_DOC
+    on a cold start) projects forward as documents are queued; queuing stops
+    once the projection would exceed budget.
     """
     batch_dir = batch_dir or BATCH_JOBS_DIR
     batch_dir.mkdir(parents=True, exist_ok=True)
@@ -180,9 +212,23 @@ def submit_batch_extraction(
         db, kind=kind, max_pages=max_pages, limit=limit
     )
 
+    projected_spent = 0.0
+    avg_cost = 0.0
+    if max_cost_usd is not None:
+        projected_spent = crud_votes.get_total_cost_usd(db, model)
+        avg_cost = (
+            crud_votes.get_average_cost_per_document(db, model=model)
+            or DEFAULT_COST_ESTIMATE_PER_DOC
+        )
+
     lines = []
     doc_ids = []
+    skipped_for_budget = 0
     for doc in docs:
+        if max_cost_usd is not None and projected_spent + avg_cost > max_cost_usd:
+            skipped_for_budget += 1
+            continue
+
         target_id = _target_id(doc, kind)
         try:
             pdf_bytes = fetch.download_pdf_bytes(doc.url)
@@ -211,9 +257,25 @@ def submit_batch_extraction(
             )
         )
         doc_ids.append(custom_id)
+        if max_cost_usd is not None:
+            projected_spent += avg_cost
+
+    if skipped_for_budget:
+        logger.info(
+            f"Budget cap (${max_cost_usd:.2f}, ~${avg_cost:.5f}/doc estimate) reached; "
+            f"queued {len(doc_ids)}/{len(docs)} documents for this batch, "
+            f"{skipped_for_budget} left unqueued"
+        )
 
     if not lines:
-        return {"batch_id": None, "kind": kind, "model": model, "doc_ids": []}
+        return {
+            "batch_id": None,
+            "kind": kind,
+            "model": model,
+            "doc_ids": [],
+            "budget_capped": skipped_for_budget > 0,
+            "skipped_for_budget": skipped_for_budget,
+        }
 
     jsonl_path = batch_dir / f"batch_{kind}_{model.replace('.', '_')}.jsonl"
     jsonl_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
@@ -226,7 +288,14 @@ def submit_batch_extraction(
         metadata={"description": f"votes-{kind}-{model}"},
     )
 
-    manifest = {"batch_id": batch.id, "kind": kind, "model": model, "doc_ids": doc_ids}
+    manifest = {
+        "batch_id": batch.id,
+        "kind": kind,
+        "model": model,
+        "doc_ids": doc_ids,
+        "budget_capped": skipped_for_budget > 0,
+        "skipped_for_budget": skipped_for_budget,
+    }
     (batch_dir / f"{batch.id}_manifest.json").write_text(
         json.dumps(manifest, indent=2), encoding="utf-8"
     )

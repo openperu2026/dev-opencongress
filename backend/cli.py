@@ -84,6 +84,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="OpenAI model to use for vote extraction",
     )
     parser.add_argument(
+        "--votes-max-cost-usd",
+        type=float,
+        default=None,
+        help=(
+            "Persistent USD budget for this model (tracked cumulatively across "
+            "runs) -- sync extraction stops before the next document once "
+            "reached; batch submission stops queuing once an estimate would "
+            "exceed it"
+        ),
+    )
+    parser.add_argument(
         "--submit-vote-batches",
         choices=["bill", "motion"],
         default=None,
@@ -116,6 +127,7 @@ def main(argv: list[str] | None = None) -> None:
             model=args.votes_model,
             max_pages=args.votes_max_pages,
             limit=args.votes_limit,
+            max_cost_usd=args.votes_max_cost_usd,
         )
         print(manifest)
         return
@@ -182,5 +194,6 @@ def main(argv: list[str] | None = None) -> None:
             votes_limit=args.votes_limit,
             votes_max_pages=args.votes_max_pages,
             votes_model=args.votes_model,
+            votes_max_cost_usd=args.votes_max_cost_usd,
             first_load=args.first_summary,
         )
