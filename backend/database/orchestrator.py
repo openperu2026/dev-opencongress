@@ -4,7 +4,7 @@ import json
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Type, Callable
+from typing import Type, Callable, Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
@@ -403,9 +403,9 @@ class OpenPeruOrchestrator:
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
         votes_limit: int | None = None,
-        votes_max_pages: int | None = None,
+        votes_max_pages: int = 5,
         votes_model: str = VOTES_DEFAULT_MODEL,
-        votes_max_cost_usd: float | None = None,
+        votes_max_cost_usd: float = 5.0,
         first_load: bool = False,
     ) -> dict[str, ProcessStats]:
         """
@@ -1675,11 +1675,11 @@ class OpenPeruOrchestrator:
     def _process_vote_extraction(
         self,
         *,
-        kind: str,
+        kind: Literal["bill", "motion"],
         model: str,
-        max_pages: int | None,
+        max_pages: int = 5,
         limit: int | None,
-        max_cost_usd: float | None = None,
+        max_cost_usd: float = 5.0,
     ) -> ProcessStats:
         """Run OpenAI structured extraction over pending vote-related documents."""
         with self.DBSession() as db:
@@ -1693,7 +1693,7 @@ class OpenPeruOrchestrator:
             )
 
     def _process_vote_load(
-        self, *, kind: str, model: str, limit: int | None
+        self, *, kind: Literal["bill", "motion"], model: str, limit: int | None
     ) -> ProcessStats:
         """Transform pending extraction results into Vote/Attendance/VoteEvent/VoteCounts."""
         with self.DBSession() as db:
@@ -1702,11 +1702,11 @@ class OpenPeruOrchestrator:
     def submit_vote_batches(
         self,
         *,
-        kind: str,
+        kind: Literal["bill", "motion"],
         model: str = VOTES_DEFAULT_MODEL,
-        max_pages: int | None = None,
+        max_pages: int = 5,
         limit: int | None = None,
-        max_cost_usd: float | None = None,
+        max_cost_usd: float = 5.0,
     ) -> dict:
         """
         Submit a Batch API job for historical vote-extraction backfills. Not
@@ -1728,7 +1728,7 @@ class OpenPeruOrchestrator:
         self,
         *,
         batch_id: str,
-        kind: str,
+        kind: Literal["bill", "motion"],
         model: str = VOTES_DEFAULT_MODEL,
     ) -> ProcessStats:
         """Poll+collect a previously submitted vote-extraction batch, then load it."""

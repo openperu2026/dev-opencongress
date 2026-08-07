@@ -112,9 +112,9 @@ def run_sync_extraction(
     *,
     kind: Literal["bill", "motion"],
     model: str = DEFAULT_MODEL,
-    max_pages: int | None = None,
+    max_pages: int = 5,
     limit: int | None = None,
-    max_cost_usd: float | None = None,
+    max_cost_usd: float = 1.0,
 ) -> ProcessStats:
     """
     max_cost_usd is a persistent, cumulative budget checked against real

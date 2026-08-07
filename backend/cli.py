@@ -62,7 +62,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Computes the first processing of summaries for bills",
     )
     parser.add_argument(
-        "--process-votes",
+        "--only-votes",
         action="store_true",
         help="Run vote extraction (sync) + load stage for bills and motions",
     )
@@ -75,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--votes-max-pages",
         type=int,
-        default=None,
+        default=5,
         help="Only extract vote documents with at most this many pages",
     )
     parser.add_argument(
@@ -86,7 +86,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--votes-max-cost-usd",
         type=float,
-        default=None,
+        default=5.0,
         help=(
             "Persistent USD budget for this model (tracked cumulatively across "
             "runs) -- sync extraction stops before the next document once "
@@ -145,32 +145,44 @@ def main(argv: list[str] | None = None) -> None:
     run_leyes = True
     run_others = True
     run_documents = True
+    run_votes = True
 
     if args.only_bills:
         run_motions = False
         run_others = False
         run_leyes = False
         run_documents = False
+        run_votes = False
     elif args.only_motions:
         run_bills = False
         run_others = False
         run_leyes = False
         run_documents = False
+        run_votes = False
     elif args.only_leyes:
         run_motions = False
         run_bills = False
         run_others = False
         run_documents = False
+        run_votes = False
     elif args.only_others:
         run_bills = False
         run_motions = False
         run_leyes = False
         run_documents = False
+        run_votes = False
     elif args.scrape_documents:
         run_bills = False
         run_motions = False
         run_leyes = False
         run_others = False
+        run_votes = False
+    elif args.only_votes:
+        run_bills = False
+        run_motions = False
+        run_leyes = False
+        run_others = False
+        run_documents = False
 
     if args.scrape:
         orchestrator.run_scrapers(
@@ -190,7 +202,7 @@ def main(argv: list[str] | None = None) -> None:
             process_leyes=run_leyes,
             process_others=run_others,
             process_documents=args.process_documents,
-            process_votes=args.process_votes,
+            process_votes=run_votes,
             votes_limit=args.votes_limit,
             votes_max_pages=args.votes_max_pages,
             votes_model=args.votes_model,
