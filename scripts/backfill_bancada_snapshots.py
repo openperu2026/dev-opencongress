@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from tqdm import tqdm
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -129,7 +130,7 @@ def backfill_bill_congresistas(db: Session, *, limit: int | None) -> int:
         rows = rows[:limit]
 
     updated = 0
-    for rel in rows:
+    for rel in tqdm(rows, desc="Backfill bancadas into bill_organizations"):
         presentation_date = db.scalar(
             select(db_models.BillOrganization.presentation_date).where(
                 db_models.BillOrganization.bill_id == rel.bill_id,
@@ -144,6 +145,10 @@ def backfill_bill_congresistas(db: Session, *, limit: int | None) -> int:
         if org is not None and org.org_id != rel.bancada_id:
             rel.bancada_id = org.org_id
             updated += 1
+
+        if updated % 100 == 0:
+            db.commit()
+
     db.commit()
     return updated
 
@@ -163,7 +168,7 @@ def backfill_motion_congresistas(db: Session, *, limit: int | None) -> int:
         rows = rows[:limit]
 
     updated = 0
-    for rel in rows:
+    for rel in tqdm(rows, desc="Backfill bancadas into motion_organizations"):
         presentation_date = db.scalar(
             select(db_models.MotionOrganization.presentation_date).where(
                 db_models.MotionOrganization.motion_id == rel.motion_id,
@@ -178,6 +183,10 @@ def backfill_motion_congresistas(db: Session, *, limit: int | None) -> int:
         if org is not None and org.org_id != rel.bancada_id:
             rel.bancada_id = org.org_id
             updated += 1
+
+        if updated % 100 == 0:
+            db.commit()
+
     db.commit()
     return updated
 
