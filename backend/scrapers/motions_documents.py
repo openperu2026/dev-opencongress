@@ -1,7 +1,9 @@
 import json
 import base64
 import boto3
-import io
+from io import BytesIO
+from pypdf import PdfReader
+
 from loguru import logger
 from datetime import datetime
 from pathlib import Path
@@ -49,7 +51,7 @@ class RawMotionDocumentScraper:
         s3_key = self._build_s3_key("motions", file_name)
 
         try:
-            success = self._upload_url_to_s3(raw_doc.url, s3_key)
+            success, metadata = self._upload_url_to_s3(raw_doc.url, s3_key)
             if not success:
                 logger.warning(
                     f"Skipping s3_key update for motion_id={raw_doc.motion_id} "
@@ -65,7 +67,11 @@ class RawMotionDocumentScraper:
                         RawMotionDocument.step_id == raw_doc.step_id,
                         RawMotionDocument.file_id == raw_doc.file_id,
                     )
-                    .values(s3_key=s3_key)
+                    .values(
+                        s3_key=s3_key,
+                        file_size=metadata["size_bytes"],
+                        num_pages=metadata["num_pages"],
+                    )
                 )
                 if result.rowcount != 1:
                     session.rollback()
@@ -251,7 +257,7 @@ class RawMotionDocumentScraper:
         return "/".join(parts)
 
     @staticmethod
-    def _upload_url_to_s3(url: str, key: str) -> bool:
+    def _upload_url_to_s3(url: str, key: str) -> tuple[bool, dict]:
         bucket = settings.AWS_S3_BUCKET_NAME
         if not bucket:
             raise RuntimeError("AWS_S3_BUCKET_NAME is not configured.")
@@ -259,13 +265,13 @@ class RawMotionDocumentScraper:
         response = get_url(url)
         if response is None:
             logger.warning(f"Failed to fetch document: {url}")
-            return False
+            return False, dict()
 
         try:
             response.raise_for_status()
         except Exception as exc:
             logger.warning(f"Non-200 response fetching {url}: {exc}")
-            return False
+            return False, dict()
 
         if settings.AWS_ACCESS_KEY_ID and settings.AWS_SECRET_ACCESS_KEY:
             session = boto3.session.Session(
@@ -277,8 +283,14 @@ class RawMotionDocumentScraper:
         else:
             client = boto3.client("s3", region_name=settings.AWS_REGION)
 
-        client.upload_fileobj(io.BytesIO(response.content), bucket, key)
-        return True
+        pdf = BytesIO(response.content)
+        client.upload_fileobj(pdf, bucket, key)
+
+        pdf.seek(0)
+        return True, {
+            "size_bytes": pdf.getbuffer().nbytes,
+            "num_pages": len(PdfReader(pdf).pages),
+        }
 
     @staticmethod
     def _download_to_path(url: str, dest: Path) -> bool:
