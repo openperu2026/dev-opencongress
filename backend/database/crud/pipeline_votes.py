@@ -446,11 +446,13 @@ def upsert_attendance(
     event_id: str,
     attendee_id: int,
     status: AttendanceStatus | str,
+    bancada_id: int | None = None,
 ) -> db_models.Attendance:
     payload = {
         "event_id": event_id,
         "attendee_id": attendee_id,
         "status": _enum_value(status),
+        "bancada_id": bancada_id,
     }
     existing = db.get(db_models.Attendance, (event_id, attendee_id))
     if existing is None:
@@ -468,29 +470,31 @@ def upsert_attendance(
 def upsert_vote_counts_for_event(
     db: Session,
     *,
-    vote_event: schema.VoteEvent,
-    bancada_ids: dict[str, int],
+    vote_event_id: str,
+    counts: dict[tuple[int | None, VoteOption], int],
 ) -> list[db_models.VoteCounts]:
     """
     Delete-then-reinsert (not per-row upsert), so a corrected re-extraction
-    doesn't leave stale bancada/option combinations behind.
+    doesn't leave stale bancada/option combinations behind. `counts` keys are
+    the already-resolved bancada_id (per-vote, see load._persist_vote_event)
+    paired with the vote option, not the raw extracted party name -- so this
+    stays consistent with whatever bancada_id actually got stored on `Vote`.
     """
     db.execute(
         delete(db_models.VoteCounts).where(
-            db_models.VoteCounts.vote_event_id == vote_event.vote_event_id
+            db_models.VoteCounts.vote_event_id == vote_event_id
         )
     )
 
     rows = []
-    for vote_count in vote_event.get_counts_by_bancada():
-        bancada_id = bancada_ids.get(vote_count.bancada_name)
+    for (bancada_id, option), count in counts.items():
         if bancada_id is None:
             continue
         row = db_models.VoteCounts(
-            vote_event_id=vote_count.vote_event_id,
-            option=_enum_value(vote_count.option),
+            vote_event_id=vote_event_id,
+            option=_enum_value(option),
             bancada_id=bancada_id,
-            count=vote_count.count,
+            count=count,
         )
         db.add(row)
         rows.append(row)

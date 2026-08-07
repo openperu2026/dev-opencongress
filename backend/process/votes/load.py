@@ -6,9 +6,11 @@ from typing import Literal
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from backend import VoteOption
 from backend.database.crud import pipeline_votes as crud_votes
 from backend.database.crud.pipeline_core import (
     ProcessStats,
+    find_active_bancada_for_person,
     find_congresista,
     find_organization,
 )
@@ -20,6 +22,11 @@ def _resolve_voter_id(db: Session, member_name: str | None) -> int | None:
         return None
     cong = find_congresista(db, name=member_name)
     return cong.id if cong is not None else None
+
+
+def _resolve_bancada_for_person(db: Session, person_id: int, at_date) -> int | None:
+    org = find_active_bancada_for_person(db, person_id, at_date)
+    return org.org_id if org is not None else None
 
 
 def _persist_vote_event(
@@ -39,7 +46,7 @@ def _persist_vote_event(
 
     crud_votes.upsert_vote_event(db, vote_event=vote_event, org_id=org.org_id)
 
-    bancada_ids: dict[str, int | None] = {}
+    vote_counts: dict[tuple[int | None, VoteOption], int] = {}
     for vote in vote_event.votes:
         voter_id = _resolve_voter_id(db, vote.voter_full_name)
         if voter_id is None:
@@ -48,11 +55,17 @@ def _persist_vote_event(
                 f"(vote_event_id={vote_event.vote_event_id})"
             )
             continue
-        if vote.bancada_name not in bancada_cache:
-            bancada_cache[vote.bancada_name] = crud_votes.resolve_bancada_id(
-                db, vote.bancada_name
-            )
-        bancada_id = bancada_cache[vote.bancada_name]
+
+        bancada_id = _resolve_bancada_for_person(db, voter_id, vote_event.event_date)
+        if bancada_id is None:
+            # No membership row covers this date -- fall back to the party
+            # acronym printed on this document's own roll call.
+            if vote.bancada_name not in bancada_cache:
+                bancada_cache[vote.bancada_name] = crud_votes.resolve_bancada_id(
+                    db, vote.bancada_name
+                )
+            bancada_id = bancada_cache[vote.bancada_name]
+
         crud_votes.upsert_vote(
             db,
             vote_event_id=vote_event.vote_event_id,
@@ -60,7 +73,8 @@ def _persist_vote_event(
             option=vote.option,
             bancada_id=bancada_id,
         )
-        bancada_ids[vote.bancada_name] = bancada_id
+        key = (bancada_id, vote.option)
+        vote_counts[key] = vote_counts.get(key, 0) + 1
 
     for attendance in vote_event.attendance:
         attendee_id = _resolve_voter_id(db, attendance.voter_full_name)
@@ -75,10 +89,13 @@ def _persist_vote_event(
             event_id=vote_event.vote_event_id,
             attendee_id=attendee_id,
             status=attendance.status,
+            bancada_id=_resolve_bancada_for_person(
+                db, attendee_id, vote_event.event_date
+            ),
         )
 
     crud_votes.upsert_vote_counts_for_event(
-        db, vote_event=vote_event, bancada_ids=bancada_ids
+        db, vote_event_id=vote_event.vote_event_id, counts=vote_counts
     )
     return True
 

@@ -4,7 +4,9 @@ import pytest
 
 from backend import (
     AttendanceStatus,
+    LegPeriod,
     Proponents,
+    RoleOrganization,
     TypeBillStep,
     TypeOrganization,
     VoteOption,
@@ -175,6 +177,68 @@ def test_build_and_persist_vote_event(bill_vote_fixture):
     counts_by_option = {c.option: c.count for c in counts}
     assert counts_by_option[VoteOption.SI] == 1
     assert counts_by_option[VoteOption.AUSENTE] == 1
+
+
+def test_persist_vote_event_prefers_membership_over_pdf_text(bill_vote_fixture):
+    db = bill_vote_fixture
+    parsed = _base_parsed()
+    steps = crud_votes.find_vote_steps(db, bill_id="B_2021_1")
+
+    # Ana's PDF roll call says "FP" (Fuerza Popular), but she has an active
+    # BancadaMembership in a different bancada covering the vote's date --
+    # that membership must win over the PDF-text fuzzy match. Luis has no
+    # membership row at all, so his Vote falls back to the PDF text, while
+    # his Attendance (no fallback available) stays unresolved.
+    renovacion = db_models.Organization(
+        org_name="Renovación Popular", org_type=TypeOrganization.BANCADA
+    )
+    db.add(renovacion)
+    db.flush()
+
+    ana = db.query(db_models.Congresista).filter_by(full_name="Ana Torres").one()
+    db.add(
+        db_models.BancadaMembership(
+            person_id=ana.id,
+            org_id=renovacion.org_id,
+            leg_period=LegPeriod.PERIODO_2021_2026.value,
+            org_type=TypeOrganization.BANCADA,
+            role=RoleOrganization.MIEMBRO,
+            start_date=date(2023, 1, 1),
+            end_date=date(2023, 12, 31),
+        )
+    )
+    db.flush()
+
+    build_result = transform.build_vote_events(
+        parsed, kind="bill", bill_id="B_2021_1", motion_id=None, steps=steps
+    )
+    vote_event = build_result.events[0].vote_event
+
+    bancada_cache: dict[str, int | None] = {}
+    assert load._persist_vote_event(db, vote_event, bancada_cache)
+    db.flush()
+
+    fuerza_popular = (
+        db.query(db_models.Organization).filter_by(org_name="Fuerza Popular").one()
+    )
+    luis = db.query(db_models.Congresista).filter_by(full_name="Luis Fernandez").one()
+
+    ana_vote = db.get(db_models.Vote, ("B_2021_1_1", ana.id))
+    assert ana_vote.bancada_id == renovacion.org_id
+
+    luis_vote = db.get(db_models.Vote, ("B_2021_1_1", luis.id))
+    assert luis_vote.bancada_id == fuerza_popular.org_id
+
+    ana_attendance = db.get(db_models.Attendance, ("B_2021_1_1", ana.id))
+    assert ana_attendance.bancada_id == renovacion.org_id
+
+    luis_attendance = db.get(db_models.Attendance, ("B_2021_1_1", luis.id))
+    assert luis_attendance.bancada_id is None
+
+    counts = db.query(db_models.VoteCounts).filter_by(vote_event_id="B_2021_1_1").all()
+    counts_by_bancada_option = {(c.bancada_id, c.option): c.count for c in counts}
+    assert counts_by_bancada_option[(renovacion.org_id, VoteOption.SI)] == 1
+    assert counts_by_bancada_option[(fuerza_popular.org_id, VoteOption.AUSENTE)] == 1
 
 
 def test_member_letter_overrides_roll_value(bill_vote_fixture):

@@ -1222,6 +1222,9 @@ class OpenPeruOrchestrator:
                             stats.skipped += 1
                             continue
 
+                        bancada = crud_core.find_active_bancada_for_person(
+                            db, cong.id, chamber_schema.presentation_date
+                        )
                         crud_bills.upsert_bill_congresista(
                             db,
                             bill.id,
@@ -1229,6 +1232,7 @@ class OpenPeruOrchestrator:
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
                             else cong_rel.role_type,
+                            bancada_id=bancada.org_id if bancada else None,
                         )
 
                     raw_bill.processed = True
@@ -1565,6 +1569,9 @@ class OpenPeruOrchestrator:
                             )
                             stats.skipped += 1
                             continue
+                        bancada = crud_core.find_active_bancada_for_person(
+                            db, cong.id, chamber_schema.presentation_date
+                        )
                         crud_motions.upsert_motion_congresista(
                             db,
                             motion.id,
@@ -1572,6 +1579,7 @@ class OpenPeruOrchestrator:
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
                             else cong_rel.role_type,
+                            bancada_id=bancada.org_id if bancada else None,
                         )
 
                     if include_documents:

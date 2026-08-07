@@ -115,6 +115,7 @@ class Attendance(Base):
         event_id (str): Unique identifier for the event.
         attendee_id (int): Unique identifier for the congressperson.
         status (str): Attendance status, e.g., 'present', 'absent'.
+        bancada_id (int): The political group of the attendee at the event date.
     """
 
     __tablename__ = "attendance"
@@ -129,11 +130,15 @@ class Attendance(Base):
         attendance_status_enum,
         nullable=False,
     )
+    bancada_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=True
+    )
 
     __table_args__ = (
         PrimaryKeyConstraint("event_id", "attendee_id", name="pk_attendance"),
         Index("ix_attendance_by_event", "event_id"),
         Index("ix_attendance_attendee_id", "attendee_id"),
+        Index("ix_attendance_bancada_id", "bancada_id"),
     )
 
 
@@ -446,7 +451,7 @@ class BillCongresistas(Base):
     person_id: Mapped[int] = mapped_column(
         ForeignKey("congresistas.id"), nullable=False
     )
-    bancada_id: Mapped[int] = mapped_column(
+    bancada_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=True
     )
     role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
@@ -734,6 +739,13 @@ class Membership(Base):
             "start_date",
             "end_date",
             name="uq_membership_person_org_period_role_dates",
+        ),
+        Index(
+            "ix_membership_person_org_type_dates",
+            "person_id",
+            "org_type",
+            "start_date",
+            "end_date",
         ),
     )
 
