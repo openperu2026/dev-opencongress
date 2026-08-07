@@ -28,6 +28,7 @@ RUN uv sync --locked --no-dev \
 COPY backend /app/backend
 COPY Makefile /app/Makefile
 COPY docker/cron /app/docker/cron
+COPY scripts /app/scripts
 
 RUN chmod +x /app/docker/cron/entrypoint.sh /app/docker/cron/run-job.sh
 

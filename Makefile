@@ -24,3 +24,9 @@ process:
 
 process-bill-documents:
 	uv run -m backend --only-bills --process-documents	
+
+backfill-bancadas-bills:
+	uv run python scripts/backfill_bancada_snapshots.py --only bills
+
+backfill-bancadas-motions:
+	uv run python scripts/backfill_bancada_snapshots.py --only motions
