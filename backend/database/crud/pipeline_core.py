@@ -8,6 +8,7 @@ from typing import Type
 from enum import Enum
 
 from backend import TypeOrganization
+from backend.process.utils import normalize_name
 from backend.database import models as db_models
 from backend.process import schema
 from backend.database.raw_models import ScraperRun
@@ -47,18 +48,19 @@ def find_congresista(
     threshold: float = 0.9,
 ) -> db_models.Congresista | None:
     """
-    Find a congressperson by website or fuzzy full-name match.
+    Find a congressperson using website, aliases, or fuzzy name matching.
 
-    The function first searches by website when a website is provided, since it is
-    expected to be a more stable identifier than the person's name. If no match is
-    found by website, or if no website is provided, it falls back to searching by
-    full name.
+    Matching is attempted in the following order:
+
+    1. Website exact match.
+    2. Known alias exact match.
+    3. Canonical full-name fuzzy match (Jaro-Winkler).
 
     Args:
         db (Session): Active SQLAlchemy database session.
-        name (str): Full name of the congressperson to search for.
-        website (str | None, optional): Congressperson website URL. Defaults to None.
-        threshold (float, optional): Minimum Jaro-Winkler similarity score.
+        name (str): Name of the congressperson.
+        website (str | None, optional): Congressperson website URL.
+        threshold (float, optional): Minimum Jaro-Winkler similarity.
             Defaults to 0.9.
 
     Returns:
@@ -66,20 +68,37 @@ def find_congresista(
         otherwise, None.
     """
 
+    # 1. Website
     if website:
         by_web = db.scalar(
             select(db_models.Congresista).where(
                 db_models.Congresista.website == website.strip()
             )
         )
+
         if by_web is not None:
             return by_web
 
-    normalized_name = name.strip().lower()
+    normalized_name = normalize_name(name, sort_tokens=True)
 
+    if not normalized_name:
+        return None
+
+    # Known alias
+    by_alias = db.scalar(
+        select(db_models.Congresista)
+        .join(db_models.CongresistaAlias)
+        .where(db_models.CongresistaAlias.name == normalized_name)
+    )
+
+    if by_alias is not None:
+        return by_alias
+
+    # Fuzzy canonical name (preserve word order for Jaro-Winkler comparison)
+    normalized_name_unsorted = normalize_name(name, sort_tokens=False)
     score = func.jarowinkler(
         func.unaccent(func.lower(db_models.Congresista.full_name)),
-        func.unaccent(normalized_name),
+        func.unaccent(normalized_name_unsorted),
     )
 
     stmt = (
@@ -93,6 +112,40 @@ def find_congresista(
     )
 
     return db.scalar(stmt)
+
+
+def save_alias(
+    db: Session,
+    congresista: db_models.Congresista,
+    raw_name: str,
+) -> bool:
+    """Create an alias if it does not already exist.
+
+    Returns:
+        True if a new alias was created, otherwise False.
+    """
+    normalized = normalize_name(raw_name)
+
+    if not normalized:
+        return False
+
+    exists = db.scalar(
+        select(db_models.CongresistaAlias.id).where(
+            db_models.CongresistaAlias.congresista_id == congresista.id,
+            db_models.CongresistaAlias.name == normalized,
+        )
+    )
+
+    if exists is None:
+        db.add(
+            db_models.CongresistaAlias(
+                congresista_id=congresista.id,
+                name=normalized,
+            )
+        )
+        return True
+
+    return False
 
 
 def find_organization(

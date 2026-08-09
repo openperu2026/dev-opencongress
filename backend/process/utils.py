@@ -4,6 +4,7 @@ import polars as pl
 from datetime import datetime, timezone, date
 from sqlalchemy.orm import Session
 from operator import attrgetter
+import unicodedata
 
 from backend import PARTY_ALIASES
 from backend.config import directories
@@ -195,6 +196,28 @@ def split_and_sort_name(name: str) -> tuple[str, str, str]:
         return full_name, first_name, last_name
     except ValueError:
         return name, None, None
+
+
+#### MATCHING CONGRESISTAS NAME
+
+
+def normalize_name(name: str, sort_tokens: bool = True) -> str:
+    name = name.strip().lower()
+
+    # Remove accents
+    name = unicodedata.normalize("NFKD", name)
+    name = "".join(c for c in name if not unicodedata.combining(c))
+
+    # Remove punctuation
+    name = re.sub(r"[.,]", " ", name)
+
+    # Normalize whitespace
+    tokens = name.split()
+
+    if sort_tokens:
+        tokens = sorted(tokens)
+
+    return " ".join(tokens)
 
 
 def find_organization_schema(

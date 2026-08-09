@@ -26,7 +26,7 @@ from backend import (
     enum_values,
     sql_value_list,
 )
-from sqlalchemy.orm import declarative_base, Mapped, mapped_column
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from datetime import datetime, date
 from pgvector.sqlalchemy import Vector
 
@@ -476,6 +476,7 @@ class Congresista(Base):
         photo_url (str): Official photo url of the congressperson.
         photo_bytes (bytes | None): Downloaded portrait image bytes, when fetched.
         website (str): Official website of the congressperson.
+        aliases (list[str]): List of all found aliases for this congresperson
     """
 
     __tablename__ = "congresistas"
@@ -489,8 +490,44 @@ class Congresista(Base):
     photo_url: Mapped[str] = mapped_column(nullable=False)
     photo_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     website: Mapped[str] = mapped_column(nullable=False)
-
+    aliases: Mapped[list["CongresistaAlias"]] = relationship(
+        back_populates="congresista",
+        cascade="all, delete-orphan",
+    )
     __table_args__ = (UniqueConstraint("full_name", "dni", name="uq_congresista_id"),)
+
+
+class CongresistaAlias(Base):
+    """
+    Represents alternate names used to match a congressperson.
+
+    Attributes:
+        id (int): Unique identifier for the row.
+        congresista_id (int): ID of the congresista.
+        name (str): Normalized alternate name.
+    """
+
+    __tablename__ = "congresista_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    congresista_id: Mapped[int] = mapped_column(
+        ForeignKey("congresistas.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(nullable=False)
+
+    congresista: Mapped["Congresista"] = relationship(
+        back_populates="aliases",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "name",
+            name="uq_congresista_alias_name",
+        ),
+    )
 
 
 class Organization(Base):
