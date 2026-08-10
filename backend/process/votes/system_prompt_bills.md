@@ -64,7 +64,7 @@ different bill's data.
 ## 2. Layout quirks — read carefully, these break naive extraction
 
 ### 2a. The roster is printed in 3 side-by-side columns, but is ONE alphabetical list
-The full roster (all ~130 members) is alphabetical by last name, but is printed in
+The full roster (all 130 members) is alphabetical by last name, but is printed in
 **three vertical column blocks** side by side to fit the page. A naive top-to-bottom,
 left-to-right text read of a single printed line yields **three unrelated people**
 (one from the start of the alphabet, one from roughly a third of the way through,
@@ -214,7 +214,8 @@ Return a single JSON object:
   Section 5 authorizes — if a value is unreadable, use `null` and log it in
   `_uncertain_fields`, don't guess.
 - Do not drop rows: every member on the roster/roll must appear in output even if
-  their status is a leave/absence code.
+  their status is a leave/absence code. The number of members in the roster/roll lists must match
+  the aggregates extracted in `overall_totals` for attendance and votings. 
 - Do not merge two distinct attendance calls or vote instances into one entry
   just because they're for the same bill — a reconsideration vote and the
   revote that follows it are two separate entries in `votings[]` (and

@@ -27,15 +27,18 @@ CONGRESISTA_ALIASES: dict[str, list[str]] = {
     "Gladys Margot Echaíz de Núñez Izaga": [
         "ECHAIZ DE NÚÑEZ IZAGA, GLADYS M.",
         "GLADYS M. ECHAÍZ DE NÚÑEZ IZAGA",
+        "GLADYS M. ECHAVÍZ DE NÚÑEZ IZAGA",
     ],
     "Jorge Arturo Zeballos Aponte": [
         "ZEBALLOS APONTE, JORGE",
         "JORGE ZEBALLOS APONTE",
+        "JORGE ZEBALLOS APO",
     ],
     "Carlos Javier Zeballos Madariaga": [
         "ZEBALLOS MADARIAGA, CARLOS",
         "CARLOS ZEBALLOS MADARIAGA",
         "CARLOS ZEBALLOS MADIARIAGA",
+        "CARLOS ZEBALLOS MADI\u200b\u200bARIAGA",
     ],
     "Carlos Ernesto Bustamante Donayre": [
         "BUSTAMANTE DONAYRE ERNESTO",
@@ -59,6 +62,8 @@ CONGRESISTA_ALIASES: dict[str, list[str]] = {
         "MARÍA JÁUREGUI MARTINEZ DE AGUAYO",
         "MARÍA JÁUREGUI MARTÍNEZ DE AGÜAYO",
         "MARÍA JERI JÁUREGUI MARTÍNEZ DE AGUAYO",
+        "MARÍA JOSÉ JÁUREGUI MARTÍNEZ DE AGUAYO",
+        "MARÍA JERI ORÉ JÁUREGUI MARTÍNEZ DE AGUAYO",
     ],
     "Rosio Torres Salinas": [
         "ROCÍO TORRES SALINAS",
@@ -66,6 +71,24 @@ CONGRESISTA_ALIASES: dict[str, list[str]] = {
     ],
     "Juan Bartolomé Burgos Oliveros": [
         "GUILLERMO BARTOLOMÉ BURGOS OLIVEROS",
+    ],
+    "María Grimaneza Acuña Peralta": ["MARÍA G#### ACUÑA PERALTA"],
+    "Yorel Kira Alcarraz Agüero": [
+        "YOEL KIRA ALCARAZ AGÜERO",
+    ],
+    "Ilich Fredy López Ureña": [
+        "LIECH FREY LÓPEZ UREÑA",
+        "LIECH FREDDY LÓPEZ UREÑA",
+    ],
+    "Pasión Neomías Dávila Atanacio": [
+        "PASTÓN NEOMÍAS DÁVILA ATANACIO",
+        "PASTOR ENOMÍAS DÁVILA ATANACIO",
+        "PASTOR ENEOMÍAS DÁVILA ATANACIO",
+    ],
+    "Alejandro Aurelio Aguinaga Recuenco": ["ALEJANDRO AGUINAGA RECIO"],
+    "Jorge Samuel Coayla Juárez": [
+        "GEORGE SAMUEL COAYLA JUÁREZ",
+        "GERMÁN SAMUEL COAYLA JUÁREZ",
     ],
 }
 
