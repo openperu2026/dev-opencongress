@@ -18,7 +18,7 @@
             <div class="congress-photo-wrap">
                 <img
                     class="congress-photo"
-                    src="{{ congresista.photo_url.replace('https://www.congreso.gob.pe', 'https://www3.congreso.gob.pe') }}"
+                    src="{{ url_for('congress.congress_photo', congresista_id=congresista.id) }}"
                     alt="{{ _('Foto de %(name)s', name=congresista.full_name) }}"
                 >
             </div>

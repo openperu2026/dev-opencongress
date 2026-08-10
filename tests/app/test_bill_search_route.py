@@ -303,6 +303,9 @@ def test_search_form_includes_new_filters(client):
     assert 'name="pley_id_q"' in body
     assert 'name="law_id_q"' in body
     assert 'name="current_step_q"' in body
+    assert 'placeholder="dd/mm/aaaa"' in body
+    assert 'name="presentation_date_from"' in body
+    assert 'name="presentation_date_to"' in body
     assert 'name="presentation_date_from_year"' in body
     assert 'name="presentation_date_from_month"' in body
     assert 'name="presentation_date_from_day"' in body
@@ -326,6 +329,26 @@ def test_search_form_includes_new_filters(client):
     assert 'name="presentation_date_to_year"' in body and 'value="" selected' in body
     assert 'name="presentation_date_to_month"' in body and 'value="" selected' in body
     assert 'name="presentation_date_to_day"' in body and 'value="" selected' in body
+
+
+def test_search_filters_by_native_date_inputs(client, session_factory):
+    _seed_bill_search_data(session_factory)
+
+    response = client.get(
+        "/bills",
+        query_string={
+            "presentation_date_from": "2024-01-10",
+            "presentation_date_to": "2024-01-31",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "2021_0001" in body
+    assert "2021_0002" not in body
+    assert 'name="presentation_date_from"' in body
+    assert 'value="2024-01-10"' in body
+    assert "2024-01-10 - 2024-01-31" in body
 
 
 def test_search_form_can_render_in_english(client):

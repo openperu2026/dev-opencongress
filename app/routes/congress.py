@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from datetime import date
-from flask import Blueprint, render_template, request
+from flask import Blueprint, Response, abort, redirect, render_template, request
 from flask_babel import gettext as _
 from sqlalchemy import case, func, or_, select
 from backend.core.enums import TypeCommittee, TypeOrganization
@@ -57,6 +57,16 @@ def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
             chamber_membership.votes_in_election if chamber_membership else 0
         ),
     )
+
+
+def _photo_mimetype(photo_bytes: bytes) -> str:
+    if photo_bytes.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if photo_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if photo_bytes.startswith(b"RIFF") and photo_bytes[8:12] == b"WEBP":
+        return "image/webp"
+    return "application/octet-stream"
 
 
 @congress_bp.route("/congress")
@@ -134,14 +144,12 @@ def index():
         committee_options = create_committee_option(db)
         special_committee_options = create_special_committee_option(db)
 
+        query = select(Congresista).order_by(Congresista.full_name.asc())
         if filters:
-            rows = db.execute(
-                select(Congresista)
-                .where(*filters)
-                .order_by(Congresista.full_name.asc())
-                .limit(50)
-            ).scalars()
-            congresistas = [_congresista_view(db, row) for row in rows]
+            query = query.where(*filters).limit(50)
+
+        rows = db.execute(query).scalars()
+        congresistas = [_congresista_view(db, row) for row in rows]
 
     return render_template(
         "congress/search.html",
@@ -156,6 +164,31 @@ def index():
         committee_options=committee_options,
         special_committee_options=special_committee_options,
     )
+
+
+@congress_bp.route("/congress/<int:congresista_id>/photo")
+def congress_photo(congresista_id):
+    with SessionProcessed() as db:
+        congresista = db.get(Congresista, congresista_id)
+
+        if not congresista:
+            abort(404)
+
+        if congresista.photo_bytes:
+            return Response(
+                congresista.photo_bytes,
+                mimetype=_photo_mimetype(congresista.photo_bytes),
+            )
+
+        if congresista.photo_url:
+            return redirect(
+                congresista.photo_url.replace(
+                    "https://www.congreso.gob.pe",
+                    "https://www3.congreso.gob.pe",
+                )
+            )
+
+    abort(404)
 
 
 @congress_bp.route("/congress/<congresista_id>")
