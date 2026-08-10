@@ -30,3 +30,6 @@ backfill-bancadas-bills:
 
 backfill-bancadas-motions:
 	uv run python scripts/backfill_bancada_snapshots.py --only motions
+
+process-votes-from-raw:
+	uv run -m backend --only-votes --skip-vote-extraction
