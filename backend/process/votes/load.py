@@ -189,10 +189,29 @@ def run_vote_load(
 
             bill_id = target_id if kind == "bill" else None
             motion_id = target_id if kind == "motion" else None
+
+            anchor_step = crud_votes.find_step_by_id(
+                db, bill_id=bill_id, motion_id=motion_id, step_id=page.step_id
+            )
+            if anchor_step is None or not anchor_step.vote_step:
+                logger.warning(
+                    f"No anchor vote step for {kind} id={target_id} "
+                    f"step_id={page.step_id} file_id={page.file_id}; skipping page"
+                )
+                page.processed = True
+                db.commit()
+                stats.skipped += 1
+                continue
+
             steps = crud_votes.find_vote_steps(db, bill_id=bill_id, motion_id=motion_id)
 
             build_result = transform.build_vote_events(
-                parsed, kind=kind, bill_id=bill_id, motion_id=motion_id, steps=steps
+                parsed,
+                kind=kind,
+                bill_id=bill_id,
+                motion_id=motion_id,
+                steps=steps,
+                anchor_step=anchor_step,
             )
 
             all_ok = not build_result.skipped

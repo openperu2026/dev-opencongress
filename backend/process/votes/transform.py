@@ -199,16 +199,20 @@ def build_vote_events(
     bill_id: str | None,
     motion_id: str | None,
     steps: list,
+    anchor_step,
 ) -> BuildResult:
     """
     Transform one extraction result's `votings`/`attendance`/`member_letters`
     into schema.VoteEvent bundles (+ clarification/letter DTOs), matching
     each voting to an already-persisted BillStep/MotionStep vote_event_id.
 
-    `steps` must be the vote_step=True rows for this bill/motion, ordered
-    (step_date, step_id) -- see pipeline_votes.find_vote_steps. Pure/DB-free:
-    all DB reads happen upstream (steps) and all writes happen downstream
-    (load.py).
+    `anchor_step` is the document's own deterministic (bill_id/motion_id,
+    step_id) target -- see pipeline_votes.find_step_by_id -- and is the
+    default target for every voting/attendance entry. `steps` must be the
+    vote_step=True rows for this bill/motion, ordered (step_date, step_id)
+    -- see pipeline_votes.find_vote_steps -- and is only used to disambiguate
+    multiple votings within one document. Pure/DB-free: all DB reads happen
+    upstream (steps, anchor_step) and all writes happen downstream (load.py).
     """
     votings = parsed.get("votings", []) or []
     attendance = parsed.get("attendance", []) or []
@@ -218,10 +222,10 @@ def build_vote_events(
     skipped: list[str] = []
 
     voting_matches = match.match_votings_to_steps(
-        votings, steps, fallback_date=session_date
+        votings, steps, anchor_step=anchor_step, fallback_date=session_date
     )
     attendance_matches = match.match_attendance_to_steps(
-        attendance, voting_matches, fallback_date=session_date
+        attendance, voting_matches, anchor_step=anchor_step, fallback_date=session_date
     )
     attendance_by_vote_event_id = {
         step.vote_event_id: att for att, step in attendance_matches if step is not None

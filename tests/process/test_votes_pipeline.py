@@ -130,7 +130,12 @@ def test_build_and_persist_vote_event(bill_vote_fixture):
     assert len(steps) == 1
 
     build_result = transform.build_vote_events(
-        parsed, kind="bill", bill_id="B_2021_1", motion_id=None, steps=steps
+        parsed,
+        kind="bill",
+        bill_id="B_2021_1",
+        motion_id=None,
+        steps=steps,
+        anchor_step=steps[0],
     )
 
     assert not build_result.skipped
@@ -210,7 +215,12 @@ def test_persist_vote_event_prefers_membership_over_pdf_text(bill_vote_fixture):
     db.flush()
 
     build_result = transform.build_vote_events(
-        parsed, kind="bill", bill_id="B_2021_1", motion_id=None, steps=steps
+        parsed,
+        kind="bill",
+        bill_id="B_2021_1",
+        motion_id=None,
+        steps=steps,
+        anchor_step=steps[0],
     )
     vote_event = build_result.events[0].vote_event
 
@@ -257,7 +267,12 @@ def test_member_letter_overrides_roll_value(bill_vote_fixture):
     steps = crud_votes.find_vote_steps(db, bill_id="B_2021_1")
 
     build_result = transform.build_vote_events(
-        parsed, kind="bill", bill_id="B_2021_1", motion_id=None, steps=steps
+        parsed,
+        kind="bill",
+        bill_id="B_2021_1",
+        motion_id=None,
+        steps=steps,
+        anchor_step=steps[0],
     )
     assert len(build_result.member_letters) == 1
 
@@ -270,16 +285,68 @@ def test_member_letter_overrides_roll_value(bill_vote_fixture):
     assert votes_by_name["Luis FERNANDEZ"] == VoteOption.NO
 
 
-def test_no_step_match_is_skipped(bill_vote_fixture):
+def test_single_voting_resolves_via_anchor_step_despite_date_mismatch(
+    bill_vote_fixture,
+):
     db = bill_vote_fixture
     parsed = _base_parsed()
     parsed["votings"][0]["record_datetime"] = "12/05/2023 07:11 pm"  # different day
     steps = crud_votes.find_vote_steps(db, bill_id="B_2021_1")
 
     build_result = transform.build_vote_events(
-        parsed, kind="bill", bill_id="B_2021_1", motion_id=None, steps=steps
+        parsed,
+        kind="bill",
+        bill_id="B_2021_1",
+        motion_id=None,
+        steps=steps,
+        anchor_step=steps[0],
     )
 
-    assert build_result.events[0].vote_event is None
-    assert build_result.skipped
-    assert "no step match" in build_result.skipped[0]
+    # The document's own (bill_id, step_id) link is authoritative -- a
+    # printed-date mismatch (OCR/timezone/publication-lag drift) must not
+    # drop a voting that we already know belongs to this step.
+    assert not build_result.skipped
+    vote_event = build_result.events[0].vote_event
+    assert vote_event is not None
+    assert vote_event.vote_event_id == steps[0].vote_event_id
+
+
+def test_multiple_votings_same_day_resolve_to_distinct_steps(bill_vote_fixture):
+    db = bill_vote_fixture
+    # A reconsideración + revote pair: two BillStep rows sharing one
+    # step_date, each with its own vote_event_id.
+    revote_step = db_models.BillStep(
+        bill_id="B_2021_1",
+        step_id=11,
+        step_type=TypeBillStep.VOTACION,
+        vote_step=True,
+        vote_event_id="B_2021_1_2",
+        step_date=date(2023, 5, 11),
+        step_detail="Segunda votación (reconsideración)",
+    )
+    db.add(revote_step)
+    db.flush()
+
+    anchor_step = db.get(db_models.BillStep, ("B_2021_1", 10))
+
+    parsed = _base_parsed()
+    parsed["votings"][0]["subject"] = "Primera votación"
+    revote = dict(parsed["votings"][0])
+    revote["subject"] = "Segunda votación (reconsideración)"
+    parsed["votings"].append(revote)
+
+    steps = crud_votes.find_vote_steps(db, bill_id="B_2021_1")
+    assert len(steps) == 2
+
+    build_result = transform.build_vote_events(
+        parsed,
+        kind="bill",
+        bill_id="B_2021_1",
+        motion_id=None,
+        steps=steps,
+        anchor_step=anchor_step,
+    )
+
+    assert not build_result.skipped
+    event_ids = {e.vote_event.vote_event_id for e in build_result.events}
+    assert event_ids == {"B_2021_1_1", "B_2021_1_2"}

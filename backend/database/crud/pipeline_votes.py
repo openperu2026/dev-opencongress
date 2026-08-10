@@ -284,6 +284,25 @@ def find_vote_steps(
     return db.scalars(stmt).all()
 
 
+def find_step_by_id(
+    db: Session,
+    *,
+    bill_id: str | None = None,
+    motion_id: str | None = None,
+    step_id: int,
+) -> db_models.BillStep | db_models.MotionStep | None:
+    """
+    Fetch the single BillStep/MotionStep row a page's own (bill_id/motion_id,
+    step_id) FK points to -- the deterministic anchor step this document was
+    scraped for. Straight PK lookup, no date-guessing.
+    """
+    if bill_id is not None:
+        return db.get(db_models.BillStep, (bill_id, step_id))
+    if motion_id is not None:
+        return db.get(db_models.MotionStep, (motion_id, step_id))
+    raise ValueError("Must provide bill_id or motion_id")
+
+
 def find_pending_vote_documents(
     db: Session,
     *,

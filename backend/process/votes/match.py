@@ -38,20 +38,36 @@ def match_votings_to_steps(
     votings: list[dict],
     steps: list,
     *,
+    anchor_step,
     fallback_date: str | None = None,
 ) -> list[tuple[dict, object | None]]:
     """
     Match each votings[] entry (in document order) to the BillStep/MotionStep
     row (vote_step=True) whose vote_event_id it should reuse.
 
-    `steps` must already be ordered (step_date, step_id) -- see
-    pipeline_votes.find_vote_steps. Returns (voting_dict, step_or_None) pairs
-    in the same order as `votings`; unmatched entries carry step=None.
+    `anchor_step` is the document's own deterministic (bill_id/motion_id,
+    step_id) target -- see pipeline_votes.find_step_by_id -- and is the
+    default target for every voting extracted from this document, since a
+    document is only ever fetched for one specific vote_step. `steps` (the
+    bill's/motion's whole vote_step=True history, ordered step_date/step_id
+    -- see pipeline_votes.find_vote_steps) is only consulted to disambiguate
+    the rarer case of multiple votings in one document (e.g. a
+    reconsideración and its revote) that fall on anchor_step's exact date;
+    it is never used to match against unrelated, differently-dated steps.
+    Returns (voting_dict, step) pairs in the same order as `votings` --
+    every entry resolves to a step, defaulting to anchor_step.
     """
+    if len(votings) <= 1:
+        return [(v, anchor_step) for v in votings]
+
+    candidate_steps = [s for s in steps if s.step_date == anchor_step.step_date]
+    if anchor_step not in candidate_steps:
+        candidate_steps.append(anchor_step)
+
     voting_dates = [
         parse_record_datetime(v.get("record_datetime"), fallback_date) for v in votings
     ]
-    step_dates = [s.step_date for s in steps]
+    step_dates = [s.step_date for s in candidate_steps]
 
     result: list[tuple[dict, object | None] | None] = [None] * len(votings)
 
@@ -70,7 +86,7 @@ def match_votings_to_steps(
             # preserve chronological/document order, so this is the primary
             # disambiguation for same-day reconsideración + revote pairs.
             for vi, si in zip(v_indices, s_indices):
-                result[vi] = (votings[vi], steps[si])
+                result[vi] = (votings[vi], candidate_steps[si])
             continue
 
         # Count mismatch: fall back to greedy text-similarity matching
@@ -79,7 +95,7 @@ def match_votings_to_steps(
         for vi in v_indices:
             for si in s_indices:
                 score = _text_similarity(
-                    votings[vi].get("subject"), steps[si].step_detail
+                    votings[vi].get("subject"), candidate_steps[si].step_detail
                 )
                 pairs.append((score, vi, si))
         pairs.sort(key=lambda p: p[0], reverse=True)
@@ -88,13 +104,13 @@ def match_votings_to_steps(
         for score, vi, si in pairs:
             if vi in used_v or si in used_s or score < SIMILARITY_FLOOR:
                 continue
-            result[vi] = (votings[vi], steps[si])
+            result[vi] = (votings[vi], candidate_steps[si])
             used_v.add(vi)
             used_s.add(si)
 
     for i, voting in enumerate(votings):
         if result[i] is None:
-            result[i] = (voting, None)
+            result[i] = (voting, anchor_step)
 
     return result
 
@@ -103,11 +119,14 @@ def match_attendance_to_steps(
     attendance: list[dict],
     voting_matches: list[tuple[dict, object | None]],
     *,
+    anchor_step,
     fallback_date: str | None = None,
 ) -> list[tuple[dict, object | None]]:
     """
     Pair each attendance[] entry to the nearest same-day matched voting's
-    resolved step (and therefore its vote_event_id).
+    resolved step (and therefore its vote_event_id), defaulting to
+    anchor_step -- the document's own deterministic target -- when no
+    same-day voting match exists.
     """
     resolved = [(v, s) for v, s in voting_matches if s is not None]
 
@@ -120,7 +139,7 @@ def match_attendance_to_steps(
             if parse_record_datetime(v.get("record_datetime"), fallback_date)
             == att_date
         ]
-        result.append((att, same_day[0] if same_day else None))
+        result.append((att, same_day[0] if same_day else anchor_step))
     return result
 
 
