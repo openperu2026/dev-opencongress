@@ -38,7 +38,7 @@ MEMBERSHIP_MODELS = {
 
 
 def _enum_value(value: Enum | str) -> str:
-    return value.value if hasattr(value, "value") else str(value)
+    return value.value if isinstance(value, Enum) else str(value)
 
 
 def find_congresista(
