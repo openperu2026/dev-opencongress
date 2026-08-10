@@ -58,11 +58,11 @@ CONGRESISTA_ALIASES: dict[str, list[str]] = {
         "MARÍA JÁUREGUI MARTINEZ DE AGUAYO",
         "MARÍA JÁUREGUI MARTÍNEZ DE AGÜAYO",
     ],
-    "Rocío Torres Salinas": [
+    "Rosio Torres Salinas": [
         "ROCÍO TORRES SALINAS",
         "ROCIO TORRES SALINAS",
     ],
-    "Guillermo Bartolomé Burgos Oliveros": [
+    "Juan Bartolomé Burgos Oliveros": [
         "GUILLERMO BARTOLOMÉ BURGOS OLIVEROS",
     ],
 }
