@@ -35,6 +35,7 @@ CONGRESISTA_ALIASES: dict[str, list[str]] = {
     "Carlos Javier Zeballos Madariaga": [
         "ZEBALLOS MADARIAGA, CARLOS",
         "CARLOS ZEBALLOS MADARIAGA",
+        "CARLOS ZEBALLOS MADIARIAGA",
     ],
     "Carlos Ernesto Bustamante Donayre": [
         "BUSTAMANTE DONAYRE ERNESTO",
@@ -57,6 +58,7 @@ CONGRESISTA_ALIASES: dict[str, list[str]] = {
         "MARÍA LO JÁUREGUI MARTÍNEZ DE AGUAYO",
         "MARÍA JÁUREGUI MARTINEZ DE AGUAYO",
         "MARÍA JÁUREGUI MARTÍNEZ DE AGÜAYO",
+        "MARÍA JERI JÁUREGUI MARTÍNEZ DE AGUAYO",
     ],
     "Rosio Torres Salinas": [
         "ROCÍO TORRES SALINAS",

@@ -67,6 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Run vote extraction (sync) + load stage for bills and motions",
     )
     parser.add_argument(
+        "--skip-vote-extraction",
+        action="store_true",
+        help="Skip the extraction of votes and attendance",
+    )
+    parser.add_argument(
         "--votes-limit",
         type=int,
         default=None,
@@ -208,4 +213,5 @@ def main(argv: list[str] | None = None) -> None:
             votes_model=args.votes_model,
             votes_max_cost_usd=args.votes_max_cost_usd,
             first_load=args.first_summary,
+            skip_extraction=args.skip_vote_extraction,
         )

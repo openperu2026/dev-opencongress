@@ -407,6 +407,7 @@ class OpenPeruOrchestrator:
         votes_model: str = VOTES_DEFAULT_MODEL,
         votes_max_cost_usd: float = 5.0,
         first_load: bool = False,
+        skip_extraction: bool = True,
     ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
@@ -486,17 +487,18 @@ class OpenPeruOrchestrator:
 
         if process_votes:
             with log_manager.stage("process", "votes"):
-                for kind in ("bill", "motion"):
-                    console.info(f"Starting vote extraction ({kind})")
-                    key = f"votes_extraction_{kind}"
-                    summary[key] = self._process_vote_extraction(
-                        kind=kind,
-                        model=votes_model,
-                        max_pages=votes_max_pages,
-                        limit=votes_limit,
-                        max_cost_usd=votes_max_cost_usd,
-                    )
-                    self._log_stage_summary(key, summary[key])
+                if not skip_extraction:
+                    for kind in ("bill", "motion"):
+                        console.info(f"Starting vote extraction ({kind})")
+                        key = f"votes_extraction_{kind}"
+                        summary[key] = self._process_vote_extraction(
+                            kind=kind,
+                            model=votes_model,
+                            max_pages=votes_max_pages,
+                            limit=votes_limit,
+                            max_cost_usd=votes_max_cost_usd,
+                        )
+                        self._log_stage_summary(key, summary[key])
 
                 for kind in ("bill", "motion"):
                     console.info(f"Starting vote load ({kind})")
