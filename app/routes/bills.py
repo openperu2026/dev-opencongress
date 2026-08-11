@@ -156,13 +156,16 @@ def _parse_int_arg(value, default):
 def _build_date_picker(prefix, args, today, min_date=None, max_date=None):
     """
     Safely normalizes form date inputs and prepares both the selected date (if valid)
-    and the select-box option lists for the template.
+    and date bounds for the template.
     """
+    raw_date = args.get(prefix)
     raw_year = args.get(f"{prefix}_year")
     raw_month = args.get(f"{prefix}_month")
     raw_day = args.get(f"{prefix}_day")
 
-    provided = any(value not in (None, "") for value in (raw_year, raw_month, raw_day))
+    provided = any(
+        value not in (None, "") for value in (raw_date, raw_year, raw_month, raw_day)
+    )
     year = _parse_int_arg(raw_year, None)
     month = _parse_int_arg(raw_month, None)
     day = _parse_int_arg(raw_day, None)
@@ -170,6 +173,19 @@ def _build_date_picker(prefix, args, today, min_date=None, max_date=None):
     max_date = max_date or today
     if min_date > max_date:
         min_date = max_date
+
+    selected_date = None
+    if raw_date:
+        try:
+            selected_date = date.fromisoformat(raw_date)
+        except ValueError:
+            selected_date = None
+
+        if selected_date is not None:
+            selected_date = max(min_date, min(selected_date, max_date))
+            year = selected_date.year
+            month = selected_date.month
+            day = selected_date.day
 
     if year is not None:
         year = max(min_date.year, min(year, max_date.year))
@@ -184,9 +200,8 @@ def _build_date_picker(prefix, args, today, min_date=None, max_date=None):
     elif month is not None:
         month = max(1, min(month, 12))
 
-    selected_date = None
     day_options = []
-    if year is not None and month is not None:
+    if selected_date is None and year is not None and month is not None:
         first_day = (
             min_date.day if year == min_date.year and month == min_date.month else 1
         )
@@ -198,10 +213,21 @@ def _build_date_picker(prefix, args, today, min_date=None, max_date=None):
             valid_month_last_day = monthrange(year, month)[1]
             day = max(1, min(day, valid_month_last_day))
             selected_date = date(year, month, day)
+    elif year is not None and month is not None:
+        first_day = (
+            min_date.day if year == min_date.year and month == min_date.month else 1
+        )
+        last_day = monthrange(year, month)[1]
+        if year == max_date.year and month == max_date.month:
+            last_day = max_date.day
+        day_options = list(range(first_day, last_day + 1))
 
     return {
         "provided": provided,
         "selected_date": selected_date,
+        "date_value": selected_date.isoformat() if selected_date else "",
+        "min_date": min_date,
+        "max_date": max_date,
         "year_value": year,
         "month_value": month,
         "day_value": day,
@@ -479,41 +505,11 @@ def index():
     elif bill_id_q:
         search_params["bill_id_q"] = bill_id_q
     if presentation_date_from_picker["provided"]:
-        search_params.update(
-            {
-                key: value
-                for key, value in {
-                    "presentation_date_from_year": presentation_date_from_picker[
-                        "year_value"
-                    ],
-                    "presentation_date_from_month": presentation_date_from_picker[
-                        "month_value"
-                    ],
-                    "presentation_date_from_day": presentation_date_from_picker[
-                        "day_value"
-                    ],
-                }.items()
-                if value is not None
-            }
-        )
+        if presentation_date_from:
+            search_params["presentation_date_from"] = presentation_date_from.isoformat()
     if presentation_date_to_picker["provided"]:
-        search_params.update(
-            {
-                key: value
-                for key, value in {
-                    "presentation_date_to_year": presentation_date_to_picker[
-                        "year_value"
-                    ],
-                    "presentation_date_to_month": presentation_date_to_picker[
-                        "month_value"
-                    ],
-                    "presentation_date_to_day": presentation_date_to_picker[
-                        "day_value"
-                    ],
-                }.items()
-                if value is not None
-            }
-        )
+        if presentation_date_to:
+            search_params["presentation_date_to"] = presentation_date_to.isoformat()
 
     if title_q:
         filters.append(
@@ -786,6 +782,10 @@ def index():
         presentation_date_to=presentation_date_to,
         presentation_date_from_provided=presentation_date_from_picker["provided"],
         presentation_date_to_provided=presentation_date_to_picker["provided"],
+        presentation_date_from_value=presentation_date_from_picker["date_value"],
+        presentation_date_to_value=presentation_date_to_picker["date_value"],
+        presentation_date_min=presentation_date_from_picker["min_date"],
+        presentation_date_max=presentation_date_from_picker["max_date"],
         presentation_date_from_year=presentation_date_from_picker["year_value"],
         presentation_date_from_month=presentation_date_from_picker["month_value"],
         presentation_date_from_day=presentation_date_from_picker["day_value"],

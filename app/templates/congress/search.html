@@ -3,15 +3,11 @@
 {% block content %}
 
 <form class="congress-search-form" method="get" action="{{ url_for('congress.index') }}">
-   
     <h1 class="search-title">{{_('Busca al congresista por:')}}</h1>
     <div class="bar-search">
-
         <div class="congress-search-grid">
             <div class="searching-container">
-
                 <input type="text" name="name_q" value="{{ name_q or '' }}" placeholder="{{_('Nombre')}}">
-                    
             </div>
 
             <div class="searching-container">
@@ -23,23 +19,23 @@
                 </select>
             </div>
 
-        <div class="searching-container">
-            <select name="region_q">
-                <option value="">{{ _('Región') }}</option>
-                {% for region_option in region_options or [] %}
-                    <option value="{{ region_option }}" {% if region_q == region_option %}selected{% endif %}>{{ region_option }}</option>
-                {% endfor %}
-            </select>
-        </div>
+            <div class="searching-container">
+                <select name="region_q">
+                    <option value="">{{ _('Región') }}</option>
+                    {% for region_option in region_options or [] %}
+                        <option value="{{ region_option }}" {% if region_q == region_option %}selected{% endif %}>{{ region_option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
-        <div class="searching-container">
-            <select name="commission_q">
-                <option value="" {% if not commission_q %}selected{% endif %} disabled hidden>{{ _('Comisión ordinaria') }}</option>
-                {% for committee_option in committee_options or [] %}
-                    <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
-                {% endfor %}
-            </select>
-        </div>
+            <div class="searching-container">
+                <select name="commission_q">
+                    <option value="" {% if not commission_q %}selected{% endif %} disabled hidden>{{ _('Comisión ordinaria') }}</option>
+                    {% for committee_option in committee_options or [] %}
+                        <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
+                    {% endfor %}
+                </select>
+            </div>
 
             <div class="searching-container">
                 <select name="special_committee_q">
@@ -63,7 +59,24 @@
     </div>
 </form>
 
- {% if congresistas %}
+{% if congresistas %}
+    <section class="congress-mosaic" aria-label="{{ _('Congresistas') }}">
+        {% for congresista in congresistas %}
+            <a class="congress-mosaic-card" href="{{ url_for('congress.congress_detail', congresista_id=congresista.id) }}">
+                <span class="congress-mosaic-photo-wrap">
+                    <img
+                        class="congress-mosaic-photo"
+                        src="{{ url_for('congress.congress_photo', congresista_id=congresista.id) }}"
+                        alt="{{ _('Foto de %(name)s', name=congresista.full_name) }}"
+                        loading="lazy"
+                    >
+                </span>
+                <span class="congress-mosaic-name">{{ congresista.full_name }}</span>
+            </a>
+        {% endfor %}
+    </section>
+
+    {% if name_q or party_q or region_q or commission_q or special_committee_q %}
         <div class="search-criteria">
             <h3>{{_('Criterios de búsqueda')}}</h3>
             {% if name_q %}
@@ -82,34 +95,9 @@
                 <span>{{ _('Comisión especial') }}: {{ special_committee_q }}</span>
             {% endif %}
         </div>
-
-        <table class="table table-striped search-results-table">
-            <thead>
-                <tr>
-                    <th>{{_('Nombre')}}</th>
-                    <th>{{_('Partido')}}</th>
-                    <th>{{_('Región')}}</th>
-                    <th>{{_('Detalle')}}</th>
-                </tr>
-            </thead>
-            <tbody>
-            {% for congresista in congresistas %}
-                <tr>
-                    <td>{{ congresista.full_name }}</td>
-                    <td>{{ congresista.party_name or _('No disponible') }}</td>
-                    <td>{{ congresista.dist_electoral or _('No disponible') }}</td>
-                    <td>
-                        <a href="{{ url_for('congress.congress_detail', congresista_id=congresista.id) }}" class="btn btn-primary btn-sm">
-                            {{_('Ver detalles')}}
-                        </a>
-                    </td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-    {% elif name_q or party_q or region_q or commission_q or special_committee_q %}
-        <p>{{_('No se encontraron congresistas.')}}</p>
     {% endif %}
+{% elif name_q or party_q or region_q or commission_q or special_committee_q %}
+    <p>{{_('No se encontraron congresistas.')}}</p>
+{% endif %}
 
 {% endblock %}
-

@@ -200,6 +200,37 @@ def test_search_form_uses_selects_for_party_and_commission(client):
     assert 'name="special_committee_q" value=' not in body
 
 
+def test_search_shows_all_congresistas_by_default(client, session_factory):
+    _seed_congress_search_data(session_factory)
+
+    response = client.get("/congress")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Ana Perez" in body
+    assert "Beatriz Gomez" in body
+    assert 'class="congress-mosaic-card"' in body
+    assert "/congress/1/photo" in body
+    assert "/congress/2/photo" in body
+
+
+def test_congress_photo_prefers_stored_db_bytes(client, session_factory):
+    _seed_congress_search_data(session_factory)
+    image_bytes = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00" + b"\x00" * 16
+
+    with session_factory() as db:
+        congresista = db.get(Congresista, 1)
+        congresista.photo_url = "https://example.com/external.jpg"
+        congresista.photo_bytes = image_bytes
+        db.commit()
+
+    response = client.get("/congress/1/photo")
+
+    assert response.status_code == 200
+    assert response.content_type == "image/jpeg"
+    assert response.data == image_bytes
+
+
 def test_search_filters_by_selected_region(client, session_factory):
     _seed_congress_search_data(session_factory)
 
