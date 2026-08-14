@@ -103,6 +103,16 @@ class Settings(BaseSettings):
     # This is only in case we need some API_KEYS. Allow us to handle safely.
     model_config = ConfigDict(env_file=directories.ROOT_DIR / ".env", extra="allow")
 
+    # For the API
+    API_TITLE: str = "OpenPeru API"
+    API_VERSION: str = "v1"
+    OPENAPI_VERSION: str = "3.0.3"
+    OPENAPI_URL_PREFIX: str = "/api"
+    OPENAPI_SWAGGER_UI_PATH: str = "/docs"
+    OPENAPI_SWAGGER_UI_URL: str = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+    API_AUTH_ENABLED: bool = False
+    API_MAX_PER_PAGE: int = 100
+
 
 settings = Settings()
 
@@ -236,3 +246,6 @@ class LogManager:
 
 
 log_manager = LogManager(directories)
+
+
+# API CONFIGURATION
