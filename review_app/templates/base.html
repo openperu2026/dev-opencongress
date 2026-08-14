@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Vote Review{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('review.static', filename='review.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="{{ url_for('review.search') }}">Vote &amp; Attendance Review</a>
+    {% if session.get('reviewer_name') %}
+      <span class="reviewer-name">Reviewing as: {{ session['reviewer_name'] }}</span>
+    {% endif %}
+  </header>
+  {% with messages = get_flashed_messages() %}
+    {% if messages %}
+      <div class="flash">
+        {% for message in messages %}<p>{{ message }}</p>{% endfor %}
+      </div>
+    {% endif %}
+  {% endwith %}
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,171 @@
+:root {
+  --border: #d9dde3;
+  --text: #1a1f24;
+  --muted: #5a6472;
+  --accent: #0e6ba8;
+  --danger: #b3261e;
+  --warning: #9a6700;
+  --bg: #f7f8fa;
+  --edit-red: #c0154a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { font-weight: 600; color: var(--text); text-decoration: none; }
+.reviewer-name { color: var(--muted); font-size: 0.9em; }
+
+.flash {
+  background: #eef7ee;
+  border: 1px solid #b7dfb7;
+  padding: 8px 16px;
+  margin: 8px 20px 0;
+}
+
+main { padding: 20px; }
+
+.filter-bar { display: flex; gap: 12px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+.filter-bar input { padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; }
+
+.queue-table, .review-table { width: 100%; border-collapse: collapse; background: #fff; }
+.queue-table th, .queue-table td, .review-table th, .review-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.pagination { margin-top: 12px; display: flex; gap: 16px; }
+
+.summary-panel { margin-bottom: 16px; overflow-x: auto; }
+.summary-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 0.9em; }
+.summary-table th, .summary-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+.summary-table th:first-child, .summary-table td:first-child { text-align: left; }
+.summary-table tr.summary-total { font-weight: 700; background: #f0f3f7; }
+
+.add-congresista-form {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.add-congresista-form select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 4px; }
+#add-rows { display: flex; flex-direction: column; gap: 8px; }
+.add-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.add-row .remove-row-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 4px;
+  width: 28px;
+  cursor: pointer;
+}
+.add-congresista-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+.detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.detail-header .meta { color: var(--muted); margin-left: 10px; }
+
+.edit-toggle-bar {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  margin-bottom: 12px;
+  background: #fff;
+}
+.edit-toggle-bar.edit-mode-on {
+  background: #fdecee;
+  border-color: var(--edit-red);
+  color: var(--edit-red);
+  font-weight: 600;
+}
+
+body.edit-mode-on { outline: 4px solid var(--edit-red); outline-offset: -4px; }
+
+.split-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  /* Fixed to the viewport (roughly minus the topbar/header/summary/edit-bar
+     above it) rather than growing with content, so the table's natural
+     height can never push the PDF pane out of view -- each pane scrolls
+     independently within this box instead of the whole page scrolling. */
+  height: calc(100vh - 400px);
+  min-height: 420px;
+}
+
+.pdf-pane { display: flex; overflow: hidden; }
+.pdf-pane iframe { width: 100%; height: 100%; border: 1px solid var(--border); }
+
+.banner {
+  padding: 16px;
+  border-radius: 4px;
+  align-self: flex-start;
+  width: 100%;
+}
+.banner-warning { background: #fff6e5; color: var(--warning); border: 1px solid #f0d38a; }
+.banner-danger { background: #fdecee; color: var(--danger); border: 1px solid #f0a8a3; }
+.banner-muted { background: #eee; color: var(--muted); }
+
+.table-pane {
+  height: 100%;
+  overflow: auto;
+  border: 1px solid var(--border);
+}
+.table-pane .review-table thead th {
+  position: sticky;
+  top: 0;
+  background: #fff;
+  z-index: 1;
+}
+
+.below-split-view {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.badge {
+  font-size: 0.75em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 6px;
+}
+.badge-corrected { background: #e6f0fa; color: var(--accent); }
+.badge-flagged { background: #fdecee; color: var(--danger); }
+.badge-verified { background: #eaf7ea; color: #1e7a3c; }
+
+#save-button { margin-top: 12px; padding: 8px 16px; }
+
+.gate {
+  max-width: 320px;
+  margin: 80px auto;
+  text-align: center;
+}
+.gate .error { color: var(--danger); }
+
+@media (max-width: 900px) {
+  .split-view { grid-template-columns: 1fr; }
+}

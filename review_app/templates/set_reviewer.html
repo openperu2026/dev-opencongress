@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Enter your name — Vote Review{% endblock %}
+{% block content %}
+<div class="gate">
+  <h1>Who's reviewing?</h1>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  <form method="post" action="{{ url_for('review.set_reviewer') }}">
+    <input type="hidden" name="next_url" value="{{ next_url }}">
+    <input type="text" name="reviewer_name" placeholder="Your name" autofocus>
+    <button type="submit">Continue</button>
+  </form>
+</div>
+{% endblock %}
