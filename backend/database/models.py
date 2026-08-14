@@ -405,6 +405,7 @@ class Bill(Base):
             "modified"} (excludes "unavailable" and "incomparable"). Kept in
             sync by crud.pipeline_bills.refresh_bill_diff_flag, called from
             the orchestrator's bill-differences pipeline stage.
+        votes (bool): True if the bill has at least one complete and reviewed votation registry
     """
 
     __tablename__ = "bills"
@@ -429,6 +430,7 @@ class Bill(Base):
     summary_oc: Mapped[str] = mapped_column(Text, nullable=False)
     pley_id: Mapped[str] = mapped_column(nullable=False)
     bill_diff: Mapped[bool] = mapped_column(nullable=False, default=False)
+    votes: Mapped[bool] = mapped_column(nullable=False, default=False)
 
     __table_args__ = (Index("ix_bill_author_id", "author_id"),)
 
