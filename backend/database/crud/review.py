@@ -10,6 +10,7 @@ extraction/load pipeline, not this reviewer tool. See the approved plan at
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Literal
@@ -20,7 +21,12 @@ from sqlalchemy.orm import Session
 
 from backend import VoteOption
 from backend.database import models as db_models
-from backend.database.crud.pipeline_votes import upsert_attendance, upsert_vote
+from backend.database.crud.pipeline_core import find_active_bancada_for_person
+from backend.database.crud.pipeline_votes import (
+    upsert_attendance,
+    upsert_vote,
+    upsert_vote_counts_for_event,
+)
 from backend.database.raw_models import (
     RawBillDocument,
     RawBillPage,
@@ -221,6 +227,44 @@ def _bancada_names_as_of(
         )
     ).all()
     return dict(rows)
+
+
+def resync_vote_event_aggregates(db: Session, vote_event_id: str) -> None:
+    """
+    Recompute `VoteEvent.votes_in_favor/against/abstention` and rebuild
+    `VoteCounts` (per bancada per option) from the CURRENT `Vote` rows for
+    this event. `apply_correction` previously only touched the individual
+    `Vote` row it was asked to change, silently leaving these two
+    derived/aggregate tables stale after every review-tool correction --
+    this makes every add/correct/remove of a vote re-sync both, the same
+    way the original ETL load path does via `upsert_vote_event`/
+    `upsert_vote_counts_for_event`, just recomputed from the live table
+    instead of from the extraction's own tally.
+
+    Public (not `_`-prefixed) because `scripts/backfill_review_aggregates.py`
+    calls it directly to re-sync events that were corrected before this
+    function existed -- one shared implementation for both the live
+    per-correction path and the one-time backfill, rather than two copies
+    that could drift apart.
+    """
+    event = db.get(db_models.VoteEvent, vote_event_id)
+    if event is None:
+        return
+
+    rows = db.execute(
+        select(db_models.Vote.option, db_models.Vote.bancada_id).where(
+            db_models.Vote.vote_event_id == vote_event_id
+        )
+    ).all()
+
+    tally = Counter(option for option, _ in rows)
+    event.votes_in_favor = tally.get(VoteOption.SI, 0)
+    event.votes_against = tally.get(VoteOption.NO, 0)
+    event.votes_abstention = tally.get(VoteOption.ABSTENCION, 0)
+
+    counts = Counter((bancada_id, option) for option, bancada_id in rows)
+    upsert_vote_counts_for_event(db, vote_event_id=vote_event_id, counts=dict(counts))
+    db.flush()
 
 
 def list_all_congresistas(db: Session) -> list[tuple[int, str]]:
@@ -443,11 +487,21 @@ def apply_correction(
 
     `new_value=None` means "remove this row" -- deletes the existing
     Vote/Attendance row if one exists (a no-op if there wasn't one). Any
-    other string means "add or correct" -- upserts the row (unchanged
-    bancada_id passthrough). No-ops (returns None, no DB write) if the
-    submitted value matches the current one either way. `new_value` is
-    assumed already validated against the relevant enum by the caller
-    when it isn't None -- this function trusts it.
+    other string means "add or correct" -- upserts the row. For a vote,
+    `bancada_id` is re-resolved from the person's current
+    `BancadaMembership` as of the event's date on every add/correct
+    (falling back to whatever was already stored if no membership record
+    resolves one) rather than blindly carrying over the previous value --
+    a brand-new row otherwise gets `bancada_id=None` forever, which would
+    silently drop out of every bancada-grouped view. Every real vote
+    change also re-syncs `VoteEvent`'s tally fields and `VoteCounts` from
+    the table's current state (see `resync_vote_event_aggregates`) --
+    those two derived tables would otherwise go stale the moment a
+    correction changed what they were computed from. No-ops (returns
+    None, no DB write) if the submitted value matches the current one
+    either way. `new_value` is assumed already validated against the
+    relevant enum by the caller when it isn't None -- this function
+    trusts it.
     """
     if target_id not in valid_target_ids:
         raise ValueError(
@@ -455,6 +509,7 @@ def apply_correction(
         )
 
     if target_type == "vote":
+        event = db.get(db_models.VoteEvent, vote_event_id)
         existing = db.get(db_models.Vote, (vote_event_id, target_id))
         old_value = existing.option.value if existing else None
         if old_value == new_value:
@@ -463,13 +518,21 @@ def apply_correction(
             if existing is not None:
                 db.delete(existing)
         else:
+            org = find_active_bancada_for_person(db, target_id, event.event_date)
+            bancada_id = (
+                org.org_id
+                if org is not None
+                else (existing.bancada_id if existing else None)
+            )
             upsert_vote(
                 db,
                 vote_event_id=vote_event_id,
                 voter_id=target_id,
                 option=new_value,
-                bancada_id=existing.bancada_id if existing else None,
+                bancada_id=bancada_id,
             )
+        db.flush()
+        resync_vote_event_aggregates(db, vote_event_id)
     elif target_type == "attendance":
         existing = db.get(db_models.Attendance, (vote_event_id, target_id))
         old_value = existing.status.value if existing else None

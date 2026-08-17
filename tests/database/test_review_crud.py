@@ -25,6 +25,7 @@ from backend.database.models import (
     MotionStep,
     Organization,
     Vote,
+    VoteCounts,
     VoteEvent,
 )
 from backend.database.raw_models import (
@@ -1027,6 +1028,180 @@ def test_apply_correction_adds_row_for_congresista_outside_normal_roster(session
     assert audit.new_value == "Presente"
     assert (
         session.get(Attendance, (event.vote_event_id, c.id)).status.value == "Presente"
+    )
+
+
+# ---------------------------------------------------------------------------
+# apply_correction -- VoteEvent/VoteCounts aggregate resync
+# ---------------------------------------------------------------------------
+
+
+def test_apply_correction_adding_a_vote_updates_event_tallies(session):
+    chamber = _seed_chamber_org(session)
+    event = _seed_bill_event(session, org_id=chamber.org_id, bill_id="2021_60")
+    c = _seed_congresista(session, "A A", "A", "A")
+    _seed_chamber_membership(session, person_id=c.id, org_id=chamber.org_id)
+    session.flush()
+
+    crud_review.apply_correction(
+        session,
+        vote_event_id=event.vote_event_id,
+        target_type="vote",
+        target_id=c.id,
+        new_value="Sí",
+        reviewer_name="Cesar",
+        valid_target_ids={c.id},
+    )
+
+    refreshed = session.get(VoteEvent, event.vote_event_id)
+    assert refreshed.votes_in_favor == 1
+    assert refreshed.votes_against == 0
+    assert refreshed.votes_abstention == 0
+
+
+def test_apply_correction_adding_a_vote_creates_vote_counts_row_with_resolved_bancada(
+    session,
+):
+    chamber = _seed_chamber_org(session)
+    fp = _seed_org(session, "Fuerza Popular")
+    event = _seed_bill_event(session, org_id=chamber.org_id, bill_id="2021_61")
+    c = _seed_congresista(session, "A A", "A", "A")
+    _seed_chamber_membership(session, person_id=c.id, org_id=chamber.org_id)
+    _seed_bancada_membership(session, person_id=c.id, org_id=fp.org_id)
+    session.flush()
+
+    crud_review.apply_correction(
+        session,
+        vote_event_id=event.vote_event_id,
+        target_type="vote",
+        target_id=c.id,
+        new_value="Sí",
+        reviewer_name="Cesar",
+        valid_target_ids={c.id},
+    )
+
+    counts = (
+        session.query(VoteCounts).filter_by(vote_event_id=event.vote_event_id).all()
+    )
+    assert len(counts) == 1
+    assert counts[0].option.value == "Sí"
+    assert counts[0].bancada_id == fp.org_id
+    assert counts[0].count == 1
+
+    # The Vote row itself picked up the freshly-resolved bancada too, not
+    # just the VoteCounts aggregate -- it would otherwise stay None
+    # forever on a brand-new row and disappear from every bancada-grouped
+    # view (including the public site's).
+    assert session.get(Vote, (event.vote_event_id, c.id)).bancada_id == fp.org_id
+
+
+def test_apply_correction_changing_a_vote_moves_the_tally(session):
+    chamber = _seed_chamber_org(session)
+    fp = _seed_org(session, "Fuerza Popular")
+    event = _seed_bill_event(session, org_id=chamber.org_id, bill_id="2021_62")
+    c = _seed_congresista(session, "A A", "A", "A")
+    _seed_chamber_membership(session, person_id=c.id, org_id=chamber.org_id)
+    _seed_bancada_membership(session, person_id=c.id, org_id=fp.org_id)
+    session.add(
+        Vote(
+            vote_event_id=event.vote_event_id,
+            voter_id=c.id,
+            option=VoteOption.SI,
+            bancada_id=fp.org_id,
+        )
+    )
+    session.flush()
+
+    crud_review.apply_correction(
+        session,
+        vote_event_id=event.vote_event_id,
+        target_type="vote",
+        target_id=c.id,
+        new_value="Abstención",
+        reviewer_name="Cesar",
+        valid_target_ids={c.id},
+    )
+
+    refreshed = session.get(VoteEvent, event.vote_event_id)
+    assert refreshed.votes_in_favor == 0
+    assert refreshed.votes_abstention == 1
+
+    counts = {
+        (c.option.value, c.bancada_id): c.count
+        for c in session.query(VoteCounts)
+        .filter_by(vote_event_id=event.vote_event_id)
+        .all()
+    }
+    assert ("Sí", fp.org_id) not in counts
+    assert counts[("Abstención", fp.org_id)] == 1
+
+
+def test_apply_correction_removing_a_vote_clears_its_tally_and_count(session):
+    chamber = _seed_chamber_org(session)
+    fp = _seed_org(session, "Fuerza Popular")
+    event = _seed_bill_event(session, org_id=chamber.org_id, bill_id="2021_63")
+    c = _seed_congresista(session, "A A", "A", "A")
+    _seed_chamber_membership(session, person_id=c.id, org_id=chamber.org_id)
+    session.add(
+        Vote(
+            vote_event_id=event.vote_event_id,
+            voter_id=c.id,
+            option=VoteOption.NO,
+            bancada_id=fp.org_id,
+        )
+    )
+    session.flush()
+
+    crud_review.apply_correction(
+        session,
+        vote_event_id=event.vote_event_id,
+        target_type="vote",
+        target_id=c.id,
+        new_value=None,
+        reviewer_name="Cesar",
+        valid_target_ids={c.id},
+    )
+
+    refreshed = session.get(VoteEvent, event.vote_event_id)
+    assert refreshed.votes_against == 0
+    assert (
+        session.query(VoteCounts).filter_by(vote_event_id=event.vote_event_id).count()
+        == 0
+    )
+
+
+def test_apply_correction_attendance_does_not_touch_vote_event_tallies(session):
+    """Attendance has no aggregate table of its own -- only a vote
+    add/correct/remove should trigger the VoteEvent/VoteCounts resync.
+    `_seed_bill_event` seeds a fixed (1, 0, 0) baseline unrelated to any
+    actual Vote rows; the assertion is that an attendance-only correction
+    leaves it untouched, not that it's zero."""
+    chamber = _seed_chamber_org(session)
+    event = _seed_bill_event(session, org_id=chamber.org_id, bill_id="2021_64")
+    c = _seed_congresista(session, "A A", "A", "A")
+    _seed_chamber_membership(session, person_id=c.id, org_id=chamber.org_id)
+    session.flush()
+    before = (event.votes_in_favor, event.votes_against, event.votes_abstention)
+
+    crud_review.apply_correction(
+        session,
+        vote_event_id=event.vote_event_id,
+        target_type="attendance",
+        target_id=c.id,
+        new_value="Presente",
+        reviewer_name="Cesar",
+        valid_target_ids={c.id},
+    )
+
+    refreshed = session.get(VoteEvent, event.vote_event_id)
+    assert (
+        refreshed.votes_in_favor,
+        refreshed.votes_against,
+        refreshed.votes_abstention,
+    ) == before
+    assert (
+        session.query(VoteCounts).filter_by(vote_event_id=event.vote_event_id).count()
+        == 0
     )
 
 
