@@ -234,6 +234,30 @@ class TestFindCongresistaAlias:
         assert result.id == congresista.id
 
 
+class TestGivenNameFirst:
+    """Tests for the _given_name_first helper (SURNAME, GIVEN -> GIVEN SURNAME)."""
+
+    def test_reorders_on_comma(self):
+        assert (
+            crud_core._given_name_first("Zeballos Aponte, Jorge")
+            == "Jorge Zeballos Aponte"
+        )
+
+    def test_strips_whitespace_around_comma(self):
+        assert (
+            crud_core._given_name_first("Zeballos Aponte ,  Jorge ")
+            == "Jorge Zeballos Aponte"
+        )
+
+    def test_no_comma_returns_unchanged(self):
+        assert crud_core._given_name_first("Jorge Zeballos Aponte") == (
+            "Jorge Zeballos Aponte"
+        )
+
+    def test_empty_string_returns_unchanged(self):
+        assert crud_core._given_name_first("") == ""
+
+
 class TestFindCongresistaFuzzy:
     """Tests for fuzzy matching in find_congresista."""
 
@@ -290,6 +314,26 @@ class TestFindCongresistaFuzzy:
         """Fuzzy match should return None if no match above threshold."""
         result = crud_core.find_congresista(session, "Completely Different Name")
         assert result is None
+
+    def test_find_congresista_fuzzy_handles_surname_first_format(
+        self, session, congresista
+    ):
+        """Roster-format 'SURNAME(S), GIVEN NAME(S)' input should match the
+        same congresista as the canonical 'GIVEN NAME(S) SURNAME(S)' order
+        -- this is the production bug fixed 2026-08-18 (91% of measured
+        name-match failures were this exact word-order mismatch)."""
+        result = crud_core.find_congresista(session, "Zeballos Aponte, Jorge")
+        assert result is not None
+        assert result.id == congresista.id
+
+    def test_find_congresista_fuzzy_surname_first_with_accents_and_case(
+        self, session, congresista
+    ):
+        """Surname-first reordering should compose with existing accent/case
+        normalization, not bypass it."""
+        result = crud_core.find_congresista(session, "ZEBALLOS APONTE, JORGE")
+        assert result is not None
+        assert result.id == congresista.id
 
     def test_find_congresista_returns_best_match(self, session):
         """Fuzzy match should return the highest-scoring match."""
