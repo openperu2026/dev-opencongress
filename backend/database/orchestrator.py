@@ -25,6 +25,7 @@ from backend.database.crud import (
     pipeline_bills as crud_bills,
     pipeline_core as crud_core,
     pipeline_motions as crud_motions,
+    pipeline_embeddings as crud_embeddings,
 )
 from backend.database.crud.pipeline_core import (
     ProcessStats,
@@ -477,6 +478,12 @@ class OpenPeruOrchestrator:
                 summary["leyes"] = self._process_leyes(limit=leyes_limit)
                 self._log_stage_summary("leyes", summary["leyes"])
 
+        # Running the semantic search
+        with log_manager.stage("process", "semantic_table"):
+            console.info("Starting semantic table population")
+            summary["semantic"] = self._semantic_table()
+            self._log_stage_summary("semantic", summary["semantic"])
+
         return summary
 
     # -----------------------------
@@ -719,6 +726,20 @@ class OpenPeruOrchestrator:
     # -----------------------------
     # Processing internals
     # -----------------------------
+    def _semantic_table(self, model_name: str = "intfloat/multilingual-e5-base"):
+        with self.DBSession() as db:
+            crud_embeddings.rebuild_semantic_bills(db)
+
+            bills = list(db.execute(select(db_models.Bill.id)).scalars().all())
+
+            processed = crud_embeddings.bulk_upsert_semantic_bills(
+                db, bills, model_name
+            )
+
+        return ProcessStats(
+            processed=processed, skipped=0, errors=len(bills) - processed
+        )
+
     def _membership_dates(self, membership: Membership) -> tuple[date, date]:
         """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28)."""
         seed = membership.start_date or membership.time_stamp
