@@ -120,7 +120,7 @@ def rebuild_semantic_bills(
     """
 
     if bill_ids is None:
-        bill_ids = list(db.execute(select(db_models.Bill.bill_id)).scalars())
+        bill_ids = list(db.execute(select(db_models.Bill.id)).scalars())
 
     if not bill_ids:
         return 0

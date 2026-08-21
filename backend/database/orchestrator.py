@@ -481,7 +481,7 @@ class OpenPeruOrchestrator:
         # Running the semantic search
         with log_manager.stage("process", "semantic_table"):
             console.info("Starting semantic table population")
-            summary["semantic"] = self._semantic_table()
+            summary["semantic"] = self._semantic_table(first_load=first_load)
             self._log_stage_summary("semantic", summary["semantic"])
 
         return summary
@@ -726,18 +726,42 @@ class OpenPeruOrchestrator:
     # -----------------------------
     # Processing internals
     # -----------------------------
-    def _semantic_table(self, model_name: str = "intfloat/multilingual-e5-base"):
+    def _semantic_table(
+        self,
+        model_name: str = "intfloat/multilingual-e5-base",
+        first_load: bool = False,
+    ) -> ProcessStats:
+        """Populate semantic_bills. On first_load, rebuild embeddings for every bill;
+        otherwise only re-embed bills whose raw content changed or that have no
+        semantic_bills rows yet."""
         with self.DBSession() as db:
-            crud_embeddings.rebuild_semantic_bills(db)
+            if first_load:
+                bill_ids = list(db.execute(select(db_models.Bill.id)).scalars().all())
+                processed_chunks = crud_embeddings.rebuild_semantic_bills(
+                    db, embedding_model_name=model_name
+                )
+            else:
+                changed_ids = (
+                    select(db_models.Bill.id)
+                    .join(RawBill, db_models.Bill.id == RawBill.id)
+                    .where(RawBill.last_update.is_(True), RawBill.changed.is_(True))
+                )
+                unembedded_ids = select(db_models.Bill.id).where(
+                    ~db_models.Bill.id.in_(select(db_models.SemanticBill.bill_id))
+                )
+                bill_ids = list(
+                    db.execute(changed_ids.union(unembedded_ids)).scalars().all()
+                )
+                processed_chunks = crud_embeddings.bulk_upsert_semantic_bills(
+                    db, bill_ids, model_name
+                )
 
-            bills = list(db.execute(select(db_models.Bill.id)).scalars().all())
-
-            processed = crud_embeddings.bulk_upsert_semantic_bills(
-                db, bills, model_name
-            )
+            db.commit()
 
         return ProcessStats(
-            processed=processed, skipped=0, errors=len(bills) - processed
+            processed=len(bill_ids),
+            skipped=0,
+            errors=0 if processed_chunks or not bill_ids else len(bill_ids),
         )
 
     def _membership_dates(self, membership: Membership) -> tuple[date, date]:
