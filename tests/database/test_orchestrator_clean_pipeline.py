@@ -41,6 +41,7 @@ def test_run_processing_loads_reference_definitions_before_memberships(monkeypat
     monkeypatch.setattr(orch, "_process_congresistas", record("congresistas"))
     monkeypatch.setattr(orch, "_process_admin_memberships", record("admin_ms"))
     monkeypatch.setattr(orch, "_process_bancada_memberships", record("bancada_ms"))
+    monkeypatch.setattr(orch, "_semantic_table", record("semantic"))
 
     orch.run_processing(
         process_bills=False,
@@ -50,7 +51,14 @@ def test_run_processing_loads_reference_definitions_before_memberships(monkeypat
         process_documents=False,
     )
 
-    assert calls == ["orgs", "bancadas", "congresistas", "admin_ms", "bancada_ms"]
+    assert calls == [
+        "orgs",
+        "bancadas",
+        "congresistas",
+        "admin_ms",
+        "bancada_ms",
+        "semantic",
+    ]
 
 
 def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrator):

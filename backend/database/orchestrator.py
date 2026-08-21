@@ -25,6 +25,7 @@ from backend.database.crud import (
     pipeline_bills as crud_bills,
     pipeline_core as crud_core,
     pipeline_motions as crud_motions,
+    pipeline_embeddings as crud_embeddings,
 )
 from backend.database.crud.pipeline_core import (
     ProcessStats,
@@ -477,6 +478,12 @@ class OpenPeruOrchestrator:
                 summary["leyes"] = self._process_leyes(limit=leyes_limit)
                 self._log_stage_summary("leyes", summary["leyes"])
 
+        # Running the semantic search
+        with log_manager.stage("process", "semantic_table"):
+            console.info("Starting semantic table population")
+            summary["semantic"] = self._semantic_table(first_load=first_load)
+            self._log_stage_summary("semantic", summary["semantic"])
+
         return summary
 
     # -----------------------------
@@ -719,6 +726,44 @@ class OpenPeruOrchestrator:
     # -----------------------------
     # Processing internals
     # -----------------------------
+    def _semantic_table(
+        self,
+        model_name: str = "intfloat/multilingual-e5-base",
+        first_load: bool = False,
+    ) -> ProcessStats:
+        """Populate semantic_bills. On first_load, rebuild embeddings for every bill;
+        otherwise only re-embed bills whose raw content changed or that have no
+        semantic_bills rows yet."""
+        with self.DBSession() as db:
+            if first_load:
+                bill_ids = list(db.execute(select(db_models.Bill.id)).scalars().all())
+                processed_chunks = crud_embeddings.rebuild_semantic_bills(
+                    db, embedding_model_name=model_name
+                )
+            else:
+                changed_ids = (
+                    select(db_models.Bill.id)
+                    .join(RawBill, db_models.Bill.id == RawBill.id)
+                    .where(RawBill.last_update.is_(True), RawBill.changed.is_(True))
+                )
+                unembedded_ids = select(db_models.Bill.id).where(
+                    ~db_models.Bill.id.in_(select(db_models.SemanticBill.bill_id))
+                )
+                bill_ids = list(
+                    db.execute(changed_ids.union(unembedded_ids)).scalars().all()
+                )
+                processed_chunks = crud_embeddings.bulk_upsert_semantic_bills(
+                    db, bill_ids, model_name
+                )
+
+            db.commit()
+
+        return ProcessStats(
+            processed=len(bill_ids),
+            skipped=0,
+            errors=0 if processed_chunks or not bill_ids else len(bill_ids),
+        )
+
     def _membership_dates(self, membership: Membership) -> tuple[date, date]:
         """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28)."""
         seed = membership.start_date or membership.time_stamp
