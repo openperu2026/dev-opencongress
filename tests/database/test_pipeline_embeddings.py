@@ -32,7 +32,9 @@ class FakeEmbeddingModel:
     def get_embedding_dimension(self):
         return 768
 
-    def encode(self, texts, normalize_embeddings=True, batch_size=32):
+    def encode(
+        self, texts, normalize_embeddings=True, batch_size=32, show_progress_bar=True
+    ):
         return [[float(index + 1)] * 768 for index, _ in enumerate(texts)]
 
 

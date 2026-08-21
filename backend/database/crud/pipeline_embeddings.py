@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from tqdm import tqdm
 from collections import defaultdict
 from functools import lru_cache
 from sqlalchemy import select, desc, func, text, delete
@@ -421,7 +422,7 @@ def build_semantic_bill_rows(
 
     full_texts_by_bill = create_bill_full_texts(db, bill_ids)
 
-    for bill_id in bill_ids:
+    for bill_id in tqdm(bill_ids, desc="Building semantic rows"):
         full_text = full_texts_by_bill.get(bill_id, "")
         chunks = _get_text_chunks(
             text=full_text,
@@ -443,9 +444,7 @@ def build_semantic_bill_rows(
         return []
 
     embeddings = embedding_model.encode(
-        texts,
-        normalize_embeddings=True,
-        batch_size=32,
+        texts, normalize_embeddings=True, batch_size=32, show_progress_bar=True
     )
 
     return [
@@ -505,17 +504,31 @@ def bulk_upsert_semantic_bills(
     if not rows:
         return 0
 
-    stmt = pg_insert(db_models.SemanticBill).values(rows)
+    # Postgres parameters
+    columns_per_row = 5
+    max_params_per_query = 65535
+    batch_size = max_params_per_query // columns_per_row  # 13107
 
-    stmt = stmt.on_conflict_do_update(
-        constraint="uq_semantic_bills_bill_chunk_model",
-        set_={
-            "text": stmt.excluded.text,
-            "embedding": stmt.excluded.embedding,
-        },
-    )
+    total_upserted = 0
 
-    db.execute(stmt)
+    for batch_start in range(0, len(rows), batch_size):
+        batch = rows[batch_start : batch_start + batch_size]
+
+        stmt = pg_insert(db_models.SemanticBill).values(batch)
+
+        stmt = stmt.on_conflict_do_update(
+            constraint="uq_semantic_bills_bill_chunk_model",
+            set_={
+                "text": stmt.excluded.text,
+                "embedding": stmt.excluded.embedding,
+            },
+        )
+
+        db.execute(stmt)
+        total_upserted += len(batch)
+
     db.flush()
+
+    return total_upserted
 
     return len(rows)
