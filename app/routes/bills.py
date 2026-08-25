@@ -1,9 +1,11 @@
 from hashlib import sha1
 from datetime import date
 from calendar import monthrange
+from functools import lru_cache
 from math import ceil
 from types import SimpleNamespace
 from datetime import datetime
+import re
 import textwrap
 from flask import (
     Blueprint,
@@ -22,6 +24,8 @@ from app.diff_render import (
     render_summary_html,
 )
 import boto3
+from spellchecker import SpellChecker
+from backend.database.crud import pipeline_embeddings
 from backend.database.crud.pipeline_bills import get_billtext_for_step
 from backend.database.raw_models import RawBillDocument
 from backend.config import settings
@@ -35,12 +39,14 @@ from backend.database.models import (
     Ley,
     Membership,
     Organization,
+    SemanticBill,
     Vote,
     VoteCounts,
     VoteEvent,
 )
 from backend.core.enums import TypeBillStep, TypeCommittee, TypeOrganization, VoteOption
 from .processed_session import SessionProcessed
+from sentence_transformers import SentenceTransformer
 from .utils import (
     create_committee_option,
     create_party_option,
@@ -305,6 +311,144 @@ def _wrap_bancada_label(name: str, max_width: int = 24) -> list[str]:
     return lines or [name]
 
 
+_TITLE_TOKEN_RE = re.compile(r"[^\W\d_]+", re.UNICODE)
+_QUERY_TOKEN_RE = re.compile(r"\w+", re.UNICODE)
+_MIN_CORRECTABLE_TOKEN_LENGTH = 4
+
+
+def _tokenize_title(title: str) -> set[str]:
+    return {
+        token for token in _TITLE_TOKEN_RE.findall(title.lower()) if len(token) >= 3
+    }
+
+
+@lru_cache(maxsize=1)
+def _get_query_spellchecker() -> SpellChecker:
+    """
+    Build (once per process) a Spanish spellchecker for correcting
+    semantic_query typos, unioning the general dictionary with words
+    derived from existing bill titles so domain-specific proper nouns and
+    jargon are also recognized as "known".
+    """
+    spell = SpellChecker(language="es")
+    with SessionProcessed() as db:
+        titles = db.execute(select(Bill.title)).scalars().all()
+    domain_words: set[str] = set()
+    for title in titles:
+        domain_words.update(_tokenize_title(title))
+    if domain_words:
+        spell.word_frequency.load_words(domain_words)
+    return spell
+
+
+def _correct_token(token: str, spell: SpellChecker) -> str:
+    if len(token) < _MIN_CORRECTABLE_TOKEN_LENGTH or not token.isalpha():
+        # Too short/ambiguous to safely correct, or numeric/bill-ID-shaped.
+        return token
+    correction = spell.correction(token.lower())
+    if correction and correction != token.lower():
+        return correction
+    return token
+
+
+def _correct_query_typos(query: str) -> str:
+    """
+    Best-effort typo correction of `query`, run just before it is embedded.
+    This only affects the text handed to the embedding model — the
+    caller's `query` argument, and the semantic_query echoed back into the
+    search box, are never mutated.
+    """
+    spell = _get_query_spellchecker()
+    return _QUERY_TOKEN_RE.sub(
+        lambda match: _correct_token(match.group(0), spell), query
+    )
+
+
+def _search_semantic_bills(
+    db: Session,
+    query: str,
+    embedding_model_name: str = "intfloat/multilingual-e5-base",
+    embedding_model: SentenceTransformer | None = None,
+    top_k: int = 10,
+    distinct_bills: bool = True,
+) -> list[SemanticBill]:
+    """
+    Semantic search over semantic_bills using cosine similarity.
+
+    Embeds `query` with the same model used to build the index, then orders
+    rows by cosine distance using the HNSW index (vector_cosine_ops).
+
+    Before embedding, `query` is passed through `_correct_query_typos`,
+    which corrects individual words against a Spanish dictionary unioned
+    with words seen in existing bill titles. This is a query-side text
+    transform only — the `query` argument itself is never mutated.
+
+    Args:
+        db (Session): Active SQLAlchemy database session.
+        query (str): Free-text search query.
+        embedding_model_name (str): Must match the model used to build the
+            index, or the vectors are not comparable.
+        embedding_model (SentenceTransformer | None): Loaded model instance;
+            loaded/cached if not provided.
+        top_k (int): Number of results to return.
+        distinct_bills (bool): If True, collapse multiple matching chunks
+            from the same bill down to its single best-scoring chunk.
+
+    Returns:
+        list[SemanticBill]: ORM entities, best match first (row.bill_id,
+            .chunk_index, .text, etc.). `.scalars()` collapses the SELECT
+            to this first column, so the `similarity` value computed below
+            is used only for ordering — it is not attached to these rows.
+    """
+
+    if embedding_model is None:
+        # Reuse the same lru_cache'd loader the ingestion pipeline uses.
+        # Instantiating SentenceTransformer(embedding_model_name) fresh here
+        # would reload model weights on every single search request.
+        embedding_model = pipeline_embeddings._get_embedding_model(embedding_model_name)
+
+    corrected_query = _correct_query_typos(query)
+
+    # No "query: " / "passage: " prefixing here, matching how documents were
+    # indexed in create_bill_full_text — see note in build_semantic_bill_rows.
+    query_embedding = embedding_model.encode(
+        corrected_query,
+        normalize_embeddings=True,
+    )
+
+    # <=> is pgvector's cosine-distance operator; it's what the HNSW index
+    # (vector_cosine_ops) accelerates. Distance is 1 - cosine_similarity, so
+    # smaller = more similar.
+    distance = SemanticBill.embedding.cosine_distance(query_embedding)
+    similarity = (1 - distance).label("similarity")
+
+    stmt = (
+        select(SemanticBill, similarity)
+        .where(SemanticBill.embedding_model_name == embedding_model_name)
+        .order_by(distance)
+        .limit(top_k * 5 if distinct_bills else top_k)
+        # over-fetch when collapsing to bills, since several of the nearest
+        # chunks can belong to the same bill
+    )
+
+    rows = db.execute(stmt).scalars().all()
+
+    if distinct_bills:
+        seen_bills: set[str] = set()
+        deduped: list[SemanticBill] = []
+        for row in rows:
+            bill_id = row.bill_id
+            if bill_id in seen_bills:
+                continue
+            seen_bills.add(bill_id)
+            deduped.append(row)
+            if len(deduped) >= top_k:
+                break
+        return deduped
+
+    return rows[:top_k]
+
+
 def _build_bancada_bars(bancada_votes):
     bar_x = 220
     bar_max_width = 520
@@ -422,6 +566,7 @@ def _build_vote_rows(db: Session, vote_event_id: str):
 
 @bills_bp.route("/bills")
 def index():
+    semantic_query = request.args.get("semantic_query", "").strip()
     title_q = request.args.get("title_q", "").strip()
     author_q = request.args.get("author_q", "").strip()
     author_party_q = request.args.get("author_party_q", "").strip()
@@ -456,6 +601,14 @@ def index():
         presentation_date_min = db.scalar(
             select(func.min(BillOrganization.presentation_date))
         )
+        semantic_bill_ids: list[str] = []
+        if semantic_query:
+            semantic_results = _search_semantic_bills(
+                db,
+                query=semantic_query,
+                top_k=max_search_results,
+            )
+            semantic_bill_ids = [row.bill_id for row in semantic_results]
     today = PRESENTATION_DATE_MAX
     presentation_date_from_picker = _build_date_picker(
         "presentation_date_from",
@@ -475,6 +628,7 @@ def index():
     presentation_date_to = presentation_date_to_picker["selected_date"]
     search_requested = any(
         [
+            semantic_query,
             title_q,
             author_q,
             author_party_q,
@@ -490,6 +644,7 @@ def index():
     )
 
     search_params = dict(
+        semantic_query=semantic_query,
         title_q=title_q,
         author_q=author_q,
         author_party_q=author_party_q,
@@ -500,6 +655,8 @@ def index():
         special_committee_q=special_committee_q,
         bill_diff_q=bill_diff_q,
     )
+    if semantic_query:
+        filters.append(Bill.id.in_(semantic_bill_ids))
     if has_pley_id_q:
         search_params["pley_id_q"] = pley_id_q
     elif bill_id_q:

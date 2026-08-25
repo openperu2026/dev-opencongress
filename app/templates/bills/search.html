@@ -4,6 +4,11 @@
 <form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
     <h1 class="search-title">{{_('Busca el proyecto de ley por:')}}</h1>
     <div class="bar-search">
+        <div class="search-row search-row--general">
+            <div class="searching-container">
+                <input type="text" name="semantic_query" value="{{ semantic_query or '' }}" placeholder="{{_('Búsqueda general...')}}">
+            </div>
+        </div>
         <div class="search-row search-row--primary">
             <div class="searching-container">
                 <input type="text" name="title_q" value="{{ title_q or '' }}" placeholder="{{_('Título')}}">

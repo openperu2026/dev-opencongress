@@ -9,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from backend import EmbeddingModel
+from backend.config import settings
 from backend.database import models as db_models
 from backend.database.models import SEMANTIC_BILLS_HNSW_INDEX, DEFAULT_EMBEDDING_DIM
 from sentence_transformers import SentenceTransformer
@@ -463,7 +464,7 @@ def _get_embedding_model(embedding_model_name: str) -> SentenceTransformer:
 
     This avoids reloading model weights every time semantic rows are generated.
     """
-    return SentenceTransformer(embedding_model_name)
+    return SentenceTransformer(embedding_model_name, token=settings.HF_TOKEN)
 
 
 def bulk_upsert_semantic_bills(
@@ -530,5 +531,3 @@ def bulk_upsert_semantic_bills(
     db.flush()
 
     return total_upserted
-
-    return len(rows)

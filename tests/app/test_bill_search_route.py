@@ -65,6 +65,7 @@ def client(monkeypatch, session_factory):
 
     monkeypatch.setattr(bills_module, "SessionProcessed", session_factory)
     monkeypatch.setattr(bills_module, "date", FixedDate)
+    bills_module._get_query_spellchecker.cache_clear()
     flask_app = create_app()
     flask_app.testing = True
     return flask_app.test_client()
@@ -552,3 +553,120 @@ def test_date_picker_builds_valid_february_days_for_leap_year():
     assert picker["selected_date"] == real_date(2024, 2, 29)
     assert len(picker["day_options"]) == 29
     assert picker["day_options"][-1] == 29
+
+
+def test_query_spellchecker_unions_dictionary_with_bill_titles(
+    monkeypatch, session_factory
+):
+    import app.routes.bills as bills_module
+
+    with session_factory() as db:
+        db.add(
+            Bill(
+                id="2021_0200",
+                title="Ley de Presupuesto Público",
+                summary_congreso="",
+                observations="",
+                status="presentado",
+                proponent=Proponents.CONGRESO,
+                bill_approved=False,
+                summary_oc="",
+                pley_id="2021_0200",
+            )
+        )
+        db.commit()
+
+    monkeypatch.setattr(bills_module, "SessionProcessed", session_factory)
+    bills_module._get_query_spellchecker.cache_clear()
+
+    spell = bills_module._get_query_spellchecker()
+
+    assert "presupuesto" in spell.known(["presupuesto"])
+    assert "congreso" in spell.known(["congreso"])
+
+
+def test_correct_token_fixes_general_dictionary_typo():
+    import app.routes.bills as bills_module
+    from spellchecker import SpellChecker
+
+    spell = SpellChecker(language="es")
+
+    assert bills_module._correct_token("congrezo", spell) == "congreso"
+
+
+def test_correct_token_fixes_domain_word_typo_once_loaded():
+    import app.routes.bills as bills_module
+    from spellchecker import SpellChecker
+
+    spell = SpellChecker(language="es")
+    spell.word_frequency.load_words(["presupuesto"])
+
+    assert bills_module._correct_token("presupuest", spell) == "presupuesto"
+
+
+def test_correct_token_leaves_short_and_numeric_tokens_unchanged():
+    import app.routes.bills as bills_module
+    from spellchecker import SpellChecker
+
+    spell = SpellChecker(language="es")
+
+    assert bills_module._correct_token("paz", spell) == "paz"
+    assert bills_module._correct_token("2021_0004", spell) == "2021_0004"
+
+
+def test_correct_token_leaves_already_correct_word_unchanged():
+    import app.routes.bills as bills_module
+    from spellchecker import SpellChecker
+
+    spell = SpellChecker(language="es")
+
+    assert bills_module._correct_token("congreso", spell) == "congreso"
+
+
+def test_correct_query_typos_preserves_structure(monkeypatch, session_factory):
+    import app.routes.bills as bills_module
+
+    monkeypatch.setattr(bills_module, "SessionProcessed", session_factory)
+    bills_module._get_query_spellchecker.cache_clear()
+
+    corrected = bills_module._correct_query_typos("proyecto de ley sobre el congrezo")
+
+    assert corrected == "proyecto de ley sobre el congreso"
+
+
+def test_search_semantic_bills_does_not_raise_nameerror(monkeypatch, session_factory):
+    import app.routes.bills as bills_module
+    from backend.database.crud import pipeline_embeddings
+
+    monkeypatch.setattr(bills_module, "SessionProcessed", session_factory)
+    bills_module._get_query_spellchecker.cache_clear()
+    pipeline_embeddings._get_embedding_model.cache_clear()
+
+    encode_calls = []
+
+    class FakeModel:
+        def encode(self, text, normalize_embeddings=True):
+            encode_calls.append(text)
+            return [0.0] * 768
+
+    monkeypatch.setattr(
+        pipeline_embeddings, "SentenceTransformer", lambda name, **kwargs: FakeModel()
+    )
+
+    class StubResult:
+        def scalars(self):
+            return self
+
+        def all(self):
+            return []
+
+    class StubDB:
+        def execute(self, stmt):
+            return StubResult()
+
+    results = bills_module._search_semantic_bills(
+        StubDB(), query="congrezo", embedding_model=None
+    )
+
+    assert results == []
+    assert encode_calls == ["congreso"]

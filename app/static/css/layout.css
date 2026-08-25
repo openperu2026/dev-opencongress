@@ -280,6 +280,12 @@ main {
   width: 100%;
 }
 
+.bill-search-form .search-row--general {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  margin-bottom: 40px;
+}
+
 .bill-search-form .search-row--primary {
   grid-template-columns: repeat(3, minmax(0, 1fr)) 92px 96px;
   align-items: stretch;
