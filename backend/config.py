@@ -99,6 +99,7 @@ class Settings(BaseSettings):
     AWS_REGION: str | None = os.getenv("AWS_REGION")
     AWS_S3_BUCKET_NAME: str | None = os.getenv("AWS_S3_BUCKET_NAME")
     AWS_S3_PREFIX: str | None = os.getenv("AWS_S3_PREFIX")
+    HF_TOKEN: str | None = os.getenv("HF_TOKEN")
 
     # This is only in case we need some API_KEYS. Allow us to handle safely.
     model_config = ConfigDict(env_file=directories.ROOT_DIR / ".env", extra="allow")
