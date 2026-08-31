@@ -1,5 +1,172 @@
 # Endpoints Documentation
 
+## Public API and Swagger
+
+The public JSON API is served under the versioned `/api/v1` prefix. Swagger UI
+is available for interactive exploration, and the generated OpenAPI document is
+available as JSON.
+
+| Property | Value |
+|----------|-------|
+| Swagger UI | `/api/docs` |
+| OpenAPI JSON | `/api/openapi.json` |
+| API prefix | `/api/v1` |
+| Authentication | Placeholder exists, currently disabled with `API_AUTH_ENABLED = False` |
+
+### API Health
+
+| Property | Value |
+|----------|-------|
+| URL | `/api/v1/health` |
+| Method | `GET` |
+| Parameters | None |
+| Response | JSON health payload |
+
+**Response example:**
+
+```json
+{
+  "status": "ok",
+  "version": "v1"
+}
+```
+
+### API Bills List
+
+| Property | Value |
+|----------|-------|
+| URL | `/api/v1/bills` |
+| Method | `GET` |
+| Parameters | `title`, `author`, `author_id`, `status`, `pley_id`, `law_id`, `current_step`, `presentation_date_from`, `presentation_date_to`, `organization`, `page`, `per_page` |
+| Response | Paginated JSON list of bills |
+
+`page` starts at `1`. `per_page` defaults to `50` and is capped at `100`.
+
+**Response shape:**
+
+```json
+{
+  "items": [
+    {
+      "id": "2021_14864",
+      "pley_id": "14864/2025-CR",
+      "title": "Proyecto de ley...",
+      "status": "Presentado",
+      "proponent": "Congreso",
+      "author_id": 93,
+      "author_name": "Diana Carolina Gonzales Delgado",
+      "presentation_date": "2025-07-22",
+      "approved": false
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 1,
+    "pages": 1
+  }
+}
+```
+
+### API Bill Detail by PL
+
+| Property | Value |
+|----------|-------|
+| URL | `/api/v1/bills/pl/<period>/<pl_number>` |
+| Method | `GET` |
+| Parameters | `period` (int), `pl_number` (int) |
+| Response | JSON bill detail with nested bill steps |
+
+Use this public route instead of the internal bill identifier. For example,
+`/api/v1/bills/pl/2021/14864` resolves internally to `2021_14864`.
+
+**Response shape:**
+
+```json
+{
+  "id": "2021_14864",
+  "pley_id": "14864/2025-CR",
+  "ley_id": null,
+  "title": "Proyecto de ley...",
+  "summary_congreso": "Resumen...",
+  "proponent": "Congreso",
+  "status": "Presentado",
+  "approval_status": "No aprobado",
+  "approved": false,
+  "days_since_presentation": 22,
+  "observations": "",
+  "author": {
+    "full_name": "Diana Carolina Gonzales Delgado",
+    "id": 93,
+    "last_name": "Gonzales Delgado",
+    "first_name": "Diana Carolina"
+  },
+  "party": "Fuerza Popular",
+  "presentation_date": "2025-07-22",
+  "latest_step": {
+    "step_id": 2,
+    "step_type": "En Comisión",
+    "vote_step": false,
+    "step_date": "2025-07-23",
+    "step_detail": "En comisión"
+  },
+  "topics": [],
+  "bill_steps": [
+    {
+      "step_id": 2,
+      "step_type": "En Comisión",
+      "vote_step": false,
+      "step_date": "2025-07-23",
+      "step_detail": "En comisión"
+    }
+  ]
+}
+```
+
+### API Congress Members List
+
+| Property | Value |
+|----------|-------|
+| URL | `/api/v1/congress-members` |
+| Method | `GET` |
+| Parameters | `name`, `party`, `region`, `condition`, `committee`, `special_committee`, `page`, `per_page` |
+| Response | Paginated JSON list of congress members |
+
+Text filters are partial, case-insensitive, and accent-insensitive where
+supported by the database. For example, `party=Fuerza` matches
+`Fuerza Popular`, and `region=TACNA` matches `Tacna`.
+
+**Response shape:**
+
+```json
+{
+  "items": [
+    {
+      "id": 93,
+      "full_name": "Diana Carolina Gonzales Delgado",
+      "first_name": "Diana Carolina",
+      "last_name": "Gonzales Delgado",
+      "photo_url": "https://example.com/photo.jpg",
+      "website": "https://example.com",
+      "party_name": "Fuerza Popular",
+      "region": "Tacna",
+      "condition": "Activo",
+      "votes_in_election": 12345,
+      "metrics": {
+        "proyectos_de_ley_presentados": 2,
+        "tasa_de_aprobacion_de_proyectos": 50.0
+      }
+    }
+  ],
+  "pagination": {
+    "page": 1,
+    "per_page": 50,
+    "total": 1,
+    "pages": 1
+  }
+}
+```
+
 ## Landing Page
 
 | Property | Value |

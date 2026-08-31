@@ -21,6 +21,41 @@ At its current stage, OpenPeru focuses on the legislative core of Congress and i
 
 All information is stored in relational databases designed for analysis, reuse, and future API access.
 
+## Public API
+
+OpenPeru exposes a versioned JSON API alongside the Flask/Jinja web frontend.
+The API is documented with Swagger UI and a generated OpenAPI schema.
+
+Run the app locally:
+
+```bash
+uv run flask --app app.app run --debug
+```
+
+Then open:
+
+- Swagger UI: `http://127.0.0.1:5000/api/docs`
+- OpenAPI JSON: `http://127.0.0.1:5000/api/openapi.json`
+
+Current API routes:
+
+- `GET /api/v1/health`
+- `GET /api/v1/bills`
+- `GET /api/v1/bills/pl/{period}/{pl_number}`
+- `GET /api/v1/congress-members`
+
+Examples:
+
+```text
+GET /api/v1/bills?page=1&per_page=10
+GET /api/v1/bills/pl/2021/14864
+GET /api/v1/congress-members?party=Fuerza&region=TACNA&page=1&per_page=10
+```
+
+API key authentication has a placeholder decorator, but it is currently disabled
+by default with `API_AUTH_ENABLED = False`. The health endpoint remains public.
+See [`docs/endpoints.md`](docs/endpoints.md) for endpoint details.
+
 ## Development Setup
 
 1. **Install UV**  
