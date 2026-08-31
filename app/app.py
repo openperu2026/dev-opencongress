@@ -43,6 +43,18 @@ def create_app():
     app.config["OPENAPI_URL_PREFIX"] = settings.OPENAPI_URL_PREFIX
     app.config["OPENAPI_SWAGGER_UI_PATH"] = settings.OPENAPI_SWAGGER_UI_PATH
     app.config["OPENAPI_SWAGGER_UI_URL"] = settings.OPENAPI_SWAGGER_UI_URL
+    app.config["API_SPEC_OPTIONS"] = {
+        "components": {
+            "securitySchemes": {
+                "bearerAuth": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "bearerFormat": "API key",
+                }
+            }
+        },
+        "security": [{"bearerAuth": []}],
+    }
 
     babel.init_app(app, locale_selector=get_locale)
 

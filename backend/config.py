@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     OPENAPI_SWAGGER_UI_PATH: str = "/docs"
     OPENAPI_SWAGGER_UI_URL: str = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
     API_AUTH_ENABLED: bool = False
+    API_KEY: str | None = None
     API_MAX_PER_PAGE: int = 100
 
 
