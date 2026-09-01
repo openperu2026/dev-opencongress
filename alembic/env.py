@@ -6,6 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 from backend.database.models import Base
 import backend.database.raw_models  # noqa: F401 — import for side effect: registers its tables on Base.metadata
+import review_app.models  # noqa: F401 — import for side effect: registers VoteReviewAudit on Base.metadata
 from backend.config import settings
 
 # this is the Alembic Config object, which provides

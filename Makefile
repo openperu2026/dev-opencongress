@@ -1,6 +1,3 @@
-migration:
-	docker compose run --rm initial-migration
-
 # Optionally restrict congresistas/bancadas/organizations processing to a
 # single legislative period, e.g. LEG_PERIOD=2026-2031 make process
 LEG_PERIOD_FLAG = $(if $(LEG_PERIOD),--leg-period $(LEG_PERIOD),)
@@ -28,3 +25,15 @@ process:
 
 process-bill-documents:
 	uv run -m backend --only-bills --process-documents	
+
+process-votes-sync:
+	uv run -m backend --only-votes --votes-limit 10 --votes-max-cost-usd 5.0
+
+backfill-bancadas-bills:
+	uv run python scripts/backfill_bancada_snapshots.py --only bills
+
+backfill-bancadas-motions:
+	uv run python scripts/backfill_bancada_snapshots.py --only motions
+
+process-votes-from-raw:
+	uv run -m backend --only-votes --skip-vote-extraction

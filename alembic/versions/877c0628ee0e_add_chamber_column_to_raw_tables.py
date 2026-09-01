@@ -1,7 +1,7 @@
 """add_chamber_column_to_raw_tables
 
 Revision ID: 877c0628ee0e
-Revises: 5cd01ffba69d
+Revises: 20260813_bill_vote_column
 Create Date: 2026-08-31 21:50:20.698866
 
 """
@@ -14,7 +14,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "877c0628ee0e"
-down_revision: Union[str, Sequence[str], None] = "5cd01ffba69d"
+down_revision: Union[str, Sequence[str], None] = "20260813_bill_vote_column"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

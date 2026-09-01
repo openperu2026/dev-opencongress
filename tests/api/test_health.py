@@ -12,3 +12,9 @@ def test_swagger_json_exists(client):
     assert response.status_code == 200
     assert body["info"]["title"] == "OpenPeru API"
     assert "/api/v1/health" in body["paths"]
+    assert body["components"]["securitySchemes"]["bearerAuth"] == {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API key",
+    }
+    assert body["security"] == [{"bearerAuth": []}]

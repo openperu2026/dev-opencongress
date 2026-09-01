@@ -472,3 +472,28 @@ class ScraperRun(Base):
     start_time: Mapped[datetime] = mapped_column(nullable=False)
     end_time: Mapped[datetime] = mapped_column(nullable=False)
     scraped_rows: Mapped[int] = mapped_column(nullable=False)
+
+
+class ModelCostLedger(Base):
+    """
+    Cumulative real spend for one LLM model, used to enforce a persistent
+    budget cap on pipelines that call out to a paid model API.
+
+    Provider-agnostic: `provider` is descriptive metadata (e.g. "openai",
+    "anthropic"), not part of the identity -- `model` alone is the key, so
+    any caller (this repo's votes extractor, or a future pipeline using a
+    different provider) shares the same table.
+
+    Attributes:
+        model (str): Model identifier (e.g. "gpt-5.6-luna"). Primary key.
+        provider (str | None): Descriptive provider name.
+        total_cost_usd (float): Cumulative real spend recorded for this model.
+        updated_at (datetime): Timestamp of the last increment.
+    """
+
+    __tablename__ = "model_cost_ledger"
+
+    model: Mapped[str] = mapped_column(primary_key=True)
+    provider: Mapped[str | None] = mapped_column(nullable=True)
+    total_cost_usd: Mapped[float] = mapped_column(nullable=False, default=0.0)
+    updated_at: Mapped[datetime] = mapped_column(nullable=False)

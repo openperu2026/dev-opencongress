@@ -26,7 +26,7 @@ from backend import (
     enum_values,
     sql_value_list,
 )
-from sqlalchemy.orm import declarative_base, Mapped, mapped_column
+from sqlalchemy.orm import declarative_base, Mapped, mapped_column, relationship
 from datetime import datetime, date
 from pgvector.sqlalchemy import Vector
 
@@ -47,6 +47,14 @@ org_type_enum = Enum(
 vote_option_enum = Enum(
     VoteOption,
     name="vote_option",
+    values_callable=enum_values,
+    native_enum=True,
+    validate_strings=True,
+)
+
+attendance_status_enum = Enum(
+    AttendanceStatus,
+    name="attendance_status",
     values_callable=enum_values,
     native_enum=True,
     validate_strings=True,
@@ -107,6 +115,7 @@ class Attendance(Base):
         event_id (str): Unique identifier for the event.
         attendee_id (int): Unique identifier for the congressperson.
         status (str): Attendance status, e.g., 'present', 'absent'.
+        bancada_id (int): The political group of the attendee at the event date.
     """
 
     __tablename__ = "attendance"
@@ -118,20 +127,18 @@ class Attendance(Base):
         ForeignKey("congresistas.id"), nullable=False
     )
     status: Mapped[AttendanceStatus] = mapped_column(
-        Enum(
-            AttendanceStatus,
-            name="attendance_status",
-            values_callable=enum_values,
-            native_enum=True,
-            validate_strings=True,
-        ),
+        attendance_status_enum,
         nullable=False,
+    )
+    bancada_id: Mapped[int | None] = mapped_column(
+        ForeignKey("organizations.org_id"), nullable=True
     )
 
     __table_args__ = (
         PrimaryKeyConstraint("event_id", "attendee_id", name="pk_attendance"),
         Index("ix_attendance_by_event", "event_id"),
         Index("ix_attendance_attendee_id", "attendee_id"),
+        Index("ix_attendance_bancada_id", "bancada_id"),
     )
 
 
@@ -247,6 +254,137 @@ class VoteCounts(Base):
     )
 
 
+class VoteClarification(Base):
+    """
+    Records a correction to a member's recorded vote, sourced from either the
+    president's clarification paragraph or a standalone member letter.
+
+    Attributes:
+        vote_event_id (str): The vote event this clarification is about.
+        voter_id (int | None): Resolved congresista, if a match was found.
+        member_name (str): Raw name as printed/extracted, kept even when resolved.
+        source (str): Either 'president_note' or 'member_letter'.
+        note (str): Verbatim clarification text.
+        roll_value (str | None): The member's value on the original roll.
+        clarified_value (str | None): The corrected value.
+    """
+
+    __tablename__ = "vote_clarifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    vote_event_id: Mapped[str] = mapped_column(
+        ForeignKey("vote_events.vote_event_id"), nullable=False
+    )
+    voter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("congresistas.id"), nullable=True
+    )
+    member_name: Mapped[str] = mapped_column(nullable=False)
+    source: Mapped[str] = mapped_column(nullable=False)
+    note: Mapped[str] = mapped_column(nullable=False)
+    roll_value: Mapped[VoteOption | None] = mapped_column(
+        vote_option_enum, nullable=True
+    )
+    clarified_value: Mapped[VoteOption | None] = mapped_column(
+        vote_option_enum, nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('president_note', 'member_letter')",
+            name="ck_vote_clarification_source",
+        ),
+        Index("ix_vote_clarifications_event", "vote_event_id"),
+        Index("ix_vote_clarifications_voter", "voter_id"),
+    )
+
+
+class AttendanceClarification(Base):
+    """
+    Records a correction to a member's recorded attendance, sourced from the
+    president's clarification paragraph.
+
+    Attributes:
+        event_id (str): The vote event this clarification is about.
+        voter_id (int | None): Resolved congresista, if a match was found.
+        member_name (str): Raw name as printed/extracted, kept even when resolved.
+        note (str): Verbatim clarification text.
+        roster_value (str | None): The member's value on the original roster.
+        clarified_value (str | None): The corrected value.
+    """
+
+    __tablename__ = "attendance_clarifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    event_id: Mapped[str] = mapped_column(
+        ForeignKey("vote_events.vote_event_id"), nullable=False
+    )
+    voter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("congresistas.id"), nullable=True
+    )
+    member_name: Mapped[str] = mapped_column(nullable=False)
+    note: Mapped[str] = mapped_column(nullable=False)
+    roster_value: Mapped[AttendanceStatus | None] = mapped_column(
+        attendance_status_enum, nullable=True
+    )
+    clarified_value: Mapped[AttendanceStatus | None] = mapped_column(
+        attendance_status_enum, nullable=True
+    )
+
+    __table_args__ = (
+        Index("ix_attendance_clarifications_event", "event_id"),
+        Index("ix_attendance_clarifications_voter", "voter_id"),
+    )
+
+
+class MemberLetter(Base):
+    """
+    Represents a standalone letter (oficio) from a member registering their
+    intended attendance and/or vote for a specific bill or motion.
+
+    Attributes:
+        bill_id (str | None): Bill this letter is about, if any.
+        motion_id (str | None): Motion this letter is about, if any.
+        voter_id (int | None): Resolved congresista, if a match was found.
+        member_name (str): Raw name as printed/extracted, kept even when resolved.
+        party (str | None): Party as printed on the letter, if present.
+        letter_date (date | None): Date on the letter.
+        subject_reference (str): The bill/motion subject text referenced by the letter.
+        requested_attendance (str | None): Attendance status requested, if any.
+        requested_vote (str | None): Vote option requested, if any.
+    """
+
+    __tablename__ = "member_letters"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    bill_id: Mapped[str | None] = mapped_column(ForeignKey("bills.id"), nullable=True)
+    motion_id: Mapped[str | None] = mapped_column(
+        ForeignKey("motions.id"), nullable=True
+    )
+    voter_id: Mapped[int | None] = mapped_column(
+        ForeignKey("congresistas.id"), nullable=True
+    )
+    member_name: Mapped[str] = mapped_column(nullable=False)
+    party: Mapped[str | None] = mapped_column(nullable=True)
+    letter_date: Mapped[date | None] = mapped_column(nullable=True)
+    subject_reference: Mapped[str] = mapped_column(nullable=False)
+    requested_attendance: Mapped[AttendanceStatus | None] = mapped_column(
+        attendance_status_enum, nullable=True
+    )
+    requested_vote: Mapped[VoteOption | None] = mapped_column(
+        vote_option_enum, nullable=True
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "(bill_id IS NOT NULL) OR (motion_id IS NOT NULL)",
+            name="ck_member_letter_has_target",
+        ),
+        Index("ix_member_letters_bill_id", "bill_id"),
+        Index("ix_member_letters_motion_id", "motion_id"),
+        Index("ix_member_letters_voter_id", "voter_id"),
+    )
+
+
 class Bill(Base):
     """
     Represents a bill in the peruvian parliament.
@@ -267,6 +405,7 @@ class Bill(Base):
             "modified"} (excludes "unavailable" and "incomparable"). Kept in
             sync by crud.pipeline_bills.refresh_bill_diff_flag, called from
             the orchestrator's bill-differences pipeline stage.
+        votes (bool): True if the bill has at least one complete and reviewed votation registry
     """
 
     __tablename__ = "bills"
@@ -291,6 +430,7 @@ class Bill(Base):
     summary_oc: Mapped[str] = mapped_column(Text, nullable=False)
     pley_id: Mapped[str] = mapped_column(nullable=False)
     bill_diff: Mapped[bool] = mapped_column(nullable=False, default=False)
+    votes: Mapped[bool] = mapped_column(nullable=False, default=False)
 
     __table_args__ = (Index("ix_bill_author_id", "author_id"),)
 
@@ -313,7 +453,7 @@ class BillCongresistas(Base):
     person_id: Mapped[int] = mapped_column(
         ForeignKey("congresistas.id"), nullable=False
     )
-    bancada_id: Mapped[int] = mapped_column(
+    bancada_id: Mapped[int | None] = mapped_column(
         ForeignKey("organizations.org_id"), nullable=True
     )
     role_type: Mapped[TypeRoleBill] = mapped_column(type_role_bill_enum, nullable=False)
@@ -476,6 +616,7 @@ class Congresista(Base):
         photo_url (str): Official photo url of the congressperson.
         photo_bytes (bytes | None): Downloaded portrait image bytes, when fetched.
         website (str): Official website of the congressperson.
+        aliases (list[str]): List of all found aliases for this congresperson
     """
 
     __tablename__ = "congresistas"
@@ -489,8 +630,44 @@ class Congresista(Base):
     photo_url: Mapped[str] = mapped_column(nullable=False)
     photo_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     website: Mapped[str] = mapped_column(nullable=False)
-
+    aliases: Mapped[list["CongresistaAlias"]] = relationship(
+        back_populates="congresista",
+        cascade="all, delete-orphan",
+    )
     __table_args__ = (UniqueConstraint("full_name", "dni", name="uq_congresista_id"),)
+
+
+class CongresistaAlias(Base):
+    """
+    Represents alternate names used to match a congressperson.
+
+    Attributes:
+        id (int): Unique identifier for the row.
+        congresista_id (int): ID of the congresista.
+        name (str): Normalized alternate name.
+    """
+
+    __tablename__ = "congresista_aliases"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    congresista_id: Mapped[int] = mapped_column(
+        ForeignKey("congresistas.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    name: Mapped[str] = mapped_column(nullable=False)
+
+    congresista: Mapped["Congresista"] = relationship(
+        back_populates="aliases",
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "name",
+            name="uq_congresista_alias_name",
+        ),
+    )
 
 
 class Organization(Base):
@@ -601,6 +778,13 @@ class Membership(Base):
             "start_date",
             "end_date",
             name="uq_membership_person_org_period_role_dates",
+        ),
+        Index(
+            "ix_membership_person_org_type_dates",
+            "person_id",
+            "org_type",
+            "start_date",
+            "end_date",
         ),
     )
 

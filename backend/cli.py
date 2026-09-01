@@ -75,6 +75,62 @@ def build_parser() -> argparse.ArgumentParser:
             "symmetry but has no effect until Phase B's scrapers exist)."
         ),
     )
+    parser.add_argument(
+        "--only-votes",
+        action="store_true",
+        help="Run vote extraction (sync) + load stage for bills and motions",
+    )
+    parser.add_argument(
+        "--skip-vote-extraction",
+        action="store_true",
+        help="Skip the extraction of votes and attendance",
+    )
+    parser.add_argument(
+        "--votes-limit",
+        type=int,
+        default=None,
+        help="Max documents/pages to process per vote extraction/load call",
+    )
+    parser.add_argument(
+        "--votes-max-pages",
+        type=int,
+        default=5,
+        help="Only extract vote documents with at most this many pages",
+    )
+    parser.add_argument(
+        "--votes-model",
+        default="gpt-5.6-luna",
+        help="OpenAI model to use for vote extraction",
+    )
+    parser.add_argument(
+        "--votes-max-cost-usd",
+        type=float,
+        default=5.0,
+        help=(
+            "Persistent USD budget for this model (tracked cumulatively across "
+            "runs) -- sync extraction stops before the next document once "
+            "reached; batch submission stops queuing once an estimate would "
+            "exceed it"
+        ),
+    )
+    parser.add_argument(
+        "--submit-vote-batches",
+        choices=["bill", "motion"],
+        default=None,
+        help="Submit a historical-backfill Batch API job for vote extraction, then exit",
+    )
+    parser.add_argument(
+        "--collect-vote-batches",
+        metavar="BATCH_ID",
+        default=None,
+        help="Poll+collect a previously submitted vote-extraction batch by id, then exit",
+    )
+    parser.add_argument(
+        "--collect-kind",
+        choices=["bill", "motion"],
+        default="bill",
+        help="Required alongside --collect-vote-batches",
+    )
     return parser
 
 
@@ -83,37 +139,69 @@ def main(argv: list[str] | None = None) -> None:
     args = parser.parse_args(argv)
 
     orchestrator = OpenPeruOrchestrator()
+
+    if args.submit_vote_batches:
+        manifest = orchestrator.submit_vote_batches(
+            kind=args.submit_vote_batches,
+            model=args.votes_model,
+            max_pages=args.votes_max_pages,
+            limit=args.votes_limit,
+            max_cost_usd=args.votes_max_cost_usd,
+        )
+        print(manifest)
+        return
+
+    if args.collect_vote_batches:
+        orchestrator.collect_vote_batches(
+            batch_id=args.collect_vote_batches,
+            kind=args.collect_kind,
+            model=args.votes_model,
+        )
+        return
+
     run_bills = True
     run_motions = True
     run_leyes = True
     run_others = True
     run_documents = True
+    run_votes = True
 
     if args.only_bills:
         run_motions = False
         run_others = False
         run_leyes = False
         run_documents = False
+        run_votes = False
     elif args.only_motions:
         run_bills = False
         run_others = False
         run_leyes = False
         run_documents = False
+        run_votes = False
     elif args.only_leyes:
         run_motions = False
         run_bills = False
         run_others = False
         run_documents = False
+        run_votes = False
     elif args.only_others:
         run_bills = False
         run_motions = False
         run_leyes = False
         run_documents = False
+        run_votes = False
     elif args.scrape_documents:
         run_bills = False
         run_motions = False
         run_leyes = False
         run_others = False
+        run_votes = False
+    elif args.only_votes:
+        run_bills = False
+        run_motions = False
+        run_leyes = False
+        run_others = False
+        run_documents = False
 
     if args.scrape:
         orchestrator.run_scrapers(
@@ -134,6 +222,12 @@ def main(argv: list[str] | None = None) -> None:
             process_leyes=run_leyes,
             process_others=run_others,
             process_documents=args.process_documents,
+            process_votes=run_votes,
+            votes_limit=args.votes_limit,
+            votes_max_pages=args.votes_max_pages,
+            votes_model=args.votes_model,
+            votes_max_cost_usd=args.votes_max_cost_usd,
             first_load=args.first_summary,
             leg_period=args.leg_period,
+            skip_extraction=args.skip_vote_extraction,
         )

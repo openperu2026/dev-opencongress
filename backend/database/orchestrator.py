@@ -4,7 +4,7 @@ import json
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
-from typing import Type, Callable
+from typing import Type, Callable, Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
@@ -74,6 +74,8 @@ from backend.process.utils import (
     split_and_sort_name,
     replace_www,
 )
+from backend.process.votes import extract as votes_extract, load as votes_load
+from backend.process.votes.config import DEFAULT_MODEL as VOTES_DEFAULT_MODEL
 from backend.scrapers.utils import get_last_id
 from backend.scrapers.congresista_photos import sync_photo as sync_congresista_photo
 from backend import TypeOrganization
@@ -420,11 +422,17 @@ class OpenPeruOrchestrator:
         process_leyes: bool = True,
         process_others: bool = True,
         process_documents: bool = True,
+        process_votes: bool = False,
         bills_limit: int | None = None,
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
+        votes_limit: int | None = None,
+        votes_max_pages: int = 5,
+        votes_model: str = VOTES_DEFAULT_MODEL,
+        votes_max_cost_usd: float = 5.0,
         first_load: bool = False,
         leg_period: str | None = None,
+        skip_extraction: bool = True,
     ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
@@ -519,6 +527,28 @@ class OpenPeruOrchestrator:
                 summary["leyes"] = self._process_leyes(limit=leyes_limit)
                 self._log_stage_summary("leyes", summary["leyes"])
 
+        if process_votes:
+            with log_manager.stage("process", "votes"):
+                if not skip_extraction:
+                    for kind in ("bill", "motion"):
+                        console.info(f"Starting vote extraction ({kind})")
+                        key = f"votes_extraction_{kind}"
+                        summary[key] = self._process_vote_extraction(
+                            kind=kind,
+                            model=votes_model,
+                            max_pages=votes_max_pages,
+                            limit=votes_limit,
+                            max_cost_usd=votes_max_cost_usd,
+                        )
+                        self._log_stage_summary(key, summary[key])
+
+                for kind in ("bill", "motion"):
+                    console.info(f"Starting vote load ({kind})")
+                    key = f"votes_load_{kind}"
+                    summary[key] = self._process_vote_load(
+                        kind=kind, model=votes_model, limit=votes_limit
+                    )
+                    self._log_stage_summary(key, summary[key])
         # Running the semantic search
         with log_manager.stage("process", "semantic_table"):
             console.info("Starting semantic table population")
@@ -1360,6 +1390,9 @@ class OpenPeruOrchestrator:
                             stats.skipped += 1
                             continue
 
+                        bancada = crud_core.find_active_bancada_for_person(
+                            db, cong.id, chamber_schema.presentation_date
+                        )
                         crud_bills.upsert_bill_congresista(
                             db,
                             bill.id,
@@ -1367,6 +1400,7 @@ class OpenPeruOrchestrator:
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
                             else cong_rel.role_type,
+                            bancada_id=bancada.org_id if bancada else None,
                         )
 
                     raw_bill.processed = True
@@ -1710,6 +1744,9 @@ class OpenPeruOrchestrator:
                             )
                             stats.skipped += 1
                             continue
+                        bancada = crud_core.find_active_bancada_for_person(
+                            db, cong.id, chamber_schema.presentation_date
+                        )
                         crud_motions.upsert_motion_congresista(
                             db,
                             motion.id,
@@ -1717,6 +1754,7 @@ class OpenPeruOrchestrator:
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
                             else cong_rel.role_type,
+                            bancada_id=bancada.org_id if bancada else None,
                         )
 
                     if include_documents:
@@ -1808,3 +1846,71 @@ class OpenPeruOrchestrator:
             f"[leyes] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
         return stats
+
+    def _process_vote_extraction(
+        self,
+        *,
+        kind: Literal["bill", "motion"],
+        model: str,
+        max_pages: int = 5,
+        limit: int | None,
+        max_cost_usd: float = 5.0,
+    ) -> ProcessStats:
+        """Run OpenAI structured extraction over pending vote-related documents."""
+        with self.DBSession() as db:
+            return votes_extract.run_sync_extraction(
+                db,
+                kind=kind,
+                model=model,
+                max_pages=max_pages,
+                limit=limit,
+                max_cost_usd=max_cost_usd,
+            )
+
+    def _process_vote_load(
+        self, *, kind: Literal["bill", "motion"], model: str, limit: int | None
+    ) -> ProcessStats:
+        """Transform pending extraction results into Vote/Attendance/VoteEvent/VoteCounts."""
+        with self.DBSession() as db:
+            return votes_load.run_vote_load(db, kind=kind, model=model, limit=limit)
+
+    def submit_vote_batches(
+        self,
+        *,
+        kind: Literal["bill", "motion"],
+        model: str = VOTES_DEFAULT_MODEL,
+        max_pages: int = 5,
+        limit: int | None = None,
+        max_cost_usd: float = 5.0,
+    ) -> dict:
+        """
+        Submit a Batch API job for historical vote-extraction backfills. Not
+        part of run_processing -- a batch job can take hours, so this is a
+        one-off operator action; pair with collect_vote_batches once the job
+        finishes.
+        """
+        with self.DBSession() as db:
+            return votes_extract.submit_batch_extraction(
+                db,
+                kind=kind,
+                model=model,
+                max_pages=max_pages,
+                limit=limit,
+                max_cost_usd=max_cost_usd,
+            )
+
+    def collect_vote_batches(
+        self,
+        *,
+        batch_id: str,
+        kind: Literal["bill", "motion"],
+        model: str = VOTES_DEFAULT_MODEL,
+    ) -> ProcessStats:
+        """Poll+collect a previously submitted vote-extraction batch, then load it."""
+        with self.DBSession() as db:
+            extraction_stats = votes_extract.collect_batch_extraction(
+                db, batch_id=batch_id, kind=kind, model=model
+            )
+        with self.DBSession() as db:
+            votes_load.run_vote_load(db, kind=kind, model=model, limit=None)
+        return extraction_stats
