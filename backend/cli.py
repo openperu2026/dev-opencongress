@@ -75,12 +75,29 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[p.value for p in LegPeriod],
         default=None,
         help=(
-            "Restrict congresistas/bancadas/organizations processing to a single "
-            "legislative period (e.g. 2026-2031). Default processes all "
-            "processable periods, unchanged. No effect on bills/motions/leyes "
-            "(chamber for those is resolved per-row from the bill/motion's own "
-            "id) or on scraping (--leg-period is accepted there for CLI "
-            "symmetry but has no effect until Phase B's scrapers exist)."
+            "PROCESSING: restricts congresistas/bancadas/organizations "
+            "processing to a single legislative period (e.g. 2026-2031). "
+            "Default (None) processes all processable periods, unchanged; any "
+            "explicit value narrows to just that period. SCRAPING (bills/"
+            "motions): does NOT restrict the legacy scrape (it always runs "
+            "with --scrape, regardless of this flag, since old bills/motions "
+            "can still gain new documents/votes/status) -- it only controls "
+            "whether the ADDITIONAL current-period (settings.LEG_PERIOD, "
+            "'2026-2031') chamber-specific range scrapers also run (Phase "
+            "B2): they run when this is None (default) or explicitly the "
+            "current period, and are skipped for any other value. SCRAPING "
+            "(congresistas/bancadas/committees/organizations, Phase B1): the "
+            "OPPOSITE of bills/motions -- this legacy reference data is now "
+            "historical/stable, so it is skipped by default and only runs "
+            "when this flag is explicitly set to a period OTHER than the "
+            "current one (e.g. '2021-2026'); the current-period chamber "
+            "scrape runs when this is None (default) or explicitly the "
+            "current period, same gating shape as bills/motions' chamber "
+            "block, but the two never run in the same call -- exactly one of "
+            "the two runs, unlike bills/motions where both may run together. "
+            "Leyes processing/scraping is unaffected either way -- there is no "
+            "bicameral concept for leyes. Chamber for bills/motions is always "
+            "resolved per-row from the bill/motion's own id, not from this flag."
         ),
     )
     parser.add_argument(

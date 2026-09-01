@@ -263,12 +263,22 @@ class OpenPeruOrchestrator:
         """
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
 
-        leg_period: when None (default) or "2026-2031", also runs the
-        2026-2031 chamber-specific congresistas/bancadas/committees/
-        organizations scrapers (Phase B1) AND the 2026-2031 chamber-specific
-        bills/motions range scrapers (Phase B2), in addition to -- not
-        instead of -- the legacy scrape above, since both periods' data
-        must keep flowing. Any other value only runs the legacy scrape.
+        leg_period: when None (default) or settings.LEG_PERIOD (the current
+        term, "2026-2031"), scrape_others runs ONLY the current-period
+        chamber-specific congresistas/bancadas/committees/organizations
+        scrape (Phase B1); the legacy (through 2021-2026) reference scrape
+        is skipped by default -- that data is now historical/stable and
+        doesn't need continuous re-scraping. Passing any OTHER explicit
+        value (e.g. "2021-2026") flips this: it opts back into the legacy
+        reference scrape and skips the current-period one for that run.
+
+        Bills/motions are NOT subject to this asymmetry: their legacy scrape
+        always runs regardless of leg_period (old bills/motions can still
+        gain new documents/votes/status), and their 2026-2031 chamber-
+        specific range scrapers (Phase B2) run when leg_period is None or
+        settings.LEG_PERIOD, same gating shape as scrape_others' current
+        block.
+
         Leyes scraping is unaffected either way -- there is no bicameral
         concept for leyes.
         """
@@ -287,99 +297,106 @@ class OpenPeruOrchestrator:
             )
 
             # =================================================================
-            # LEGACY (through 2021-2026) -- unicameral www3.congreso.gob.pe,
-            # runs unconditionally regardless of leg_period. See the
-            # "2026-2031 BICAMERAL TERM" block below for the new-term scrape,
-            # which runs IN ADDITION TO this, not instead of it.
+            # LEGACY (through 2021-2026) -- unicameral www3.congreso.gob.pe.
+            # This reference data is now historical/stable, so it is OPT-IN
+            # ONLY: it runs when leg_period is explicitly set to something
+            # other than the current period (settings.LEG_PERIOD), and is
+            # skipped by default. See the "2026-2031 BICAMERAL TERM" block
+            # below for the current-period scrape, which runs by default
+            # instead of this one, not in addition to it.
             # =================================================================
 
-            with log_manager.stage("scraper", "congresistas") as stage_logger:
-                if self._recent_raw_exists(RawCongresista, days=1):
-                    console.info(
-                        "Skipping congresistas scrape: latest raw scrape is within 1 day"
-                    )
-                    stage_logger.info("Skipped congresistas scraper")
-                else:
-                    console.info("Starting congresistas scraper")
-                    stage_logger.info("Starting congresistas scraper")
-                    cong = RawCongresistasScraper()
-                    start_time = datetime.now()
-                    cong.get_dict_periodos()
-                    scraped_congs = cong.extract_and_load_all(only_current=only_current)
-                    end_time = datetime.now()
-                    self.scraper_results["congresistas.py"] = ScraperStats(
-                        start_time, end_time, len(scraped_congs)
-                    )
-                    self._load_scraper_results("congresistas.py")
+            if leg_period not in (None, settings.LEG_PERIOD):
+                with log_manager.stage("scraper", "congresistas") as stage_logger:
+                    if self._recent_raw_exists(RawCongresista, days=1):
+                        console.info(
+                            "Skipping congresistas scrape: latest raw scrape is within 1 day"
+                        )
+                        stage_logger.info("Skipped congresistas scraper")
+                    else:
+                        console.info("Starting congresistas scraper")
+                        stage_logger.info("Starting congresistas scraper")
+                        cong = RawCongresistasScraper()
+                        start_time = datetime.now()
+                        cong.get_dict_periodos()
+                        scraped_congs = cong.extract_and_load_all(
+                            only_current=only_current
+                        )
+                        end_time = datetime.now()
+                        self.scraper_results["congresistas.py"] = ScraperStats(
+                            start_time, end_time, len(scraped_congs)
+                        )
+                        self._load_scraper_results("congresistas.py")
 
-            with log_manager.stage("scraper", "bancadas") as stage_logger:
-                if self._recent_raw_exists(RawBancada, days=1):
-                    console.info(
-                        "Skipping bancadas scrape: latest raw scrape is within 1 day"
-                    )
-                    stage_logger.info("Skipped bancadas scraper")
-                else:
-                    console.info("Starting bancadas scraper")
-                    stage_logger.info("Starting bancadas scraper")
-                    banc = RawBancadaScraper()
-                    start_time = datetime.now()
-                    banc.get_raw_bancadas(only_current=only_current)
-                    scraped_banc = banc.add_bancadas_to_db()
-                    end_time = datetime.now()
-                    self.scraper_results["bancadas.py"] = ScraperStats(
-                        start_time, end_time, int(scraped_banc)
-                    )
-                    self._load_scraper_results("bancadas.py")
+                with log_manager.stage("scraper", "bancadas") as stage_logger:
+                    if self._recent_raw_exists(RawBancada, days=1):
+                        console.info(
+                            "Skipping bancadas scrape: latest raw scrape is within 1 day"
+                        )
+                        stage_logger.info("Skipped bancadas scraper")
+                    else:
+                        console.info("Starting bancadas scraper")
+                        stage_logger.info("Starting bancadas scraper")
+                        banc = RawBancadaScraper()
+                        start_time = datetime.now()
+                        banc.get_raw_bancadas(only_current=only_current)
+                        scraped_banc = banc.add_bancadas_to_db()
+                        end_time = datetime.now()
+                        self.scraper_results["bancadas.py"] = ScraperStats(
+                            start_time, end_time, int(scraped_banc)
+                        )
+                        self._load_scraper_results("bancadas.py")
 
-            with log_manager.stage("scraper", "committees") as stage_logger:
-                if self._recent_raw_exists(RawCommittee, days=1):
-                    console.info(
-                        "Skipping committees scrape: latest raw scrape is within 1 day"
-                    )
-                    stage_logger.info("Skipped committees scraper")
-                else:
-                    console.info("Starting committees scraper")
-                    stage_logger.info("Starting committees scraper")
-                    comm = RawCommitteeScraper()
-                    start_time = datetime.now()
-                    comm.get_raw_committees(only_current=only_current)
-                    comm.add_committees_to_db()
-                    scraped_comm = len(comm.committee_list)
-                    end_time = datetime.now()
-                    self.scraper_results["committees.py"] = ScraperStats(
-                        start_time, end_time, scraped_comm
-                    )
-                    self._load_scraper_results("committees.py")
+                with log_manager.stage("scraper", "committees") as stage_logger:
+                    if self._recent_raw_exists(RawCommittee, days=1):
+                        console.info(
+                            "Skipping committees scrape: latest raw scrape is within 1 day"
+                        )
+                        stage_logger.info("Skipped committees scraper")
+                    else:
+                        console.info("Starting committees scraper")
+                        stage_logger.info("Starting committees scraper")
+                        comm = RawCommitteeScraper()
+                        start_time = datetime.now()
+                        comm.get_raw_committees(only_current=only_current)
+                        comm.add_committees_to_db()
+                        scraped_comm = len(comm.committee_list)
+                        end_time = datetime.now()
+                        self.scraper_results["committees.py"] = ScraperStats(
+                            start_time, end_time, scraped_comm
+                        )
+                        self._load_scraper_results("committees.py")
 
-            with log_manager.stage("scraper", "organizations") as stage_logger:
-                if self._recent_raw_exists(RawOrganization, days=1):
-                    console.info(
-                        "Skipping organizations scrape: latest raw scrape is within 1 day"
-                    )
-                    stage_logger.info("Skipped organizations scraper")
-                else:
-                    console.info("Starting organizations scraper")
-                    stage_logger.info("Starting organizations scraper")
-                    org = RawOrganizationScraper()
-                    start_time = datetime.now()
-                    org.get_raw_organizations(only_current=only_current)
-                    scraped_orgs = len(org.organizations_list)
-                    org.add_organizations_to_db()
-                    end_time = datetime.now()
-                    self.scraper_results["organizations.py"] = ScraperStats(
-                        start_time, end_time, scraped_orgs
-                    )
-                    self._load_scraper_results("organizations.py")
+                with log_manager.stage("scraper", "organizations") as stage_logger:
+                    if self._recent_raw_exists(RawOrganization, days=1):
+                        console.info(
+                            "Skipping organizations scrape: latest raw scrape is within 1 day"
+                        )
+                        stage_logger.info("Skipped organizations scraper")
+                    else:
+                        console.info("Starting organizations scraper")
+                        stage_logger.info("Starting organizations scraper")
+                        org = RawOrganizationScraper()
+                        start_time = datetime.now()
+                        org.get_raw_organizations(only_current=only_current)
+                        scraped_orgs = len(org.organizations_list)
+                        org.add_organizations_to_db()
+                        end_time = datetime.now()
+                        self.scraper_results["organizations.py"] = ScraperStats(
+                            start_time, end_time, scraped_orgs
+                        )
+                        self._load_scraper_results("organizations.py")
 
             # =================================================================
             # 2026-2031 BICAMERAL TERM -- per-chamber senado/diputados
             # microsites (see RawCongresistasScraper/RawBancadaScraper/
             # RawCommitteeScraper/RawOrganizationScraper's "2026-2031 BICAMERAL
-            # TERM" sections). Runs additively alongside the legacy scrape
-            # above whenever leg_period is None (default) or "2026-2031".
+            # TERM" sections). Runs by default (leg_period is None or
+            # settings.LEG_PERIOD) INSTEAD OF the legacy block above, not in
+            # addition to it -- see the LEGACY block's comment above.
             # =================================================================
 
-            if leg_period in (None, "2026-2031"):
+            if leg_period in (None, settings.LEG_PERIOD):
                 with log_manager.stage("scraper", "chamber_reference") as stage_logger:
                     console.info(
                         "Starting 2026-2031 chamber scrapers "
@@ -453,9 +470,12 @@ class OpenPeruOrchestrator:
                     self._load_scraper_results("chamber_reference.py")
 
         # =====================================================================
-        # LEGACY (through 2021-2026) -- runs unconditionally regardless of
-        # leg_period. See the "2026-2031 BICAMERAL TERM" blocks below for
-        # the new-term scrape, which runs IN ADDITION TO this, not instead.
+        # LEGACY (through 2021-2026) -- bills/motions ALWAYS scrape the
+        # legacy range regardless of leg_period (unlike scrape_others above:
+        # old bills/motions can still gain new documents/votes/status, so
+        # this never becomes opt-in). See the "2026-2031 BICAMERAL TERM"
+        # blocks below for the current-period scrape, which runs IN
+        # ADDITION TO this, not instead.
         # =====================================================================
 
         if scrape_bills:
@@ -500,7 +520,7 @@ class OpenPeruOrchestrator:
                 # "chamber X silently stopped scraping" is visible per the
                 # design doc's own stats.errors monitoring guidance.
                 # =============================================================
-                if leg_period in (None, "2026-2031"):
+                if leg_period in (None, settings.LEG_PERIOD):
                     for chamber in ("Senadores", "Diputados"):
                         chamber_results = self._scrape_chamber_range(
                             scraper=scraper,
@@ -553,7 +573,7 @@ class OpenPeruOrchestrator:
 
                 # 2026-2031 BICAMERAL TERM -- see the bills block above for
                 # the full rationale (independent per-chamber stats).
-                if leg_period in (None, "2026-2031"):
+                if leg_period in (None, settings.LEG_PERIOD):
                     for chamber in ("Senadores", "Diputados"):
                         chamber_results = self._scrape_chamber_range(
                             scraper=scraper,

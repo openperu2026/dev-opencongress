@@ -25,6 +25,23 @@ class DummyLogManager:
         return DummyStage()
 
 
+class RecordingLogManager:
+    """Like DummyLogManager, but records every console.info message so
+    tests can assert on which code paths actually ran (distinguishing the
+    LEGACY scrape_others block from the current-period chamber block by
+    their distinct log messages, since both may leave zero scraper
+    instances behind when _recent_raw_exists is mocked True)."""
+
+    def __init__(self):
+        self.messages: list[str] = []
+
+    def console_logger(self):
+        return SimpleNamespace(info=lambda msg, *a, **k: self.messages.append(msg))
+
+    def stage(self, *args, **kwargs):
+        return DummyStage()
+
+
 class DummyBillScraper:
     raw_bills = []
 
@@ -534,6 +551,120 @@ def test_run_scrapers_2026_2031_leg_period_invokes_chamber_scrapers(monkeypatch)
     )
 
     assert len(DummyChamberScraper.instances) == 4
+
+
+def test_run_scrapers_default_leg_period_skips_legacy_reference_scrape(monkeypatch):
+    """Behavior change: leg_period=None (default) must NOT enter the LEGACY
+    congresistas/bancadas/committees/organizations block at all anymore --
+    that reference data is now historical/stable and opt-in only. The 3
+    tests above only assert on scraper *instantiation*, which stays zero
+    either way once _recent_raw_exists is mocked True (both blocks' "skip"
+    branches short-circuit before ever instantiating anything) -- so they
+    can't tell "outer gate skipped the block" apart from "block ran and its
+    inner check said skip". This test distinguishes the two via the
+    legacy block's own log message, which is only ever emitted from
+    inside it."""
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+    log_mgr = RecordingLogManager()
+
+    monkeypatch.setattr(orchestrator_module, "log_manager", log_mgr)
+    monkeypatch.setattr(orch, "_recent_raw_exists", lambda *a, **k: True)
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.committees", "RawCommitteeScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period=None,
+    )
+
+    # Legacy-only message (no chamber name prefix) must never appear.
+    assert "Skipping congresistas scrape: latest raw scrape is within 1 day" not in (
+        log_mgr.messages
+    )
+    # Current-period chamber block must still be entered.
+    assert any("Starting 2026-2031 chamber scrapers" in m for m in log_mgr.messages)
+
+
+def test_run_scrapers_legacy_leg_period_runs_legacy_reference_scrape(monkeypatch):
+    """The flip side of the test above: an explicit non-current leg_period
+    (e.g. "2021-2026") is the opt-in that must actually enter the LEGACY
+    block, while skipping the current-period chamber block entirely."""
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+    log_mgr = RecordingLogManager()
+
+    monkeypatch.setattr(orchestrator_module, "log_manager", log_mgr)
+    monkeypatch.setattr(orch, "_recent_raw_exists", lambda *a, **k: True)
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.committees", "RawCommitteeScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period="2021-2026",
+    )
+
+    assert "Skipping congresistas scrape: latest raw scrape is within 1 day" in (
+        log_mgr.messages
+    )
+    assert not any("Starting 2026-2031 chamber scrapers" in m for m in log_mgr.messages)
+
+
+def test_run_scrapers_legacy_leg_period_still_runs_bills_motions_legacy_scrape(
+    monkeypatch,
+):
+    """Regression for the deliberate asymmetry: unlike scrape_others above,
+    bills/motions' legacy scrape must run regardless of leg_period -- old
+    bills/motions can still gain new documents/votes/status."""
+    calls = []
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+
+    monkeypatch.setattr(orchestrator_module, "log_manager", DummyLogManager())
+    monkeypatch.setattr("backend.scrapers.bills.RawBillScraper", DummyBillScraper)
+    monkeypatch.setattr("backend.scrapers.motions.RawMotionScraper", DummyMotionScraper)
+    monkeypatch.setattr(
+        orch,
+        "_scrape_range",
+        lambda **kwargs: calls.append(("_scrape_range", kwargs["entity_name"]))
+        or _stats(1, 2, 0),
+    )
+    monkeypatch.setattr(
+        orch,
+        "_scrape_pending_daily",
+        lambda **kwargs: calls.append(("_scrape_pending_daily", kwargs["entity_name"]))
+        or _stats(1, 2, 0),
+    )
+    monkeypatch.setattr(orch, "_scrape_chamber_range", lambda **kwargs: _stats(1, 2, 0))
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+
+    orch.run_scrapers(
+        scrape_bills=True,
+        scrape_motions=True,
+        scrape_leyes=False,
+        scrape_others=False,
+        leg_period="2021-2026",
+    )
+
+    assert ("_scrape_range", "Bills") in calls
+    assert ("_scrape_pending_daily", "Bills") in calls
+    assert ("_scrape_range", "Motions") in calls
+    assert ("_scrape_pending_daily", "Motions") in calls
 
 
 def test_recent_raw_exists_is_chamber_scoped(engine, session):
