@@ -100,9 +100,21 @@ class Settings(BaseSettings):
     AWS_S3_BUCKET_NAME: str | None = os.getenv("AWS_S3_BUCKET_NAME")
     AWS_S3_PREFIX: str | None = os.getenv("AWS_S3_PREFIX")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
+    HF_TOKEN: str | None = os.getenv("HF_TOKEN")
 
     # This is only in case we need some API_KEYS. Allow us to handle safely.
     model_config = ConfigDict(env_file=directories.ROOT_DIR / ".env", extra="allow")
+
+    # For the API
+    API_TITLE: str = "OpenPeru API"
+    API_VERSION: str = "v1"
+    OPENAPI_VERSION: str = "3.0.3"
+    OPENAPI_URL_PREFIX: str = "/api"
+    OPENAPI_SWAGGER_UI_PATH: str = "/docs"
+    OPENAPI_SWAGGER_UI_URL: str = "https://cdn.jsdelivr.net/npm/swagger-ui-dist/"
+    API_AUTH_ENABLED: bool = False
+    API_KEY: str | None = None
+    API_MAX_PER_PAGE: int = 100
 
 
 settings = Settings()
@@ -237,3 +249,6 @@ class LogManager:
 
 
 log_manager = LogManager(directories)
+
+
+# API CONFIGURATION

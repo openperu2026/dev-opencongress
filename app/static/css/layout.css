@@ -280,6 +280,12 @@ main {
   width: 100%;
 }
 
+.bill-search-form .search-row--general {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  margin-bottom: 40px;
+}
+
 .bill-search-form .search-row--primary {
   grid-template-columns: repeat(3, minmax(0, 1fr)) 92px 96px;
   align-items: stretch;
@@ -365,12 +371,21 @@ main {
   width: 180px;
 }
 
-.bill-search-form .search-date-grid {
+.bill-search-form .search-date-grid,
+.bill-search-form .search-date-native-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 50px;
   width: 100%;
   margin-top: -10px;
+}
+
+.bill-search-form .search-date-native-grid {
+  margin-top: 0;
+}
+
+.bill-search-form .search-date-legacy-grid {
+  display: none;
 }
 
 .bill-search-form .search-date-group {
@@ -401,6 +416,112 @@ main {
   font-size: 10px;
   box-sizing: border-box;
   background-color: var(--color-background);
+}
+
+.bill-search-form .search-date-input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  padding: 0 12px;
+  border: 2px solid #b7b7b7;
+  font-size: 16px;
+  box-sizing: border-box;
+  background-color: var(--color-background);
+  color: #344452;
+}
+
+.date-picker-wrap {
+  position: relative;
+}
+
+.date-picker-popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: min(320px, 88vw);
+  padding: 12px;
+  border: 1px solid #d8e0e8;
+  background: #ffffff;
+  box-shadow: 0 14px 28px rgba(42, 8, 0, 0.16);
+}
+
+.date-picker-popup[hidden] {
+  display: none;
+}
+
+.date-picker-header {
+  display: grid;
+  grid-template-columns: 36px 1fr 36px;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.date-picker-header strong {
+  color: #15283b;
+  font-size: 15px;
+  text-align: center;
+  text-transform: capitalize;
+}
+
+.date-picker-header button,
+.date-picker-grid button {
+  border: 1px solid #d8e0e8;
+  background: #ffffff;
+  color: #15283b;
+  cursor: pointer;
+}
+
+.date-picker-header button {
+  width: 36px;
+  height: 32px;
+}
+
+.date-picker-weekdays,
+.date-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.date-picker-weekdays {
+  margin-bottom: 6px;
+}
+
+.date-picker-weekdays span {
+  color: #667789;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.date-picker-grid span,
+.date-picker-grid button {
+  min-height: 32px;
+}
+
+.date-picker-grid button {
+  font-size: 14px;
+}
+
+.date-picker-grid button:hover,
+.date-picker-grid button:focus {
+  border-color: var(--color-highlight);
+  outline: none;
+}
+
+.date-picker-grid button.is-selected {
+  border-color: var(--color-highlight);
+  background: var(--color-highlight);
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.date-picker-grid button:disabled {
+  color: #b7b7b7;
+  background: #f5f5f5;
+  cursor: not-allowed;
 }
 
 .bill-search-form .radio-container {
@@ -558,12 +679,82 @@ main {
     vertical-align: middle;
 }
 
+.congress-mosaic {
+  width: calc(100% - 72px);
+  max-width: 1180px;
+  margin: 0 auto 34px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.congress-mosaic-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  color: #15283b;
+  text-decoration: none;
+  background: #ffffff;
+  border: 1px solid #d8e0e8;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+.congress-mosaic-card:hover,
+.congress-mosaic-card:focus {
+  transform: translateY(-3px);
+  border-color: var(--color-highlight);
+  box-shadow: 0 10px 22px rgba(42, 8, 0, 0.14);
+  outline: none;
+}
+
+.congress-mosaic-photo-wrap {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  overflow: hidden;
+  background: #f1f5f9;
+}
+
+.congress-mosaic-photo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.congress-mosaic-name {
+  display: flex;
+  align-items: center;
+  min-height: 58px;
+  padding: 10px 12px;
+  color: #15283b;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+  justify-content: center;
+}
+
+@media (max-width: 1050px) {
+  .congress-mosaic {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .congress-mosaic {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+  }
+}
+
 @media (max-width: 500px) {
   .congress-search-form .congress-search-grid,
   .bill-search-form .search-row--primary,
   .bill-search-form .search-row--secondary,
   .bill-search-form .search-diff-panel,
-  .bill-search-form .search-date-grid {
+  .bill-search-form .search-date-grid,
+  .bill-search-form .search-date-native-grid {
     grid-template-columns: 1fr;
   }
 
@@ -583,7 +774,8 @@ main {
 
   .search-criteria,
   .search-results-summary,
-  .search-results-table {
+  .search-results-table,
+  .congress-mosaic {
     width: calc(100% - 32px);
   }
 }
