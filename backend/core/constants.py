@@ -122,6 +122,33 @@ CHAMBER_BASE_URLS = {
 # string, so no changes needed there.
 CHAMBER_LEG_PERIOD_LABEL = "Parlamentario 2026 - 2031"
 
+# Phase B2 (bills/motions bicameral scraping) chamber-derived maps. Distinct
+# from CHAMBER_LABEL_TO_ORG_NAME above (that maps to canonical Organization
+# names for the process layer) and from chamber_label_from_id's suffix map
+# in backend/process/utils.py (that maps id-suffix -> label, the inverse
+# direction) -- these three map a resolved chamber label to the specific
+# wire formats congreso.gob.pe's bills/motions APIs and the bills SPA expect.
+CHAMBER_LABEL_TO_COD_TIPO_PARL = {"Senadores": "S", "Diputados": "D"}  # API wire code
+
+CHAMBER_LABEL_TO_ID_SUFFIX = {
+    "Senadores": "S",
+    "Diputados": "CD",
+}  # RawBill/RawMotion id suffix
+
+# perParId for the 2026-2031 period -- also doubles as motions' detail-URL
+# "year" path segment (confirmed live: GET .../mocion/{S|D}/2026/{number}
+# uses the bare period-start year, not the full period string). Legacy
+# get_last_id()/_scrape_range() keep their own separate hardcoded 2021
+# literals unchanged (by design, to guarantee zero legacy behavior change),
+# so this deliberately has no "2021-2026" entry -- a dict entry nothing
+# reads would be an unenforced claim that this is a single source of truth
+# when it demonstrably isn't wired up as one.
+LEG_PERIOD_TO_PER_PAR_ID = {"2026-2031": 2026}
+
+# The bills SPA's hash-route chamber prefix (e.g.
+# {BASE_URL}/senado/expediente/2026-2031/{number}), confirmed live.
+CHAMBER_LABEL_TO_ROUTE_SLUG = {"Senadores": "senado", "Diputados": "diputados"}
+
 LEGISLATURE_ALIASES = {
     # Congress wording → canonical legislature code
     # 2030

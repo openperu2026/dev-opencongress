@@ -128,6 +128,195 @@ def test_process_congresistas_creates_party_and_chamber_memberships(
         assert chamber_org.parent_org_id is None
 
 
+_SENADOR_PROFILE_HTML = """
+<html>
+  <div class="nombres"><span>Label</span><span>Ana Maria Torres Vega</span></div>
+  <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+  <div class="votacion"><span>Label</span><span>25,642</span></div>
+  <div class="representa"><span>Label</span><span>Lambayeque</span></div>
+  <div class="condicion"><span>Label</span><span>En Ejercicio</span></div>
+  <div class="foto"><img src="/FotosCongresista/ana.jpg"/></div>
+</html>
+"""
+
+
+def test_first_load_seeds_2026_2031_first_membership_with_term_start_date(
+    orchestrator, monkeypatch
+):
+    """New: on first_load=True, the FIRST-ever chamber_mem/party_mem
+    recorded for a 2026-2031 congresista gets start_date=2026-07-28
+    (confirmed real term-start date), not whatever date we happened to
+    scrape on.
+
+    Mutation-verified: the scrape timestamp deliberately falls in the
+    term's SECOND legislative year (Oct 2027, after the Jul 27 boundary),
+    where the existing timestamp-derived fallback (get_current_leg_year)
+    would incorrectly derive 2027-07-28 instead of the true term start
+    2026-07-28 -- a timestamp still within the first legislative year
+    (e.g. Oct 2026) would accidentally derive the same date either way and
+    not actually prove this fix does anything."""
+    monkeypatch.setattr("backend.database.orchestrator.get_cong_data", lambda path: {})
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2026 - 2031",
+                chamber="Senadores",
+                website="https://senado.congreso.gob.pe/senador/ana-torres/",
+                profile_content=_SENADOR_PROFILE_HTML,
+                memberships_content=None,
+                # Scraped well into the term's second legislative year --
+                # see the mutation-verification note above.
+                timestamp=datetime(2027, 10, 15),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas(first_load=True)
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        memberships = (
+            db.query(db_models.Membership)
+            .filter(db_models.Membership.person_id == cong.id)
+            .all()
+        )
+        assert len(memberships) == 2
+        for ms in memberships:
+            assert ms.start_date == date(2026, 7, 28)
+
+
+def test_first_load_does_not_affect_legacy_2021_2026_memberships(
+    orchestrator, monkeypatch
+):
+    """Regression: first_load=True must never force-reset legacy (pre-2026)
+    memberships' start_date to 2026-07-28."""
+    monkeypatch.setattr("backend.database.orchestrator.get_cong_data", lambda path: {})
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2021 - 2026",
+                chamber=None,
+                website="https://www.congreso.gob.pe/congresista/juan",
+                profile_content=_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2025, 8, 1),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas(first_load=True)
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        memberships = (
+            db.query(db_models.Membership)
+            .filter(db_models.Membership.person_id == cong.id)
+            .all()
+        )
+        assert len(memberships) == 2
+        for ms in memberships:
+            # Falls through to the existing timestamp-derived fallback
+            # (legislative year containing 2025-08-01 -> starts 2025-07-28),
+            # unaffected by first_load.
+            assert ms.start_date == date(2025, 7, 28)
+
+
+def test_first_load_does_not_override_start_date_when_membership_already_exists(
+    orchestrator,
+):
+    """Regression: first_load=True must NOT force-apply the 2026-07-28
+    term-start date when a Membership already exists for this exact
+    (person, org, leg_period, org_type) -- e.g. a bancada switch, where a
+    NEW membership genuinely starts on the date it was detected, not on
+    day one of the term. Exercises _upsert_membership_schema directly
+    (unit-level) rather than the full congresistas pipeline, since
+    reproducing an org-switch through the HTML-fixture-driven integration
+    path would obscure exactly which mechanism is under test.
+
+    Mutation-verified: the new membership's timestamp deliberately falls
+    in the term's SECOND legislative year (Sep 2027), so if the
+    already-exists guard were missing, this call would incorrectly
+    override start_date to 2026-07-28 instead of deriving 2027-07-28 from
+    the timestamp -- a timestamp still within the first legislative year
+    would accidentally produce the same result either way and not prove
+    the guard does anything.
+    """
+    with orchestrator.DBSession() as db:
+        cong = db_models.Congresista(full_name="Ana Torres", website="w", photo_url="p")
+        org_a = db_models.Organization(org_name="Bancada A", org_type="Bancada")
+        org_b = db_models.Organization(org_name="Bancada B", org_type="Bancada")
+        db.add_all([cong, org_a, org_b])
+        db.flush()
+
+        # An existing membership already recorded for org_a.
+        db.add(
+            db_models.BancadaMembership(
+                person_id=cong.id,
+                org_id=org_a.org_id,
+                leg_period="2026-2031",
+                org_type="Bancada",
+                role="Miembro",
+                start_date=date(2026, 7, 28),
+                end_date=date(2027, 7, 28),
+            )
+        )
+        db.commit()
+
+        # New membership for a DIFFERENT org (org_b) -- e.g. a bancada
+        # switch detected on a later scrape. No prior membership exists
+        # for (cong, org_b, ...), so this SHOULD get the term-start
+        # override under first_load=True per the "first-ever record" rule.
+        new_membership = schema.Membership(
+            cong_name="Ana Torres",
+            org_name="Bancada B",
+            org_type="Bancada",
+            leg_period="2026-2031",
+            role="Miembro",
+            time_stamp=datetime(2027, 9, 1),
+        )
+        result = orchestrator._upsert_membership_schema(
+            db,
+            cong=cong,
+            org=org_b,
+            membership=new_membership,
+            first_load=True,
+        )
+        assert result.start_date == date(2026, 7, 28)
+
+        # Re-upserting the SAME (cong, org_b) membership again (simulating
+        # a later re-process finding it already exists) must NOT re-derive
+        # 2026-07-28 from the override -- it must fall through to the
+        # timestamp-derived fallback, which for Sep 2027 yields 2027-07-28.
+        again = schema.Membership(
+            cong_name="Ana Torres",
+            org_name="Bancada B",
+            org_type="Bancada",
+            leg_period="2026-2031",
+            role="Presidente",  # role change -> upsert_membership treats as a new row
+            time_stamp=datetime(2027, 9, 1),
+        )
+        result2 = orchestrator._upsert_membership_schema(
+            db,
+            cong=cong,
+            org=org_b,
+            membership=again,
+            first_load=True,
+        )
+        assert result2.start_date == date(2027, 7, 28)
+
+
 def test_process_bills_senado_bill_links_committee_and_chamber(orchestrator):
     """CRITICAL regression (found in 3rd review round): the org_type-conditional
     fix at orchestrator.py's bill_orgs loop must not scope the chamber's own

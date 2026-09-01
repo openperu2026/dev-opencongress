@@ -252,7 +252,20 @@ async def fetch_multiple_urls_async(
         return [fromstring(html) for html in html_responses if html]
 
 
-def get_last_id(entity: str) -> int:
+def get_last_id(
+    entity: str,
+    per_par_id: int | None = None,
+    cod_tipo_parl: str | None = None,
+) -> int:
+    """Return the remote max id for ``entity`` ("Bills"/"Motions"/"Leyes").
+
+    per_par_id/cod_tipo_parl: optional overrides for the 2026-2031 bicameral
+    term (e.g. get_last_id("Bills", per_par_id=2026, cod_tipo_parl="S")).
+    When omitted, preserves the exact legacy payload shape per entity --
+    Motions sends only codTipoParl="C" (no perParId key at all); Bills sends
+    only perParId=2021 (no codTipoParl key at all) -- this asymmetry is
+    intentional and preserved, not a bug to fix.
+    """
     config = URLS[entity]
 
     headers = {
@@ -263,18 +276,15 @@ def get_last_id(entity: str) -> int:
 
     with httpx.Client(headers=headers, timeout=30) as client:
         if config["method"] == "POST":
+            payload = {"pageSize": 10, "rowStart": 0}
             if entity == "Motions":
-                payload = {
-                    "codTipoParl": "C",
-                    "pageSize": 10,
-                    "rowStart": 0,
-                }
+                payload["codTipoParl"] = cod_tipo_parl or "C"
+                if per_par_id is not None:
+                    payload["perParId"] = per_par_id
             else:
-                payload = {
-                    "perParId": 2021,
-                    "pageSize": 10,
-                    "rowStart": 0,
-                }
+                payload["perParId"] = per_par_id if per_par_id is not None else 2021
+                if cod_tipo_parl is not None:
+                    payload["codTipoParl"] = cod_tipo_parl
             r = client.post(config["url"], json=payload)
 
         else:

@@ -60,7 +60,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--first-summary",
         action="store_true",
-        help="Computes the first processing of summaries for bills",
+        help=(
+            "Backfill mode: computes the first processing of bill summaries "
+            "and semantic embeddings for every eligible row, and seeds the "
+            "first-ever 2026-2031 chamber/party/bancada/admin-org "
+            "membership per person with the confirmed real term-start date "
+            "(2026-07-28) instead of the scrape timestamp. Legacy "
+            "memberships and already-recorded 2026-2031 memberships are "
+            "unaffected either way."
+        ),
     )
     parser.add_argument(
         "--leg-period",

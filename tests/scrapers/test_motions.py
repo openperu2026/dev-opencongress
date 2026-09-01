@@ -192,3 +192,67 @@ def test_scrape_motion_appends_raw_motion(monkeypatch, session):
     general_dict = json.loads(motion.general)
     assert "titulo" in general_dict
     assert general_dict["titulo"] == "Moción X"
+
+
+# ---------- 2026-2031 chamber motions (Phase B2) ----------
+
+
+def test_create_chamber_raw_motion_uses_explicit_id():
+    scraper = RawMotionScraper()
+    data = {
+        "firmantes": [{"nombre": "Senador A"}],
+        "seguimientos": [{"evento": "presentada"}],
+        "titulo": "Moción bicameral",
+    }
+
+    raw_motion = scraper.create_chamber_raw_motion("00054-2026-2031-S", data)
+
+    assert isinstance(raw_motion, RawMotion)
+    assert raw_motion.id == "00054-2026-2031-S"
+    assert raw_motion.congresistas == json.dumps([{"nombre": "Senador A"}])
+    assert raw_motion.steps == json.dumps([{"evento": "presentada"}])
+    assert json.loads(raw_motion.general) == {"titulo": "Moción bicameral"}
+
+
+def test_scrape_chamber_motion_senadores_builds_correct_id_and_url(monkeypatch):
+    scraper = RawMotionScraper()
+    captured_urls = []
+
+    def fake_get_url_text(url):
+        captured_urls.append(url)
+        return json.dumps(
+            {"data": {"firmantes": [], "seguimientos": [], "titulo": "M"}}
+        )
+
+    monkeypatch.setattr("backend.scrapers.motions.get_url_text", fake_get_url_text)
+    monkeypatch.setattr(scraper, "update_tracking", lambda motion: [motion])
+
+    scraper.scrape_chamber_motion("Senadores", 54)
+
+    assert captured_urls == [
+        "https://api.congreso.gob.pe/smociones-portal-service/mocion/S/2026/54"
+    ]
+    assert len(scraper.raw_motions) == 1
+    assert scraper.raw_motions[0].id == "00054-2026-2031-S"
+
+
+def test_scrape_chamber_motion_diputados_builds_correct_id_and_url(monkeypatch):
+    scraper = RawMotionScraper()
+    captured_urls = []
+
+    def fake_get_url_text(url):
+        captured_urls.append(url)
+        return json.dumps(
+            {"data": {"firmantes": [], "seguimientos": [], "titulo": "M"}}
+        )
+
+    monkeypatch.setattr("backend.scrapers.motions.get_url_text", fake_get_url_text)
+    monkeypatch.setattr(scraper, "update_tracking", lambda motion: [motion])
+
+    scraper.scrape_chamber_motion("Diputados", 212)
+
+    assert captured_urls == [
+        "https://api.congreso.gob.pe/smociones-portal-service/mocion/D/2026/212"
+    ]
+    assert len(scraper.raw_motions) == 1
+    assert scraper.raw_motions[0].id == "00212-2026-2031-CD"

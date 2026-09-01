@@ -73,17 +73,25 @@ from backend.process.utils import (
     find_organization_schema,
     split_and_sort_name,
     replace_www,
+    chamber_label_from_id,
 )
 from backend.process.votes import extract as votes_extract, load as votes_load
 from backend.process.votes.config import DEFAULT_MODEL as VOTES_DEFAULT_MODEL
 from backend.scrapers.utils import get_last_id
 from backend.scrapers.congresista_photos import sync_photo as sync_congresista_photo
 from backend import TypeOrganization
-from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
+from backend.core.constants import (
+    CHAMBER_LABEL_TO_ORG_NAME,
+    CHAMBER_LABEL_TO_ID_SUFFIX,
+    CHAMBER_LABEL_TO_COD_TIPO_PARL,
+    LEG_PERIOD_TO_PER_PAR_ID,
+)
 from backend.core.parsers import (
     get_processable_year_range,
     resolve_processable_leg_periods,
+    LEG_PERIOD_RANGES,
 )
+from backend.core.enums import LegPeriod
 
 # org_type values that are always top-level (parent_org_id=NULL by design) —
 # a parent_org_id filter must never be applied when looking these up, since
@@ -193,8 +201,18 @@ class OpenPeruOrchestrator:
     def _get_last_id_scraped(
         self,
         raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        id_suffix: str | None = None,
     ) -> int:
-        """Return the highest numeric id present in ``raw_model`` (0 if empty)."""
+        """Return the highest numeric id present in ``raw_model`` (0 if empty).
+
+        id_suffix: when given (e.g. "S"/"CD"), scopes to 2026-2031 ids
+        ending "-{id_suffix}" and parses the leading zero-padded number.
+        When omitted (default, legacy path), scopes to legacy-format ids
+        only (those containing "_") before parsing -- without this filter,
+        a mixed table (once any new-format id exists) would raise
+        IndexError on item.split("_", 1)[1], since new-format ids have no
+        underscore. No-op change when only legacy ids exist.
+        """
         with self.DBSession() as db:
             ids = db.scalars(select(raw_model.id).distinct()).all()
 
@@ -204,7 +222,16 @@ class OpenPeruOrchestrator:
         if raw_model is RawLey:
             return max(int(item) for item in ids)
 
-        return max(int(item.split("_", 1)[1]) for item in ids)
+        if id_suffix is not None:
+            matching = [item for item in ids if item.endswith(f"-{id_suffix}")]
+            if not matching:
+                return 0
+            return max(int(item.split("-", 1)[0]) for item in matching)
+
+        legacy_ids = [item for item in ids if "_" in item]
+        if not legacy_ids:
+            return 0
+        return max(int(item.split("_", 1)[1]) for item in legacy_ids)
 
     def _load_scraper_results(self, scraper_name: str) -> None:
         """Persist a ScraperStats row for ``scraper_name`` and log a one-line summary."""
@@ -238,11 +265,12 @@ class OpenPeruOrchestrator:
 
         leg_period: when None (default) or "2026-2031", also runs the
         2026-2031 chamber-specific congresistas/bancadas/committees/
-        organizations scrapers (Phase B1) in addition to -- not instead of --
-        the legacy scrape above, since both periods' data must keep flowing.
-        Any other value only runs the legacy scrape (no effect on bills/
-        motions/leyes scraping either way -- chamber for those is resolved
-        per-row from the bill/motion's own id once Phase B2 lands).
+        organizations scrapers (Phase B1) AND the 2026-2031 chamber-specific
+        bills/motions range scrapers (Phase B2), in addition to -- not
+        instead of -- the legacy scrape above, since both periods' data
+        must keep flowing. Any other value only runs the legacy scrape.
+        Leyes scraping is unaffected either way -- there is no bicameral
+        concept for leyes.
         """
         console = log_manager.console_logger()
         console.info("Starting scraper pipeline")
@@ -424,6 +452,12 @@ class OpenPeruOrchestrator:
                     )
                     self._load_scraper_results("chamber_reference.py")
 
+        # =====================================================================
+        # LEGACY (through 2021-2026) -- runs unconditionally regardless of
+        # leg_period. See the "2026-2031 BICAMERAL TERM" blocks below for
+        # the new-term scrape, which runs IN ADDITION TO this, not instead.
+        # =====================================================================
+
         if scrape_bills:
             from backend.scrapers.bills import RawBillScraper
 
@@ -450,6 +484,7 @@ class OpenPeruOrchestrator:
                     max_age_days=1,
                     flush_every=100,
                     entity_name="Bills",
+                    chamber_scrape_fn=scraper.scrape_chamber_bill,
                 )
                 self.scraper_results["bills.py"] = ScraperStats(
                     new_results.start_time,
@@ -457,6 +492,29 @@ class OpenPeruOrchestrator:
                     new_results.scrapped + pending_results.scrapped,
                 )
                 self._load_scraper_results("bills.py")
+
+                # =============================================================
+                # 2026-2031 BICAMERAL TERM -- independent per-chamber id
+                # sequences, confirmed live 2026-09-01 (Phase B2 plan). Each
+                # chamber gets its OWN ScraperStats entry (not combined) so
+                # "chamber X silently stopped scraping" is visible per the
+                # design doc's own stats.errors monitoring guidance.
+                # =============================================================
+                if leg_period in (None, "2026-2031"):
+                    for chamber in ("Senadores", "Diputados"):
+                        chamber_results = self._scrape_chamber_range(
+                            scraper=scraper,
+                            raw_model=RawBill,
+                            scrape_fn=scraper.scrape_chamber_bill,
+                            buffer_attr="raw_bills",
+                            load_fn=scraper.load_raw_bills,
+                            chamber=chamber,
+                            flush_every=100,
+                            entity_name="Bills",
+                        )
+                        key = f"bills_chamber_{chamber.lower()}.py"
+                        self.scraper_results[key] = chamber_results
+                        self._load_scraper_results(key)
 
         if scrape_motions:
             from backend.scrapers.motions import RawMotionScraper
@@ -484,6 +542,7 @@ class OpenPeruOrchestrator:
                     max_age_days=1,
                     flush_every=100,
                     entity_name="Motions",
+                    chamber_scrape_fn=scraper.scrape_chamber_motion,
                 )
                 self.scraper_results["motions.py"] = ScraperStats(
                     new_results.start_time,
@@ -491,6 +550,24 @@ class OpenPeruOrchestrator:
                     new_results.scrapped + pending_results.scrapped,
                 )
                 self._load_scraper_results("motions.py")
+
+                # 2026-2031 BICAMERAL TERM -- see the bills block above for
+                # the full rationale (independent per-chamber stats).
+                if leg_period in (None, "2026-2031"):
+                    for chamber in ("Senadores", "Diputados"):
+                        chamber_results = self._scrape_chamber_range(
+                            scraper=scraper,
+                            raw_model=RawMotion,
+                            scrape_fn=scraper.scrape_chamber_motion,
+                            buffer_attr="raw_motions",
+                            load_fn=scraper.load_raw_motions,
+                            chamber=chamber,
+                            flush_every=100,
+                            entity_name="Motions",
+                        )
+                        key = f"motions_chamber_{chamber.lower()}.py"
+                        self.scraper_results[key] = chamber_results
+                        self._load_scraper_results(key)
 
         if scrape_documents:
             with log_manager.stage("scraper", "documents") as stage_logger:
@@ -549,6 +626,18 @@ class OpenPeruOrchestrator:
         preserves current behavior exactly. Bills/motions/leyes processing is
         not period-gated and ignores this parameter -- chamber for those is
         resolved per-row from the bill/motion's own id (see process_bill_organizations).
+
+        first_load: besides its existing bill-summary/semantic-embedding
+        backfill meaning, also controls the initial start_date for
+        2026-2031 chamber/party/bancada/admin-org memberships -- when True,
+        the FIRST-ever membership recorded for a given (person, org,
+        leg_period, org_type) in the 2026-2031 term is seeded with the
+        confirmed real term-start date (2026-07-28) rather than whichever
+        date we happened to scrape it on. A later re-scrape that finds an
+        existing membership (e.g. someone switched bancadas mid-term) is
+        unaffected regardless of first_load -- it always uses the date it
+        was detected. Legacy (pre-2026) memberships are never affected by
+        this flag either way. See _upsert_membership_schema.
         """
         console = log_manager.console_logger()
         console.info("Starting processing pipeline")
@@ -569,17 +658,17 @@ class OpenPeruOrchestrator:
             with log_manager.stage("process", "congresistas"):
                 console.info("Starting congresistas processing")
                 summary["congresistas"] = self._process_congresistas(
-                    leg_period=leg_period
+                    leg_period=leg_period, first_load=first_load
                 )
                 self._log_stage_summary("congresistas", summary["congresistas"])
 
             with log_manager.stage("process", "memberships"):
                 console.info("Starting memberships processing")
                 summary["admin_memberships"] = self._process_admin_memberships(
-                    leg_period=leg_period
+                    leg_period=leg_period, first_load=first_load
                 )
                 summary["bancada_memberships"] = self._process_bancada_memberships(
-                    leg_period=leg_period
+                    leg_period=leg_period, first_load=first_load
                 )
                 self._log_stage_summary(
                     "admin_memberships", summary["admin_memberships"]
@@ -708,6 +797,66 @@ class OpenPeruOrchestrator:
         end_time = datetime.now()
         return ScraperStats(start_time, end_time, count)
 
+    def _scrape_chamber_range(
+        self,
+        scraper,
+        raw_model: Type[RawBill] | Type[RawMotion],
+        scrape_fn: Callable[[str, int], None],
+        buffer_attr: str,
+        load_fn: Callable[[], None],
+        chamber: str,
+        flush_every: int = 100,
+        entity_name: str = "Bills",
+    ) -> ScraperStats:
+        """2026-2031 counterpart to _scrape_range: one independent
+        per-chamber id sequence (Senado/Diputados numbers don't share a
+        range). ``scrape_fn`` is scraper.scrape_chamber_bill/
+        scrape_chamber_motion, taking (chamber, number).
+
+        Throttled (unlike _scrape_range, left untouched): the very first
+        run after this ships unattended-backfills the ENTIRE existing
+        2026-2031 history for this chamber through a recaptcha-protected
+        path (bills specifically, via Playwright) -- _scrape_range's lack
+        of throttling is harmless for legacy only because its backlog is
+        already caught up in steady state. Mirrors _scrape_pending_daily's
+        already-proven interval.
+        """
+        id_suffix = CHAMBER_LABEL_TO_ID_SUFFIX[chamber]
+        start = self._get_last_id_scraped(raw_model, id_suffix=id_suffix) + 1
+        end = get_last_id(
+            entity_name,
+            per_par_id=LEG_PERIOD_TO_PER_PAR_ID["2026-2031"],
+            cod_tipo_parl=CHAMBER_LABEL_TO_COD_TIPO_PARL[chamber],
+        )
+
+        logger.info(f"Scraping {entity_name} ({chamber}) in range {start}..{end}")
+
+        start_time = datetime.now()
+        count = 0
+
+        for idx, number in enumerate(
+            tqdm(range(start, end + 1), desc=f"{entity_name} ({chamber})"), start=1
+        ):
+            scrape_fn(chamber, number)
+
+            current_length = len(getattr(scraper, buffer_attr))
+
+            if current_length >= flush_every:
+                count += current_length
+                load_fn()
+
+            if idx % 10 == 0:
+                time.sleep(2)
+
+        remaining = len(getattr(scraper, buffer_attr))
+
+        if remaining:
+            count += remaining
+            load_fn()
+
+        end_time = datetime.now()
+        return ScraperStats(start_time, end_time, count)
+
     def _scrape_pending_daily(
         self,
         raw_model: Type[RawBill] | Type[RawMotion],
@@ -719,8 +868,17 @@ class OpenPeruOrchestrator:
         max_age_days: int = 1,
         flush_every: int = 100,
         entity_name: str = "items",
+        chamber_scrape_fn: Callable[[str, int], None] | None = None,
     ) -> ScraperStats:
-        """Re-scrape rows older than ``max_age_days`` and not yet approved, sleeping briefly every 10 ids."""
+        """Re-scrape rows older than ``max_age_days`` and not yet approved, sleeping briefly every 10 ids.
+
+        chamber_scrape_fn: optional -- when a pending id is new-format
+        (2026-2031, detected via chamber_label_from_id), dispatches to this
+        instead of the legacy scrape_fn(year, number) path. Reuses Phase A's
+        existing chamber_label_from_id() rather than reimplementing suffix
+        parsing. Legacy-format ids are entirely unaffected (identical to
+        today) regardless of whether chamber_scrape_fn is provided.
+        """
         pending_ids = self._get_ids_to_update(raw_model, model, max_age_days)
         start_time = datetime.now()
         count = 0
@@ -728,9 +886,19 @@ class OpenPeruOrchestrator:
         for idx, item_id in enumerate(
             tqdm(pending_ids, desc=f"Pending {entity_name}"), start=1
         ):
-            year, number = item_id.split("_", 1)
-
-            scrape_fn(str(year), str(number))
+            chamber_label = chamber_label_from_id(item_id)
+            if chamber_label is None:
+                year, number = item_id.split("_", 1)
+                scrape_fn(str(year), str(number))
+            elif chamber_scrape_fn is not None:
+                number = int(item_id.split("-", 1)[0])
+                chamber_scrape_fn(chamber_label, number)
+            else:
+                logger.warning(
+                    f"Skipping pending id {item_id}: chamber-scoped id but "
+                    "no chamber_scrape_fn provided"
+                )
+                continue
 
             current_length = len(getattr(scraper, buffer_attr))
 
@@ -941,9 +1109,18 @@ class OpenPeruOrchestrator:
             errors=0 if processed_chunks or not bill_ids else len(bill_ids),
         )
 
-    def _membership_dates(self, membership: Membership) -> tuple[date, date]:
-        """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28)."""
-        seed = membership.start_date or membership.time_stamp
+    def _membership_dates(
+        self, membership: Membership, *, seed_override: date | None = None
+    ) -> tuple[date, date]:
+        """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28).
+
+        seed_override: when given, used instead of membership.time_stamp as
+        the seed for deriving the legislative-year window (still only when
+        membership.start_date itself is unset). See _upsert_membership_schema
+        for when this is the 2026-2031 term-start date rather than the scrape
+        timestamp.
+        """
+        seed = membership.start_date or seed_override or membership.time_stamp
         leg_year = get_current_leg_year(seed)
         derived_start = date(leg_year, 7, 28)
         derived_end = date(leg_year + 1, 7, 28)
@@ -993,9 +1170,42 @@ class OpenPeruOrchestrator:
         cong: db_models.Congresista,
         org: db_models.Organization,
         membership: Membership,
+        first_load: bool = False,
     ) -> db_models.Membership:
-        """Upsert a Membership row linking ``cong`` to ``org`` with derived dates and non-null extras."""
-        start_date, end_date = self._membership_dates(membership)
+        """Upsert a Membership row linking ``cong`` to ``org`` with derived dates and non-null extras.
+
+        first_load: when True AND membership.leg_period is the 2026-2031
+        term AND no Membership row has ever been recorded for this
+        (person, org, leg_period, org_type) before, seeds the start-date
+        derivation with the confirmed real term-start date (2026-07-28)
+        instead of the scrape timestamp -- every congresista's chamber/
+        party/bancada/admin membership genuinely began that day, regardless
+        of when we happened to scrape their profile. Only the FIRST-ever
+        record for a given membership gets this treatment: a later re-scrape
+        that finds an existing record (e.g. someone switched bancadas
+        mid-term) falls through to the existing timestamp-derived fallback,
+        since that membership change genuinely started whenever we detected
+        it, not on day one of the term.
+        """
+        seed_override = None
+        if first_load and membership.leg_period == LegPeriod.PERIODO_2026_2031:
+            already_exists = crud_core.membership_exists(
+                db,
+                person_id=cong.id,
+                org_id=org.org_id,
+                leg_period=membership.leg_period,
+                org_type=org.org_type,
+            )
+            if not already_exists:
+                seed_override = next(
+                    start
+                    for period, start, _ in LEG_PERIOD_RANGES
+                    if period == LegPeriod.PERIODO_2026_2031
+                )
+
+        start_date, end_date = self._membership_dates(
+            membership, seed_override=seed_override
+        )
         extra_fields = {
             "condicion": membership.condicion,
             "votes_in_election": membership.votes_in_election,
@@ -1014,7 +1224,9 @@ class OpenPeruOrchestrator:
             extra_fields=extra_fields,
         )
 
-    def _process_congresistas(self, *, leg_period: str | None = None) -> ProcessStats:
+    def _process_congresistas(
+        self, *, leg_period: str | None = None, first_load: bool = False
+    ) -> ProcessStats:
         """Process unprocessed RawCongresista rows into Congresista + Organization + Membership records."""
         stats = ProcessStats()
         clean_inserted = 0
@@ -1102,6 +1314,7 @@ class OpenPeruOrchestrator:
                             cong=cong,
                             org=org,
                             membership=ms,
+                            first_load=first_load,
                         )
 
                     raw_cong.processed = True
@@ -1220,7 +1433,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_admin_memberships(
-        self, *, leg_period: str | None = None
+        self, *, leg_period: str | None = None, first_load: bool = False
     ) -> ProcessStats:
         """Link congresistas to admin organizations; marks RawOrganization processed only if all members resolved."""
         stats = ProcessStats()
@@ -1258,6 +1471,7 @@ class OpenPeruOrchestrator:
                             cong=cong,
                             org=org,
                             membership=ms,
+                            first_load=first_load,
                         )
                     raw_org.processed = not missing
                     stats.processed += 1
@@ -1325,7 +1539,7 @@ class OpenPeruOrchestrator:
         return stats
 
     def _process_bancada_memberships(
-        self, *, leg_period: str | None = None
+        self, *, leg_period: str | None = None, first_load: bool = False
     ) -> ProcessStats:
         """Link congresistas to bancada organizations; only marks raw processed when every member resolves."""
         stats = ProcessStats()
@@ -1387,6 +1601,7 @@ class OpenPeruOrchestrator:
                             cong=cong,
                             org=org,
                             membership=ms,
+                            first_load=first_load,
                         )
 
                     raw_bancada.processed = not missing

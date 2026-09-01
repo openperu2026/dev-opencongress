@@ -8,16 +8,43 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings
+from backend.core.constants import (
+    CHAMBER_LABEL_TO_ID_SUFFIX,
+    CHAMBER_LABEL_TO_ROUTE_SLUG,
+    LEG_PERIOD_TO_PER_PAR_ID,
+)
 from backend.database.raw_models import RawBill
 from backend.scrapers.utils import get_url_text
 
 BASE_URL = "https://wb2server.congreso.gob.pe/spley-portal/#"
 DB_PATH = settings.DB_URL
 
+# 2026-2031 term: RawBill.id uses the full period string ("00006-2026-2031-S",
+# confirmed live and matching chamber_label_from_id()'s expectations), but
+# the SPA's own per-chamber detail ROUTE uses the bare period-start year
+# instead ({BASE_URL}/senado/expediente/2026/6) -- confirmed live 2026-09-01
+# by extracting the real router-generated href from a live search result
+# page (an earlier session's guess of the full period string in the route
+# was wrong and never actually resolved; it happened to look like it worked
+# once due to a stale/cached opaque token, not because the route was
+# correct). Same bare-year convention as motions.py's detail URL after all
+# -- no asymmetry between the two entities' URL shapes.
+CHAMBER_LEG_PERIOD = "2026-2031"
+
 
 class RawBillScraper:
     """
-    Class to scrape and store raw bill information
+    Class to scrape and store raw bill information.
+
+    Two independent scraping paths (see section headers below): LEGACY
+    (through 2021-2026) builds bill_id/bill_url from a bare year via
+    scrape_bill(). 2026-2031 BICAMERAL TERM builds bill_id from the fixed
+    period string but bill_url from the bare period-start year (see the
+    CHAMBER_LEG_PERIOD comment above) via scrape_chamber_bill(). Both funnel
+    through the SAME __get_existing_api_url/__search_api_url discovery
+    mechanism unchanged (chamber-agnostic -- they only care about the
+    resolved id/url, not what chamber it's for) and the same section-mapping
+    logic (SHARED, extracted into _apply_sections below).
     """
 
     def __init__(self, session=None, engine=None):
@@ -41,6 +68,12 @@ class RawBillScraper:
 
         # List of raw bills objects
         self.raw_bills = []
+
+    # =====================================================================
+    # SHARED -- used by both the legacy and 2026-2031 code paths below.
+    # Both are already chamber-agnostic (only care about the resolved
+    # id/url passed in), so no changes are needed for the new term.
+    # =====================================================================
 
     def __get_existing_api_url(self, bill_id: str) -> str | None:
         with self.Session() as db:
@@ -82,6 +115,27 @@ class RawBillScraper:
 
             finally:
                 browser.close()
+
+    def _apply_sections(self, raw_bill: RawBill, data: dict) -> RawBill:
+        """Populate general/congresistas/committees/steps on an already
+        id-stamped RawBill from a fetched detail payload. Shared by both
+        create_raw_bill (legacy) and create_chamber_raw_bill (2026-2031)."""
+        for raw_name, attribute_name in self.section_mapping.items():
+            # Grab expected section, use English value to signal no section
+            # (since sections can be empty lists themselves)
+            attribute_value = data.get(raw_name, "Not Found")
+            if attribute_value == "Not Found":
+                logger.warning(
+                    f"{raw_bill.id} - Missing Attribute: {raw_name} ({attribute_name})"
+                )
+            else:
+                setattr(raw_bill, attribute_name, json.dumps(attribute_value))
+        return raw_bill
+
+    # =====================================================================
+    # LEGACY (through 2021-2026) -- bare-year id/url, discovered via the
+    # unicameral SPA route
+    # =====================================================================
 
     def scrape_bill(self, year: str, bill_number: str) -> None:
         """
@@ -132,21 +186,75 @@ class RawBillScraper:
         raw_bill = RawBill(
             id=f"{year}_{bill_number}", timestamp=datetime.now(), processed=False
         )
-
-        # Add sections
-        for raw_name, attribute_name in self.section_mapping.items():
-            # Grab expected section, use English value to signal no section
-            # (since sections can be empty lists themselves)
-            attribute_value = data.get(raw_name, "Not Found")
-            if attribute_value == "Not Found":
-                logger.warning(
-                    f"{raw_bill.id} - Missing Attribute: {raw_name} ({attribute_name})"
-                )
-            else:
-                setattr(raw_bill, attribute_name, json.dumps(attribute_value))
-
+        self._apply_sections(raw_bill, data)
         raw_bill.api_url = api_url
         return raw_bill
+
+    # =====================================================================
+    # 2026-2031 BICAMERAL TERM -- chamber-prefixed id/url, confirmed live
+    # 2026-09-01 (Phase B2 plan, Step B2-0). Reuses the SAME Playwright
+    # navigate-and-intercept mechanism as legacy (SHARED section above)
+    # unchanged -- only the id/url construction differs.
+    # =====================================================================
+
+    def scrape_chamber_bill(self, chamber: str, bill_number: int) -> None:
+        """Scrape one 2026-2031 bill for one chamber.
+
+        Live-confirmed 2026-09-01 (post-implementation spot-check, both
+        chambers): the detail route resolves via the real opaque
+        expediente/{token1}/{token2}?codTipoParl={S|D} GET, and the
+        resulting body carries general/firmantes/comisiones/seguimientos
+        exactly matching legacy's section_mapping -- no schema drift.
+        """
+        bill_id = f"{bill_number:05d}-{CHAMBER_LEG_PERIOD}-{CHAMBER_LABEL_TO_ID_SUFFIX[chamber]}"
+        bill_url = (
+            f"{BASE_URL}/{CHAMBER_LABEL_TO_ROUTE_SLUG[chamber]}/expediente/"
+            f"{LEG_PERIOD_TO_PER_PAR_ID[CHAMBER_LEG_PERIOD]}/{bill_number}"
+        )
+
+        api_url = self.__get_existing_api_url(bill_id)
+
+        if not api_url:
+            api_url = self.__search_api_url(bill_url)
+
+        if not api_url:
+            logger.warning(f"No API URL found for Raw Bill {bill_id}")
+            return
+
+        response = get_url_text(api_url)
+
+        if not response:
+            logger.warning(f"No response found for Raw Bill {bill_id}")
+            return
+
+        try:
+            resp = json.loads(response)
+        except json.JSONDecodeError:
+            logger.warning(f"Invalid JSON response for Raw Bill {bill_id}")
+            return
+
+        bill = self.create_chamber_raw_bill(bill_id, resp["data"], api_url)
+
+        tracking_result = self.update_tracking(bill)
+
+        if isinstance(tracking_result, list):
+            self.raw_bills.extend(tracking_result)
+        else:
+            self.raw_bills.append(tracking_result)
+
+        logger.success(f"Successfully scraped Raw Bill {bill_id}")
+
+    def create_chamber_raw_bill(
+        self, bill_id: str, data: dict, api_url: str
+    ) -> RawBill:
+        raw_bill = RawBill(id=bill_id, timestamp=datetime.now(), processed=False)
+        self._apply_sections(raw_bill, data)
+        raw_bill.api_url = api_url
+        return raw_bill
+
+    # =====================================================================
+    # SHARED -- used by both the legacy and 2026-2031 code paths above
+    # =====================================================================
 
     def update_tracking(self, bill: RawBill) -> list[RawBill]:
         """Update the tracking columns of a RawBill object"""

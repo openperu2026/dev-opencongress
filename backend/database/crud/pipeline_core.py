@@ -338,6 +338,34 @@ def upsert_organization(
     )
 
 
+def membership_exists(
+    db: Session,
+    *,
+    person_id: int,
+    org_id: int,
+    leg_period: str | Enum,
+    org_type: str | TypeOrganization,
+) -> bool:
+    """True if ANY Membership row already exists for this (person, org,
+    leg_period, org_type), regardless of start_date/end_date/role -- unlike
+    upsert_membership's own existing-row lookup, which is keyed on the
+    exact start_date/end_date/role too (so it can't answer "has this
+    person ever had this membership before", only "does this exact
+    date/role combination already exist").
+    """
+    return (
+        db.scalars(
+            select(db_models.Membership.id).where(
+                db_models.Membership.person_id == person_id,
+                db_models.Membership.org_id == org_id,
+                db_models.Membership.leg_period == _enum_value(leg_period),
+                db_models.Membership.org_type == _enum_value(org_type),
+            )
+        ).first()
+        is not None
+    )
+
+
 def upsert_membership(
     db: Session,
     *,

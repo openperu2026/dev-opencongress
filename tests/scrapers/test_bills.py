@@ -171,3 +171,83 @@ def test_scrape_bill_appends_raw_bill(monkeypatch, session):
     assert json.loads(bill.general)["titulo"] == "Ley de Prueba"
     assert json.loads(bill.committees)[0]["nombre"] == "Comisión Y"
     assert json.loads(bill.steps)[0]["evento"] == "ingreso"
+
+
+# ---------- 2026-2031 chamber bills (Phase B2) ----------
+
+
+def test_create_chamber_raw_bill_uses_explicit_id():
+    scraper = RawBillScraper()
+
+    data = {
+        "general": {"titulo": "Ley X"},
+        "firmantes": [{"nombre": "Senador A"}],
+        "seguimientos": [{"evento": "derivado"}],
+    }
+
+    raw_bill = scraper.create_chamber_raw_bill(
+        "00006-2026-2031-S", data, "www.example.org"
+    )
+
+    assert isinstance(raw_bill, RawBill)
+    assert raw_bill.id == "00006-2026-2031-S"
+    assert raw_bill.general == json.dumps(data["general"])
+    assert raw_bill.congresistas == json.dumps(data["firmantes"])
+    assert raw_bill.committees is None
+    assert raw_bill.api_url == "www.example.org"
+
+
+def test_scrape_chamber_bill_senadores_builds_correct_id_and_url(monkeypatch):
+    scraper = RawBillScraper()
+    captured_urls = []
+
+    def fake_search(bill_url):
+        captured_urls.append(bill_url)
+        return f"{API_URL}opaque1/opaque2"
+
+    monkeypatch.setattr(
+        scraper, "_RawBillScraper__get_existing_api_url", lambda bid: None
+    )
+    monkeypatch.setattr(scraper, "_RawBillScraper__search_api_url", fake_search)
+
+    def fake_get_url_text(url):
+        return json.dumps({"data": {"general": {"titulo": "Ley Senado"}}})
+
+    monkeypatch.setattr("backend.scrapers.bills.get_url_text", fake_get_url_text)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bill: [bill])
+
+    scraper.scrape_chamber_bill("Senadores", 6)
+
+    assert captured_urls == [
+        "https://wb2server.congreso.gob.pe/spley-portal/#/senado/expediente/2026/6"
+    ]
+    assert len(scraper.raw_bills) == 1
+    assert scraper.raw_bills[0].id == "00006-2026-2031-S"
+
+
+def test_scrape_chamber_bill_diputados_builds_correct_id_and_url(monkeypatch):
+    scraper = RawBillScraper()
+    captured_urls = []
+
+    def fake_search(bill_url):
+        captured_urls.append(bill_url)
+        return f"{API_URL}opaque1/opaque2"
+
+    monkeypatch.setattr(
+        scraper, "_RawBillScraper__get_existing_api_url", lambda bid: None
+    )
+    monkeypatch.setattr(scraper, "_RawBillScraper__search_api_url", fake_search)
+
+    def fake_get_url_text(url):
+        return json.dumps({"data": {"general": {"titulo": "Ley Diputados"}}})
+
+    monkeypatch.setattr("backend.scrapers.bills.get_url_text", fake_get_url_text)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bill: [bill])
+
+    scraper.scrape_chamber_bill("Diputados", 102)
+
+    assert captured_urls == [
+        "https://wb2server.congreso.gob.pe/spley-portal/#/diputados/expediente/2026/102"
+    ]
+    assert len(scraper.raw_bills) == 1
+    assert scraper.raw_bills[0].id == "00102-2026-2031-CD"

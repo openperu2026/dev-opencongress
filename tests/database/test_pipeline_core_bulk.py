@@ -258,3 +258,61 @@ def test_find_organization_parent_org_id_scoping(session):
         parent_org_id=senado.org_id + 999,
     )
     assert none_found is None
+
+
+def test_membership_exists(session, create_congresista):
+    cong = create_congresista()
+    org = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Fuerza Popular", org_type=TypeOrganization.BANCADA
+        ),
+    )
+
+    # Nothing recorded yet.
+    assert (
+        crud_core.membership_exists(
+            session,
+            person_id=cong.id,
+            org_id=org.org_id,
+            leg_period="2026-2031",
+            org_type=TypeOrganization.BANCADA,
+        )
+        is False
+    )
+
+    crud_core.upsert_membership(
+        session,
+        person_id=cong.id,
+        org_id=org.org_id,
+        leg_period="2026-2031",
+        org_type=TypeOrganization.BANCADA,
+        role=RoleOrganization.MIEMBRO,
+        start_date=date(2026, 7, 28),
+        end_date=date(2027, 7, 28),
+    )
+
+    # Now exists -- and the check is independent of role/dates (unlike
+    # upsert_membership's own exact-match existing-row lookup).
+    assert (
+        crud_core.membership_exists(
+            session,
+            person_id=cong.id,
+            org_id=org.org_id,
+            leg_period="2026-2031",
+            org_type=TypeOrganization.BANCADA,
+        )
+        is True
+    )
+
+    # A different leg_period/org_type for the same person+org is unaffected.
+    assert (
+        crud_core.membership_exists(
+            session,
+            person_id=cong.id,
+            org_id=org.org_id,
+            leg_period="2021-2026",
+            org_type=TypeOrganization.BANCADA,
+        )
+        is False
+    )
