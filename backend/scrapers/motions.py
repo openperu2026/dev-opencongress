@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from datetime import datetime
 from loguru import logger
 
@@ -33,8 +34,9 @@ class RawMotionScraper:
     the hardcoded "C" chamber code via scrape_motion(). 2026-2031
     BICAMERAL TERM builds them from a chamber + the fixed period-start
     year via scrape_chamber_motion() -- confirmed live to use the SAME
-    URL shape as legacy, just S/D instead of C. Both share the same
-    section-mapping logic (SHARED, extracted into _apply_sections below).
+    URL shape as legacy, just S/D instead of C. Both are thin wrappers
+    that build id/url and delegate to the SAME __fetch_and_track_motion
+    helper (below) for the actual fetch/parse/track sequence.
     """
 
     def __init__(self, session=None, engine=None):
@@ -75,6 +77,26 @@ class RawMotionScraper:
         raw_motion.general = json.dumps(data)
         return raw_motion
 
+    def __fetch_and_track_motion(
+        self,
+        motion_id: str,
+        motion_url: str,
+        create_fn: Callable[[dict], RawMotion],
+    ) -> None:
+        """Fetch+parse the detail JSON, build the RawMotion via create_fn,
+        and update tracking. Shared by scrape_motion (legacy) and
+        scrape_chamber_motion (2026-2031) -- only id/url construction and
+        which create_* method builds the row differ."""
+        response = get_url_text(motion_url)
+
+        if response:
+            resp = json.loads(response)
+            new_motion = create_fn(resp["data"])
+            self.raw_motions.extend(self.update_tracking(new_motion))
+            logger.success(f"Successfully scraped Raw Motion {motion_id}")
+        else:
+            return None
+
     # =====================================================================
     # LEGACY (through 2021-2026) -- bare-year id/url, hardcoded "C" chamber
     # code
@@ -86,20 +108,13 @@ class RawMotionScraper:
 
         Returns tuple with result of scrape, error message if relevant
         """
-
+        motion_id = f"{year}_{motion_number}"
         motion_url = f"{BASE_URL}/mocion/C/{year}/{motion_number}"
-        response = get_url_text(motion_url)
-
-        if response:
-            resp = json.loads(response)
-
-            # Successfully built the raw bill!
-            new_motion = self.create_raw_motion(year, motion_number, resp["data"])
-            self.raw_motions.extend(self.update_tracking(new_motion))
-            logger.success(f"Successfully scraped Raw Motion {year}_{motion_number}")
-
-        else:
-            return None
+        self.__fetch_and_track_motion(
+            motion_id,
+            motion_url,
+            lambda data: self.create_raw_motion(year, motion_number, data),
+        )
 
     def create_raw_motion(self, year: str, motion_number: str, data: dict) -> RawMotion:
         # Initialize raw bill with id and timestamp
@@ -123,15 +138,11 @@ class RawMotionScraper:
         cod_tipo_parl = CHAMBER_LABEL_TO_COD_TIPO_PARL[chamber]
         motion_id = f"{motion_number:05d}-{CHAMBER_LEG_PERIOD}-{CHAMBER_LABEL_TO_ID_SUFFIX[chamber]}"
         motion_url = f"{BASE_URL}/mocion/{cod_tipo_parl}/{year}/{motion_number}"
-        response = get_url_text(motion_url)
-
-        if response:
-            resp = json.loads(response)
-            new_motion = self.create_chamber_raw_motion(motion_id, resp["data"])
-            self.raw_motions.extend(self.update_tracking(new_motion))
-            logger.success(f"Successfully scraped Raw Motion {motion_id}")
-        else:
-            return None
+        self.__fetch_and_track_motion(
+            motion_id,
+            motion_url,
+            lambda data: self.create_chamber_raw_motion(motion_id, data),
+        )
 
     def create_chamber_raw_motion(self, motion_id: str, data: dict) -> RawMotion:
         raw_motion = RawMotion(

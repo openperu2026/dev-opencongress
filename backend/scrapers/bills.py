@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from datetime import datetime
 from loguru import logger
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
@@ -40,11 +41,11 @@ class RawBillScraper:
     (through 2021-2026) builds bill_id/bill_url from a bare year via
     scrape_bill(). 2026-2031 BICAMERAL TERM builds bill_id from the fixed
     period string but bill_url from the bare period-start year (see the
-    CHAMBER_LEG_PERIOD comment above) via scrape_chamber_bill(). Both funnel
-    through the SAME __get_existing_api_url/__search_api_url discovery
-    mechanism unchanged (chamber-agnostic -- they only care about the
-    resolved id/url, not what chamber it's for) and the same section-mapping
-    logic (SHARED, extracted into _apply_sections below).
+    CHAMBER_LEG_PERIOD comment above) via scrape_chamber_bill(). Both are
+    thin wrappers that build id/url and delegate to the SAME
+    __fetch_and_track_bill helper (SHARED, below) for the actual
+    fetch/parse/track sequence -- chamber-agnostic, only the id/url and
+    which create_* method builds the row differ.
     """
 
     def __init__(self, session=None, engine=None):
@@ -132,21 +133,16 @@ class RawBillScraper:
                 setattr(raw_bill, attribute_name, json.dumps(attribute_value))
         return raw_bill
 
-    # =====================================================================
-    # LEGACY (through 2021-2026) -- bare-year id/url, discovered via the
-    # unicameral SPA route
-    # =====================================================================
-
-    def scrape_bill(self, year: str, bill_number: str) -> None:
-        """
-        Scrape key sections: general, congresistas, committees, steps
-
-        Returns tuple with result of scrape, error message if relevant
-        """
-
-        bill_url = f"{BASE_URL}/expediente/{year}/{bill_number}"
-        bill_id = f"{year}_{bill_number}"
-
+    def __fetch_and_track_bill(
+        self,
+        bill_id: str,
+        bill_url: str,
+        create_fn: Callable[[dict, str], RawBill],
+    ) -> None:
+        """Resolve the API url, fetch+parse the detail JSON, build the
+        RawBill via create_fn, and update tracking. Shared by scrape_bill
+        (legacy) and scrape_chamber_bill (2026-2031) -- only id/url
+        construction and which create_* method builds the row differ."""
         api_url = self.__get_existing_api_url(bill_id)
 
         if not api_url:
@@ -168,7 +164,7 @@ class RawBillScraper:
             logger.warning(f"Invalid JSON response for Raw Bill {bill_id}")
             return
 
-        bill = self.create_raw_bill(year, bill_number, resp["data"], api_url)
+        bill = create_fn(resp["data"], api_url)
 
         tracking_result = self.update_tracking(bill)
 
@@ -178,6 +174,27 @@ class RawBillScraper:
             self.raw_bills.append(tracking_result)
 
         logger.success(f"Successfully scraped Raw Bill {bill_id}")
+
+    # =====================================================================
+    # LEGACY (through 2021-2026) -- bare-year id/url, discovered via the
+    # unicameral SPA route
+    # =====================================================================
+
+    def scrape_bill(self, year: str, bill_number: str) -> None:
+        """
+        Scrape key sections: general, congresistas, committees, steps
+
+        Returns tuple with result of scrape, error message if relevant
+        """
+        bill_id = f"{year}_{bill_number}"
+        bill_url = f"{BASE_URL}/expediente/{year}/{bill_number}"
+        self.__fetch_and_track_bill(
+            bill_id,
+            bill_url,
+            lambda data, api_url: self.create_raw_bill(
+                year, bill_number, data, api_url
+            ),
+        )
 
     def create_raw_bill(
         self, year: str, bill_number: str, data: dict, api_url: str
@@ -211,38 +228,11 @@ class RawBillScraper:
             f"{BASE_URL}/{CHAMBER_LABEL_TO_ROUTE_SLUG[chamber]}/expediente/"
             f"{LEG_PERIOD_TO_PER_PAR_ID[CHAMBER_LEG_PERIOD]}/{bill_number}"
         )
-
-        api_url = self.__get_existing_api_url(bill_id)
-
-        if not api_url:
-            api_url = self.__search_api_url(bill_url)
-
-        if not api_url:
-            logger.warning(f"No API URL found for Raw Bill {bill_id}")
-            return
-
-        response = get_url_text(api_url)
-
-        if not response:
-            logger.warning(f"No response found for Raw Bill {bill_id}")
-            return
-
-        try:
-            resp = json.loads(response)
-        except json.JSONDecodeError:
-            logger.warning(f"Invalid JSON response for Raw Bill {bill_id}")
-            return
-
-        bill = self.create_chamber_raw_bill(bill_id, resp["data"], api_url)
-
-        tracking_result = self.update_tracking(bill)
-
-        if isinstance(tracking_result, list):
-            self.raw_bills.extend(tracking_result)
-        else:
-            self.raw_bills.append(tracking_result)
-
-        logger.success(f"Successfully scraped Raw Bill {bill_id}")
+        self.__fetch_and_track_bill(
+            bill_id,
+            bill_url,
+            lambda data, api_url: self.create_chamber_raw_bill(bill_id, data, api_url),
+        )
 
     def create_chamber_raw_bill(
         self, bill_id: str, data: dict, api_url: str
