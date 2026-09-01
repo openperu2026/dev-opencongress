@@ -11,7 +11,13 @@ from backend.process.schema import (
     BillText,
 )
 from backend.process.billtext import extract_bill_body
-from backend.process.utils import create_vote_ids, as_date, get_sentence_case
+from backend.process.utils import (
+    create_vote_ids,
+    as_date,
+    get_sentence_case,
+    chamber_label_from_id,
+)
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
 
 def process_bill_text(bill_pages: list[RawBillPage], version_id: int) -> BillText:
@@ -348,10 +354,11 @@ def process_bill_organizations(
             )
         )
 
+    chamber_label = chamber_label_from_id(raw_bill.id)
     list_orgs.append(
         BillOrganization(
             bill_id=raw_bill.id,
-            org_name="Cámara de Diputados",
+            org_name=CHAMBER_LABEL_TO_ORG_NAME[chamber_label],
             org_type="Cámara",
             presentation_date=as_date(dates.get("presentation_date")),
             decision_date=as_date(dates.get("final_plenary_decision_date")),

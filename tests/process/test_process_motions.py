@@ -220,6 +220,25 @@ def test_process_motion_organizations_no_steps_uses_raw_presentation_date():
     assert orgs[0].presentation_date.isoformat() == "2026-01-10"
 
 
+def test_process_motion_organizations_senado_id_resolves_to_senado():
+    """New-format motion id confirmed 2026-08-31: "{number}-{period}-S"."""
+    rm = _raw_motion(id="00054-2026-2031-S", steps=[])
+
+    orgs = mod.process_motion_organizations(rm, [])
+
+    assert len(orgs) == 1
+    assert orgs[0].org_name == "Senado de la República"
+
+
+def test_process_motion_organizations_diputados_id_resolves_to_diputados():
+    rm = _raw_motion(id="00210-2026-2031-CD", steps=[])
+
+    orgs = mod.process_motion_organizations(rm, [])
+
+    assert len(orgs) == 1
+    assert orgs[0].org_name == "Cámara de Diputados"
+
+
 def test_process_motion_text_joins_ordered_pages():
     pages = [
         _raw_page(page_num=2, text="Segunda página"),

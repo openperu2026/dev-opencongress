@@ -3,12 +3,24 @@ from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership, Organization
 from backend.process.utils import gen_congresistas_df, to_datetime
 from backend.database.session import get_db
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
 import json
 from pathlib import Path
 from datetime import datetime
 from urllib.parse import urljoin
 from lxml.html import fromstring, HtmlElement
+
+# Chamber-specific role text. Deliberately does NOT include "Congreso" (the
+# confirmed joint/bicameral label) — an individual congresista always belongs
+# to exactly one chamber, so seeing "Congreso" here would be an unexpected
+# value; let it raise (KeyError, caught by the per-row exception handler)
+# rather than silently assigning a nonsense role.
+_CHAMBER_LABEL_TO_ROLE = {
+    "Diputados": "Diputado",
+    "Senadores": "Senador",
+    None: "Diputado",  # preserves current behavior for all pre-2026 rows
+}
 
 
 def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
@@ -157,23 +169,30 @@ def process_profile_content(
     )
 
     region = xpath2('//*[@class="representa"]/span[2]', html)
-    # TODO: Update when the webpage divides diputados and senadores
+    chamber_org_name = CHAMBER_LABEL_TO_ORG_NAME[raw_cong.chamber]
+    chamber_role = _CHAMBER_LABEL_TO_ROLE[raw_cong.chamber]
     chamber_mem = Membership(
         cong_name=cong.full_name,
-        org_name="Cámara de Diputados",
+        org_name=chamber_org_name,
         org_type="Cámara",
         leg_period=raw_cong.leg_period,
-        role=normalize_membership_role("Diputado"),
+        role=normalize_membership_role(chamber_role),
         time_stamp=getattr(raw_cong, "timestamp", datetime.now()),
         condicion=xpath2('//*[@class="condicion"]/span[2]', html),
         votes_in_election=int(votes_text.replace(",", "")),
         dist_electoral=REGIONS_MAP.get(region, region),
     )
 
+    # Senado URL is a placeholder pending Step 0 confirmation of the real link.
+    chamber_link = (
+        "www.congreso.gob.pe/diputados"
+        if raw_cong.chamber != "Senadores"
+        else "www.congreso.gob.pe/senado"
+    )
     chamber = Organization(
-        org_name="Cámara de Diputados",
+        org_name=chamber_org_name,
         org_type="Cámara",
-        org_link="www.congreso.gob.pe/diputados",
+        org_link=chamber_link,
     )
 
     return cong, [party, chamber], [party_mem, chamber_mem]

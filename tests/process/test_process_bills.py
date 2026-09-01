@@ -256,6 +256,38 @@ def test_process_bill_organizations_no_steps_uses_raw_presentation_date():
     assert orgs[0].presentation_date.isoformat() == "2026-01-10"
 
 
+def test_process_bill_organizations_senado_id_resolves_to_senado():
+    """New-format bill id confirmed 2026-08-31: "{number}-{period}-S" for
+    Senado. Chamber is parsed directly from the id suffix, no JSON payload
+    field needed."""
+    rb = _raw_bill(id="00006-2026-2031-S", steps=[])
+
+    orgs = mod.process_bill_organizations(rb, [])
+
+    assert len(orgs) == 1
+    assert orgs[0].org_name == "Senado de la República"
+
+
+def test_process_bill_organizations_diputados_id_resolves_to_diputados():
+    rb = _raw_bill(id="00102-2026-2031-CD", steps=[])
+
+    orgs = mod.process_bill_organizations(rb, [])
+
+    assert len(orgs) == 1
+    assert orgs[0].org_name == "Cámara de Diputados"
+
+
+def test_process_bill_organizations_legacy_id_defaults_to_diputados():
+    """Regression: legacy ids ("{year}_{number}") have no -S/-CD suffix and
+    must keep defaulting to Diputados, unchanged."""
+    rb = _raw_bill(id="2021_14864", steps=[])
+
+    orgs = mod.process_bill_organizations(rb, [])
+
+    assert len(orgs) == 1
+    assert orgs[0].org_name == "Cámara de Diputados"
+
+
 def test_process_bill_text_extracts_body_from_ordered_pages():
     pages = [
         _raw_page(page_num=2, text="\nArticulo 2. Final"),

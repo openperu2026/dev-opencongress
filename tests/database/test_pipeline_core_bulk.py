@@ -98,3 +98,163 @@ def test_upsert_bancada_membership_is_idempotent(session, create_congresista):
     assert second.id == first.id
     assert session.query(db_models.BancadaMembership).count() == 1
     assert session.query(db_models.Membership).count() == 1
+
+
+def test_upsert_organization_same_name_type_different_parent_creates_two_rows(
+    session,
+):
+    """CRITICAL regression: this is the exact bug the bicameral migration's
+    Step 4b fix exists for. Before the fix, upserting the second chamber's
+    same-named committee would match the first chamber's row via
+    find_organization (name+type only) and silently overwrite its
+    parent_org_id, corrupting every membership that pointed at it."""
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    senado = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Senado de la República", org_type="Cámara"),
+    )
+
+    committee_diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Justicia",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+    committee_senado = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Justicia",
+            org_type="Comisión",
+            parent_org_name="Senado de la República",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    assert committee_diputados.org_id != committee_senado.org_id
+    assert committee_diputados.parent_org_id == diputados.org_id
+    assert committee_senado.parent_org_id == senado.org_id
+    assert (
+        session.query(db_models.Organization)
+        .filter(db_models.Organization.org_name == "Comisión de Justicia")
+        .count()
+        == 2
+    )
+
+
+def test_upsert_organization_same_name_type_same_parent_updates_in_place(session):
+    crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+
+    first = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Economía",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+    second = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Economía",
+            org_type="Comisión",
+            org_link="updated-link",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    assert second.org_id == first.org_id
+    assert second.org_link == "updated-link"
+    assert (
+        session.query(db_models.Organization)
+        .filter(db_models.Organization.org_name == "Comisión de Economía")
+        .count()
+        == 1
+    )
+
+
+def test_upsert_organization_with_no_parent_unaffected_by_parent_scoping(session):
+    """Chambers and parties are top-level (parent_org_id=NULL) -- confirms the
+    parent_org_id fix doesn't regress orgs that never had a parent to begin
+    with."""
+    first = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Partido Morado", org_type="Partido"),
+    )
+    second = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Partido Morado", org_type="Partido"),
+    )
+
+    assert second.org_id == first.org_id
+    assert first.parent_org_id is None
+    assert (
+        session.query(db_models.Organization)
+        .filter(db_models.Organization.org_name == "Partido Morado")
+        .count()
+        == 1
+    )
+
+
+def test_find_organization_parent_org_id_scoping(session):
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    senado = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Senado de la República", org_type="Cámara"),
+    )
+    committee_diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Salud",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+    crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Salud",
+            org_type="Comisión",
+            parent_org_name="Senado de la República",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    # Scoped by the Diputados parent finds only the Diputados committee.
+    found = crud_core.find_organization(
+        session,
+        org_name="Comisión de Salud",
+        org_type="Comisión",
+        parent_org_id=diputados.org_id,
+    )
+    assert found.org_id == committee_diputados.org_id
+
+    # Unscoped (parent_org_id omitted) preserves prior behavior: picks by
+    # fuzzy score then lowest org_id -- still returns *a* match, not an error.
+    unscoped = crud_core.find_organization(
+        session, org_name="Comisión de Salud", org_type="Comisión"
+    )
+    assert unscoped is not None
+
+    # A parent_org_id that doesn't match either committee finds nothing.
+    none_found = crud_core.find_organization(
+        session,
+        org_name="Comisión de Salud",
+        org_type="Comisión",
+        parent_org_id=senado.org_id + 999,
+    )
+    assert none_found is None

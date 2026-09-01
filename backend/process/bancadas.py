@@ -3,6 +3,7 @@ from backend import RoleOrganization, find_leg_period
 from backend.database.raw_models import RawBancada
 from backend.process.schema import Organization, Membership
 from backend.process.utils import split_and_sort_name
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
 CONGRESO_BASE_URL = "https://www.congreso.gob.pe"
 LEGACY_CONGRESO_BASE_URL = "https://www3.congreso.gob.pe"
@@ -26,6 +27,7 @@ def process_bancada(
 
     rows = html.xpath('//*[@class="table-cng"]/tbody/tr')
     current_leg_period = find_leg_period(raw_bancada.timestamp)
+    parent_org_name = CHAMBER_LABEL_TO_ORG_NAME[raw_bancada.chamber]
 
     bancadas: list[Organization] = []
     memberships: list[Membership] = []
@@ -46,10 +48,8 @@ def process_bancada(
                 Organization(
                     org_name=current_bancada,
                     org_type="Bancada",
-                    # TODO: Update this when the new congress website address
-                    # for different routes for committees in camara
-                    parent_org_name="Cámara de Diputados",
-                    parent_org_type="Cámara",
+                    parent_org_name=parent_org_name,
+                    parent_org_type="Cámara" if parent_org_name is not None else None,
                 )
             )
 

@@ -43,6 +43,7 @@ def _raw_cong(
     memberships_content=None,
     leg_period="2021-2026",
     website="https://www.congreso.gob.pe/congresista/juan",
+    chamber=None,
 ):
     if memberships_content is None:
         memberships_content = {"data": []}
@@ -52,6 +53,7 @@ def _raw_cong(
         leg_period=leg_period,
         website=website,
         timestamp=datetime(2025, 8, 1),
+        chamber=chamber,
     )
 
 
@@ -85,6 +87,51 @@ def test_process_profile_content_parses_fields_and_votes_int(
     assert memberships[0].org_name == "Accion Popular"
     assert memberships[1].votes_in_election == 12345
     assert memberships[1].org_name == "Cámara de Diputados"
+
+
+def test_process_profile_content_chamber_none_is_byte_identical_to_diputados(
+    profile_html, dict_data_cong
+):
+    """CRITICAL regression (Regression Rule #3): chamber=None is what every
+    historical 2021-2026 row has -- must produce identical output to an
+    explicit chamber="Diputados" row, and to pre-change behavior."""
+    raw_none = _raw_cong(
+        profile_content=profile_html, leg_period="2021-2026", chamber=None
+    )
+    raw_diputados = _raw_cong(
+        profile_content=profile_html, leg_period="2021-2026", chamber="Diputados"
+    )
+
+    cong_none, orgs_none, memberships_none = mod.process_profile_content(
+        raw_none, dict_data_cong
+    )
+    cong_diputados, orgs_diputados, memberships_diputados = mod.process_profile_content(
+        raw_diputados, dict_data_cong
+    )
+
+    assert [o.org_name for o in orgs_none] == [o.org_name for o in orgs_diputados]
+    assert memberships_none[1].org_name == "Cámara de Diputados"
+    assert memberships_diputados[1].org_name == "Cámara de Diputados"
+    assert memberships_none[1].role == memberships_diputados[1].role
+
+
+def test_process_profile_content_senadores_chamber_maps_to_senado(
+    profile_html, dict_data_cong
+):
+    raw = _raw_cong(
+        profile_content=profile_html, leg_period="2026-2031", chamber="Senadores"
+    )
+
+    cong, orgs, memberships = mod.process_profile_content(raw, dict_data_cong)
+
+    assert [org.org_name for org in orgs] == [
+        "Accion Popular",
+        "Senado de la República",
+    ]
+    assert memberships[1].org_name == "Senado de la República"
+    from backend import RoleOrganization
+
+    assert memberships[1].role == RoleOrganization.SENADOR
 
 
 def test_process_memberships_all_branches(monkeypatch):

@@ -100,9 +100,18 @@ def find_organization(
     org_name: str,
     org_type: TypeOrganization | str,
     threshold: float = 0.9,
+    parent_org_id: int | None = None,
 ) -> db_models.Organization | None:
     """
     Find the closest organization by fuzzy name match and organization type.
+
+    parent_org_id: optionally scope the match to organizations under a specific
+    parent. Needed because Organization.org_uniq is (org_name, org_type,
+    parent_org_id) — two orgs can share a name+type under different parents
+    (e.g. a same-named committee under each chamber). Omit (or pass None) to
+    preserve prior unscoped behavior; None is never used to mean "match rows
+    with a NULL parent" since no two same-name/same-type orgs legitimately
+    share a NULL parent (top-level chambers and parties are each unique).
     """
 
     if isinstance(org_type, str):
@@ -115,12 +124,16 @@ def find_organization(
         func.unaccent(normalized_name),
     )
 
+    filters = [
+        db_models.Organization.org_type == org_type,
+        score >= threshold,
+    ]
+    if parent_org_id is not None:
+        filters.append(db_models.Organization.parent_org_id == parent_org_id)
+
     stmt = (
         select(db_models.Organization)
-        .where(
-            db_models.Organization.org_type == org_type,
-            score >= threshold,
-        )
+        .where(*filters)
         .order_by(
             score.desc(),
             db_models.Organization.org_id.asc(),
@@ -231,7 +244,14 @@ def upsert_organization(
     if payload.get("org_subtype") is not None:
         payload["org_subtype"] = _enum_value(payload["org_subtype"])
 
-    existing = find_organization(db, schema.org_name, schema.org_type)
+    # Scope the existing-row check by parent_org_id, matching the real
+    # org_uniq constraint (org_name, org_type, parent_org_id) — without this,
+    # two same-named orgs under different parents (e.g. a same-named
+    # committee under each chamber) would collide and silently overwrite
+    # each other's parent_org_id.
+    existing = find_organization(
+        db, schema.org_name, schema.org_type, parent_org_id=parent_id
+    )
 
     return _upsert_model(
         db,

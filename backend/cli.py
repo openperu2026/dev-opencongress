@@ -1,6 +1,7 @@
 import argparse
 
 from backend.database.orchestrator import OpenPeruOrchestrator
+from backend.core.enums import LegPeriod
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,6 +62,19 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Computes the first processing of summaries for bills",
     )
+    parser.add_argument(
+        "--leg-period",
+        choices=[p.value for p in LegPeriod],
+        default=None,
+        help=(
+            "Restrict congresistas/bancadas/organizations processing to a single "
+            "legislative period (e.g. 2026-2031). Default processes all "
+            "processable periods, unchanged. No effect on bills/motions/leyes "
+            "(chamber for those is resolved per-row from the bill/motion's own "
+            "id) or on scraping (--leg-period is accepted there for CLI "
+            "symmetry but has no effect until Phase B's scrapers exist)."
+        ),
+    )
     return parser
 
 
@@ -110,6 +124,7 @@ def main(argv: list[str] | None = None) -> None:
             only_current=args.only_current,
             scrape_documents=run_documents,
             upload_s3=args.upload_s3,
+            leg_period=args.leg_period,
         )
 
     if not args.skip_processing:
@@ -120,4 +135,5 @@ def main(argv: list[str] | None = None) -> None:
             process_others=run_others,
             process_documents=args.process_documents,
             first_load=args.first_summary,
+            leg_period=args.leg_period,
         )

@@ -43,6 +43,7 @@ def test_cli_scrape_only_others_matches_make_target(monkeypatch):
             "only_current": True,
             "scrape_documents": False,
             "upload_s3": False,
+            "leg_period": None,
         }
     ]
     assert orch.processing_calls == []
@@ -60,6 +61,7 @@ def test_cli_scrape_only_bills_matches_make_target(monkeypatch):
             "only_current": False,
             "scrape_documents": False,
             "upload_s3": False,
+            "leg_period": None,
         }
     ]
     assert orch.processing_calls == []
@@ -77,6 +79,7 @@ def test_cli_scrape_only_motions_matches_make_target(monkeypatch):
             "only_current": False,
             "scrape_documents": False,
             "upload_s3": False,
+            "leg_period": None,
         }
     ]
     assert orch.processing_calls == []
@@ -94,6 +97,7 @@ def test_cli_scrape_only_leyes_matches_make_target(monkeypatch):
             "only_current": False,
             "scrape_documents": False,
             "upload_s3": False,
+            "leg_period": None,
         }
     ]
     assert orch.processing_calls == []
@@ -119,6 +123,7 @@ def test_cli_scrape_documents_with_s3_upload_matches_make_target(monkeypatch):
             "only_current": False,
             "scrape_documents": True,
             "upload_s3": True,
+            "leg_period": None,
         }
     ]
     assert orch.processing_calls == []
@@ -136,5 +141,16 @@ def test_cli_process_target_runs_all_processing(monkeypatch):
             "process_others": True,
             "process_documents": False,
             "first_load": False,
+            "leg_period": None,
         }
     ]
+
+
+def test_cli_leg_period_flag_threads_through(monkeypatch):
+    orch = run_cli(
+        monkeypatch,
+        ["--scrape", "--only-others", "--leg-period", "2026-2031"],
+    )
+
+    assert orch.scraper_calls[0]["leg_period"] == "2026-2031"
+    assert orch.processing_calls[0]["leg_period"] == "2026-2031"

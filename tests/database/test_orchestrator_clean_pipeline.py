@@ -11,6 +11,7 @@ from backend.database.raw_models import (
     RawBill,
     RawBillDocument,
     RawBillPage,
+    RawCongresista,
     RawLey,
     RawMotion,
 )
@@ -59,6 +60,162 @@ def test_run_processing_loads_reference_definitions_before_memberships(monkeypat
         "bancada_ms",
         "semantic",
     ]
+
+
+_PROFILE_HTML = """
+<html>
+  <div class="nombres"><span>Label</span><span>Juan Alberto Perez Quispe</span></div>
+  <div class="grupo"><span>Label</span><span>Accion Popular</span></div>
+  <div class="votacion"><span>Label</span><span>12,345</span></div>
+  <div class="representa"><span>Label</span><span>Lima</span></div>
+  <div class="condicion"><span>Label</span><span>Titular</span></div>
+  <div class="foto"><img src="/FotosCongresista/juan.jpg"/></div>
+</html>
+"""
+
+
+def test_process_congresistas_creates_party_and_chamber_memberships(
+    orchestrator, monkeypatch
+):
+    """CRITICAL regression (found in the bicameral migration's 3rd review round):
+    Step 4b's parent_org_id fix, if applied unconditionally to every entry in
+    this method's shared membership loop, would silently stop creating
+    party_mem/chamber_mem for every congresista -- since both are top-level
+    (parent_org_id=NULL) and would be searched for under a non-existent
+    "parent of themselves". Confirms the org_type-conditional branch fix
+    (orchestrator.py:884) actually works end-to-end."""
+    monkeypatch.setattr("backend.database.orchestrator.get_cong_data", lambda path: {})
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2021 - 2026",
+                chamber=None,
+                website="https://www.congreso.gob.pe/congresista/juan",
+                profile_content=_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2025, 8, 1),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+
+    assert stats.errors == 0
+    assert stats.skipped == 0
+    assert stats.processed == 1
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        memberships = (
+            db.query(db_models.Membership)
+            .filter(db_models.Membership.person_id == cong.id)
+            .all()
+        )
+        org_types = sorted(m.org_type for m in memberships)
+        assert org_types == sorted(["Partido", "Cámara"])
+
+        chamber_org = (
+            db.query(db_models.Organization)
+            .filter(db_models.Organization.org_type == "Cámara")
+            .one()
+        )
+        assert chamber_org.org_name == "Cámara de Diputados"
+        assert chamber_org.parent_org_id is None
+
+
+def test_process_bills_senado_bill_links_committee_and_chamber(orchestrator):
+    """CRITICAL regression (found in 3rd review round): the org_type-conditional
+    fix at orchestrator.py's bill_orgs loop must not scope the chamber's own
+    entry by its own org_id as parent, while still correctly scoping the
+    committee entry by the bill's actual chamber (Senado, not Diputados)."""
+    with orchestrator.DBSession() as db:
+        senado = db_models.Organization(
+            org_name="Senado de la República", org_type="Cámara"
+        )
+        db.add(senado)
+        db.flush()
+        db.add(
+            db_models.Organization(
+                org_name="Comisión de Economía",
+                org_type="Comisión",
+                parent_org_id=senado.org_id,
+            )
+        )
+        db.add(
+            RawBill(
+                id="00006-2026-2031-S",
+                timestamp=datetime(2026, 1, 10),
+                general=json.dumps(
+                    {
+                        "fecPresentacion": "2026-01-10",
+                        "titulo": "Proyecto de Ley Senado",
+                        "sumilla": "Resumen",
+                        "observaciones": "",
+                        "desEstado": "Presentado",
+                        "desProponente": "Ministerio Público",
+                        "desGpar": "Bancada Ausente",
+                        "proyectoLey": "00006-2026-2031-S",
+                    }
+                ),
+                congresistas=json.dumps([]),
+                steps=json.dumps(
+                    [
+                        {
+                            "seguimientoPleyId": 1,
+                            "fecha": "2026-01-01",
+                            "desEstado": "Presentado",
+                            "detalle": "Presentado",
+                        },
+                        {
+                            "seguimientoPleyId": 2,
+                            "fecha": "2026-01-02",
+                            "desEstado": "En Comisión",
+                            "detalle": "Pasa a comisión",
+                            "desComisiones": json.dumps(["Comisión de Economía"]),
+                        },
+                    ]
+                ),
+                committees=json.dumps([]),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_bills(limit=None)
+
+    assert stats.errors == 0
+    assert stats.skipped == 0
+    assert stats.processed == 1
+
+    with orchestrator.DBSession() as db:
+        bill = db.get(db_models.Bill, "00006-2026-2031-S")
+        assert bill is not None
+
+        bill_orgs = (
+            db.query(db_models.BillOrganization)
+            .filter(db_models.BillOrganization.bill_id == "00006-2026-2031-S")
+            .all()
+        )
+        orgs_by_org_id = {
+            org.org_id: org for org in db.query(db_models.Organization).all()
+        }
+        orgs_by_name = {
+            orgs_by_org_id[bo.org_id].org_name: orgs_by_org_id[bo.org_id]
+            for bo in bill_orgs
+        }
+        assert set(orgs_by_name) == {"Senado de la República", "Comisión de Economía"}
+        assert orgs_by_name["Senado de la República"].parent_org_id is None
+        assert (
+            orgs_by_name["Comisión de Economía"].parent_org_id
+            == orgs_by_name["Senado de la República"].org_id
+        )
 
 
 def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrator):

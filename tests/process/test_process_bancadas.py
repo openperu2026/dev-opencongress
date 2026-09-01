@@ -53,7 +53,10 @@ def html_two_bancadas_two_members():
 
 
 def _raw_bancada(
-    raw_html: str, timestamp="2026-01-01T00:00:00", legislative_period="2025-2026"
+    raw_html: str,
+    timestamp="2026-01-01T00:00:00",
+    legislative_period="2025-2026",
+    chamber=None,
 ):
     """
     Minimal stand-in for RawBancada.
@@ -61,12 +64,48 @@ def _raw_bancada(
     - raw_html
     - timestamp
     - legislative_period
+    - chamber
     """
     return SimpleNamespace(
         raw_html=raw_html,
         timestamp=timestamp,
         legislative_period=legislative_period,
+        chamber=chamber,
     )
+
+
+def test_process_bancada_senadores_chamber_sets_senado_parent(
+    html_one_bancada_one_member,
+):
+    """T7: bancadas confirmed chamber-specific with often-identical names
+    across chambers (Step 0 item 7) -- this is the exact scenario Step 4b's
+    parent_org_id fix exists for."""
+    rb = _raw_bancada(
+        raw_html=html_one_bancada_one_member,
+        timestamp="2026-08-01T00:00:00",
+        legislative_period="2026-2031",
+        chamber="Senadores",
+    )
+
+    bancadas, _ = mod.process_bancada(rb)
+
+    assert bancadas[0].parent_org_name == "Senado de la República"
+    assert bancadas[0].parent_org_type == "Cámara"
+
+
+def test_process_bancada_chamber_none_defaults_to_diputados(
+    html_one_bancada_one_member,
+):
+    rb = _raw_bancada(
+        raw_html=html_one_bancada_one_member,
+        timestamp="2025-01-01T00:00:00",
+        legislative_period="2021-2026",
+        chamber=None,
+    )
+
+    bancadas, _ = mod.process_bancada(rb)
+
+    assert bancadas[0].parent_org_name == "Cámara de Diputados"
 
 
 def test_process_bancada_current_period_no_override(

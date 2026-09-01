@@ -79,6 +79,35 @@ LEG_PERIOD_ALIASES = {
 }
 
 
+# Single source of truth for "which legislative periods are we willing to
+# process" — previously expressed independently as separate hardcoded
+# allowlists in _process_congresistas/_process_bancada_definitions/
+# _process_bancada_memberships plus a separate year-range in
+# _process_organization_definitions, which risked drifting out of sync.
+PROCESSABLE_LEG_PERIODS = [
+    "Parlamentario 2021 - 2026",
+    "Parlamentario 2016 - 2021",
+    "Parlamentario 2026 - 2031",
+]
+
+# Maps a raw scraped chamber label (RawCongresista.chamber / RawBancada.chamber /
+# RawCommittee.chamber / RawOrganization.chamber) to the canonical parent
+# Organization name. Two distinct "no specific chamber" cases:
+#   - None: not specified / legacy pre-2026 data — defaults to Diputados to
+#     preserve existing 2021-2026 behavior byte-for-byte.
+#   - "Congreso": a CONFIRMED joint/bicameral entity (e.g. "Comisión Permanente",
+#     "Comisión Bicameral de Presupuesto y Cuenta General de la República") that
+#     genuinely has no chamber parent — maps to None (no parent), not Diputados.
+# Any other value raises (KeyError), by design — see backend/database/orchestrator.py
+# per-row exception handling, which catches and counts this in stats.errors rather
+# than silently misattributing an unrecognized label to the wrong chamber.
+CHAMBER_LABEL_TO_ORG_NAME = {
+    "Diputados": "Cámara de Diputados",
+    "Senadores": "Senado de la República",
+    "Congreso": None,
+    None: "Cámara de Diputados",
+}
+
 LEGISLATURE_ALIASES = {
     # Congress wording → canonical legislature code
     # 2025

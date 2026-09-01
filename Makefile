@@ -1,8 +1,12 @@
 migration:
 	docker compose run --rm initial-migration
 
+# Optionally restrict congresistas/bancadas/organizations processing to a
+# single legislative period, e.g. LEG_PERIOD=2026-2031 make process
+LEG_PERIOD_FLAG = $(if $(LEG_PERIOD),--leg-period $(LEG_PERIOD),)
+
 scrape-others:
-	uv run -m backend --scrape --skip-processing --only-others --only-current
+	uv run -m backend --scrape --skip-processing --only-others --only-current $(LEG_PERIOD_FLAG)
 
 scrape-bills:
 	uv run -m backend --scrape --skip-processing --only-bills
@@ -20,7 +24,7 @@ process-first-summary:
 	uv run -m backend --only-bills --first-summary
 
 process:
-	uv run -m backend
+	uv run -m backend $(LEG_PERIOD_FLAG)
 
 process-bill-documents:
 	uv run -m backend --only-bills --process-documents	

@@ -15,6 +15,25 @@ from backend.process.schema import (
     MotionOrganization,
 )
 
+# New-format bill/motion ids end in -S (Senado) or -CD (Diputados), e.g.
+# "00006-2026-2031-S", "00102-2026-2031-CD" (confirmed 2026-08-31 against the
+# live site). Legacy ids ("{year}_{number}", e.g. "2021_14864") have no such
+# suffix.
+_BILL_ID_CHAMBER_SUFFIXES = {"S": "Senadores", "CD": "Diputados"}
+
+
+def chamber_label_from_id(entity_id: str) -> str | None:
+    """Parse the raw chamber label from a bill/motion id's trailing suffix.
+
+    Returns None for legacy-format ids (no -S/-CD suffix), which downstream
+    chamber resolution (CHAMBER_LABEL_TO_ORG_NAME) treats as "unspecified,
+    defaults to Diputados" -- preserving existing 2021-2026 behavior exactly.
+    """
+    for suffix, label in _BILL_ID_CHAMBER_SUFFIXES.items():
+        if entity_id.endswith(f"-{suffix}"):
+            return label
+    return None
+
 
 def extract_text(text: str, initial: str = None, final: str = None) -> str:
     """
@@ -200,14 +219,20 @@ def split_and_sort_name(name: str) -> tuple[str, str, str]:
 def find_organization_schema(
     orgs: list[BillOrganization | MotionOrganization],
     *,
-    org_name: str,
     org_type: str,
+    org_name: str | None = None,
 ) -> BillOrganization | MotionOrganization | None:
+    """Find the first entry matching org_type (and org_name, if given).
+
+    org_name is optional so a bill/motion's chamber-type entry can be found
+    without assuming which chamber it is — needed once bill_orgs can contain
+    a non-Diputados chamber entry (see process_bill_organizations).
+    """
     return next(
         (
             org
             for org in orgs
-            if org.org_name == org_name
+            if (org_name is None or org.org_name == org_name)
             and (org.org_type.value if hasattr(org.org_type, "value") else org.org_type)
             == org_type
         ),

@@ -76,6 +76,22 @@ from backend.process.utils import (
 )
 from backend.scrapers.utils import get_last_id
 from backend.scrapers.congresista_photos import sync_photo as sync_congresista_photo
+from backend import TypeOrganization
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
+from backend.core.parsers import (
+    get_processable_year_range,
+    resolve_processable_leg_periods,
+)
+
+# org_type values that are always top-level (parent_org_id=NULL by design) —
+# a parent_org_id filter must never be applied when looking these up, since
+# they don't have a chamber (or any) parent to scope by. Membership.org_type
+# is a TypeOrganization enum member at this stage (backend/process/schema.py),
+# not yet converted to its string .value.
+_CHAMBER_UNSCOPED_ORG_TYPES = {
+    TypeOrganization.CHAMBER,
+    TypeOrganization.PARTY,
+}
 
 
 @dataclass(frozen=True)
@@ -197,9 +213,16 @@ class OpenPeruOrchestrator:
         only_current: bool = True,
         scrape_documents: bool = False,
         upload_s3: bool = False,
+        leg_period: str | None = None,
     ) -> None:
         """
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
+
+        leg_period: accepted for CLI symmetry with run_processing, but has no
+        effect yet -- the scraper functions this would dispatch to
+        (per-chamber congresistas/bancadas/committees/organizations scraping)
+        don't exist until Phase B (see the bicameral migration plan's Step 2).
+        Reserved here so the CLI flag doesn't need a signature change later.
         """
         console = log_manager.console_logger()
         console.info("Starting scraper pipeline")
@@ -401,9 +424,17 @@ class OpenPeruOrchestrator:
         leyes_limit: int | None = None,
         motions_limit: int | None = None,
         first_load: bool = False,
+        leg_period: str | None = None,
     ) -> dict[str, ProcessStats]:
         """
         Process raw -> clean tables.
+
+        leg_period: optionally restrict congresistas/bancadas/organizations
+        processing to a single legislative period (a LegPeriod value, e.g.
+        "2026-2031") instead of all of PROCESSABLE_LEG_PERIODS. Default (None)
+        preserves current behavior exactly. Bills/motions/leyes processing is
+        not period-gated and ignores this parameter -- chamber for those is
+        resolved per-row from the bill/motion's own id (see process_bill_organizations).
         """
         console = log_manager.console_logger()
         console.info("Starting processing pipeline")
@@ -412,20 +443,30 @@ class OpenPeruOrchestrator:
         if process_others:
             with log_manager.stage("process", "organizations"):
                 console.info("Starting organizations processing")
-                summary["organizations"] = self._process_organization_definitions()
-                summary["bancadas"] = self._process_bancada_definitions()
+                summary["organizations"] = self._process_organization_definitions(
+                    leg_period=leg_period
+                )
+                summary["bancadas"] = self._process_bancada_definitions(
+                    leg_period=leg_period
+                )
                 self._log_stage_summary("organizations", summary["organizations"])
                 self._log_stage_summary("bancadas", summary["bancadas"])
 
             with log_manager.stage("process", "congresistas"):
                 console.info("Starting congresistas processing")
-                summary["congresistas"] = self._process_congresistas()
+                summary["congresistas"] = self._process_congresistas(
+                    leg_period=leg_period
+                )
                 self._log_stage_summary("congresistas", summary["congresistas"])
 
             with log_manager.stage("process", "memberships"):
                 console.info("Starting memberships processing")
-                summary["admin_memberships"] = self._process_admin_memberships()
-                summary["bancada_memberships"] = self._process_bancada_memberships()
+                summary["admin_memberships"] = self._process_admin_memberships(
+                    leg_period=leg_period
+                )
+                summary["bancada_memberships"] = self._process_bancada_memberships(
+                    leg_period=leg_period
+                )
                 self._log_stage_summary(
                     "admin_memberships", summary["admin_memberships"]
                 )
@@ -787,10 +828,24 @@ class OpenPeruOrchestrator:
         self, db, org_schema: Organization
     ) -> tuple[db_models.Organization, bool]:
         """Upsert an organization; second return is True if this was a new insert."""
+        # Resolve org_schema's own declared parent (None for top-level orgs like
+        # chambers/parties) so the pre-check matches the real org_uniq constraint
+        # (org_name, org_type, parent_org_id) — otherwise insert/update counting
+        # would misreport once same-named orgs exist under different parents.
+        parent_org_id = None
+        if org_schema.parent_org_name and org_schema.parent_org_type:
+            parent = crud_core.find_organization(
+                db,
+                org_name=org_schema.parent_org_name,
+                org_type=org_schema.parent_org_type,
+            )
+            parent_org_id = parent.org_id if parent else None
+
         pre = crud_core.find_organization(
             db,
             org_name=org_schema.org_name,
             org_type=org_schema.org_type,
+            parent_org_id=parent_org_id,
         )
         org = crud_core.upsert_organization(db, org_schema)
         return org, pre is None
@@ -823,15 +878,17 @@ class OpenPeruOrchestrator:
             extra_fields=extra_fields,
         )
 
-    def _process_congresistas(self) -> ProcessStats:
+    def _process_congresistas(self, *, leg_period: str | None = None) -> ProcessStats:
         """Process unprocessed RawCongresista rows into Congresista + Organization + Membership records."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
+        chamber_tally = {"Diputados": 0, "Senadores": 0, "None": 0}
 
         CONG_JSON = directories.PROCESSED_DATA / "cong_info_2021_2026.json"
 
         dict_cong_data = get_cong_data(CONG_JSON)
+        processable_periods = resolve_processable_leg_periods(leg_period)
         with self.DBSession() as db:
             rows = (
                 db.query(RawCongresista)
@@ -843,11 +900,7 @@ class OpenPeruOrchestrator:
             )
             for raw_cong in tqdm(rows, desc="Process congresistas"):
                 try:
-                    # TODO: Remove this range to process all years
-                    if raw_cong.leg_period not in [
-                        "Parlamentario 2021 - 2026",
-                        "Parlamentario 2016 - 2021",
-                    ]:
+                    if raw_cong.leg_period not in processable_periods:
                         raw_cong.processed = False
                         stats.skipped += 1
                         continue
@@ -871,8 +924,13 @@ class OpenPeruOrchestrator:
                     else:
                         clean_updated += 1
 
+                    chamber_org_id = None
                     for org_schema in org_schemas:
-                        self._upsert_organization_with_count(db, org_schema)
+                        upserted_org, _ = self._upsert_organization_with_count(
+                            db, org_schema
+                        )
+                        if org_schema.org_type == TypeOrganization.CHAMBER:
+                            chamber_org_id = upserted_org.org_id
 
                     memberships = profile_memberships
                     if raw_cong.memberships_content:
@@ -881,10 +939,21 @@ class OpenPeruOrchestrator:
                         )
                     for ms in memberships:
                         # TODO: We need to implement a fuzzy match for finding organization
+                        # party_mem/chamber_mem entries are top-level (parent_org_id=NULL
+                        # by design, see _CHAMBER_UNSCOPED_ORG_TYPES) and must NOT be
+                        # scoped by chamber_org_id — only committee/admin/bancada
+                        # memberships (from process_cong_memberships) are actually
+                        # children of this congresista's chamber.
+                        ms_parent_org_id = (
+                            chamber_org_id
+                            if ms.org_type not in _CHAMBER_UNSCOPED_ORG_TYPES
+                            else None
+                        )
                         org = crud_core.find_organization(
                             db=db,
                             org_name=ms.org_name,
                             org_type=ms.org_type,
+                            parent_org_id=ms_parent_org_id,
                         )
                         if org is None:
                             logger.warning(
@@ -901,6 +970,9 @@ class OpenPeruOrchestrator:
 
                     raw_cong.processed = True
                     stats.processed += 1
+                    chamber_tally[raw_cong.chamber or "None"] = (
+                        chamber_tally.get(raw_cong.chamber or "None", 0) + 1
+                    )
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawCongresista id={raw_cong.id}: {exc}"
@@ -909,15 +981,25 @@ class OpenPeruOrchestrator:
                     stats.errors += 1
             db.commit()
         logger.info(
-            f"[congresistas] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+            f"[congresistas] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} by_chamber={chamber_tally}"
         )
         return stats
 
-    def _process_organization_definitions(self) -> ProcessStats:
+    def _process_organization_definitions(
+        self, *, leg_period: str | None = None
+    ) -> ProcessStats:
         """Load chambers, committees, and admin organizations into the clean Organization table."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
+        processable_year_range = get_processable_year_range(leg_period)
+        committee_chamber_tally = {
+            "Diputados": 0,
+            "Senadores": 0,
+            "Congreso": 0,
+            "None": 0,
+        }
+        org_chamber_tally = {"Diputados": 0, "Senadores": 0, "Congreso": 0, "None": 0}
         with self.DBSession() as db:
             for org_schema in process_chambers():
                 _, inserted = self._upsert_organization_with_count(db, org_schema)
@@ -938,8 +1020,7 @@ class OpenPeruOrchestrator:
 
             for raw_comm in tqdm(committees, desc="Process committees"):
                 try:
-                    # TODO: Remove this range to process all years
-                    if int(raw_comm.legislative_year) not in range(2016, 2027):
+                    if int(raw_comm.legislative_year) not in processable_year_range:
                         raw_comm.processed = False
                         stats.skipped += 1
                         continue
@@ -953,6 +1034,10 @@ class OpenPeruOrchestrator:
                             clean_updated += 1
                     raw_comm.processed = True
                     stats.processed += 1
+                    key = raw_comm.chamber or "None"
+                    committee_chamber_tally[key] = (
+                        committee_chamber_tally.get(key, 0) + 1
+                    )
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawCommittee id={raw_comm.id}: {exc}"
@@ -972,8 +1057,7 @@ class OpenPeruOrchestrator:
             )
             for raw_org in tqdm(organizations, desc="Process organizations"):
                 try:
-                    # TODO: Remove this range to process all years
-                    if int(raw_org.legislative_year) not in range(2016, 2027):
+                    if int(raw_org.legislative_year) not in processable_year_range:
                         raw_org.processed = False
                         stats.skipped += 1
                         continue
@@ -984,6 +1068,8 @@ class OpenPeruOrchestrator:
                     else:
                         clean_updated += 1
                     stats.processed += 1
+                    key = raw_org.chamber or "None"
+                    org_chamber_tally[key] = org_chamber_tally.get(key, 0) + 1
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawOrganization id={raw_org.id}: {exc}"
@@ -993,13 +1079,16 @@ class OpenPeruOrchestrator:
 
             db.commit()
         logger.info(
-            f"[organization_definitions] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+            f"[organization_definitions] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} committees_by_chamber={committee_chamber_tally} orgs_by_chamber={org_chamber_tally}"
         )
         return stats
 
-    def _process_admin_memberships(self) -> ProcessStats:
+    def _process_admin_memberships(
+        self, *, leg_period: str | None = None
+    ) -> ProcessStats:
         """Link congresistas to admin organizations; marks RawOrganization processed only if all members resolved."""
         stats = ProcessStats()
+        processable_year_range = get_processable_year_range(leg_period)
         with self.DBSession() as db:
             organizations = (
                 db.query(RawOrganization)
@@ -1011,7 +1100,7 @@ class OpenPeruOrchestrator:
             )
             for raw_org in tqdm(organizations, desc="Process admin memberships"):
                 try:
-                    if int(raw_org.legislative_year) not in range(2016, 2027):
+                    if int(raw_org.legislative_year) not in processable_year_range:
                         raw_org.processed = False
                         stats.skipped += 1
                         continue
@@ -1049,11 +1138,15 @@ class OpenPeruOrchestrator:
         )
         return stats
 
-    def _process_bancada_definitions(self) -> ProcessStats:
-        """Upsert Organization rows for each bancada in the 2021-2026 legislative period."""
+    def _process_bancada_definitions(
+        self, *, leg_period: str | None = None
+    ) -> ProcessStats:
+        """Upsert Organization rows for each bancada in a processable legislative period."""
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
+        processable_periods = resolve_processable_leg_periods(leg_period)
+        chamber_tally = {"Diputados": 0, "Senadores": 0, "None": 0}
         with self.DBSession() as db:
             rows = (
                 db.query(RawBancada)
@@ -1064,9 +1157,7 @@ class OpenPeruOrchestrator:
             )
             for raw_bancada in tqdm(rows, desc="Process bancada definitions"):
                 try:
-                    if raw_bancada.legislative_period not in [
-                        "Parlamentario 2021 - 2026"
-                    ]:
+                    if raw_bancada.legislative_period not in processable_periods:
                         raw_bancada.processed = False
                         stats.skipped += 1
                         continue
@@ -1082,6 +1173,8 @@ class OpenPeruOrchestrator:
                             clean_updated += 1
                     stats.processed += 1
                     raw_bancada.processed = not missing
+                    key = raw_bancada.chamber or "None"
+                    chamber_tally[key] = chamber_tally.get(key, 0) + 1
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada definitions id={raw_bancada.id}: {exc}"
@@ -1091,13 +1184,17 @@ class OpenPeruOrchestrator:
 
             db.commit()
         logger.info(
-            f"[bancada_definitions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+            f"[bancada_definitions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} by_chamber={chamber_tally}"
         )
         return stats
 
-    def _process_bancada_memberships(self) -> ProcessStats:
+    def _process_bancada_memberships(
+        self, *, leg_period: str | None = None
+    ) -> ProcessStats:
         """Link congresistas to bancada organizations; only marks raw processed when every member resolves."""
         stats = ProcessStats()
+        processable_periods = resolve_processable_leg_periods(leg_period)
+        chamber_tally = {"Diputados": 0, "Senadores": 0, "None": 0}
         with self.DBSession() as db:
             rows = (
                 db.query(RawBancada)
@@ -1108,13 +1205,26 @@ class OpenPeruOrchestrator:
             )
             for raw_bancada in tqdm(rows, desc="Process bancada memberships"):
                 try:
-                    if raw_bancada.legislative_period not in [
-                        "Parlamentario 2021 - 2026"
-                    ]:
+                    if raw_bancada.legislative_period not in processable_periods:
                         raw_bancada.processed = False
                         stats.skipped += 1
                         continue
                     _, memberships = process_bancada(raw_bancada)
+
+                    # Resolve this row's chamber org_id once (not per membership) so
+                    # same-named bancadas across chambers (confirmed real — Step 0
+                    # item 7) don't collide via the unscoped fuzzy match.
+                    chamber_org_name = CHAMBER_LABEL_TO_ORG_NAME[raw_bancada.chamber]
+                    bancada_parent_org_id = None
+                    if chamber_org_name is not None:
+                        chamber_org = crud_core.find_organization(
+                            db,
+                            org_name=chamber_org_name,
+                            org_type=TypeOrganization.CHAMBER,
+                        )
+                        bancada_parent_org_id = (
+                            chamber_org.org_id if chamber_org else None
+                        )
 
                     missing = False
                     for ms in memberships:
@@ -1127,6 +1237,7 @@ class OpenPeruOrchestrator:
                             db,
                             org_name=ms.org_name,
                             org_type=ms.org_type,
+                            parent_org_id=bancada_parent_org_id,
                         )
                         if cong is None or org is None:
                             logger.warning(
@@ -1144,6 +1255,8 @@ class OpenPeruOrchestrator:
 
                     raw_bancada.processed = not missing
                     stats.processed += 1
+                    key = raw_bancada.chamber or "None"
+                    chamber_tally[key] = chamber_tally.get(key, 0) + 1
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada memberships id={raw_bancada.id}: {exc}"
@@ -1153,7 +1266,7 @@ class OpenPeruOrchestrator:
 
             db.commit()
         logger.info(
-            f"[bancada_memberships] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
+            f"[bancada_memberships] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} by_chamber={chamber_tally}"
         )
         return stats
 
@@ -1177,7 +1290,6 @@ class OpenPeruOrchestrator:
                     bill_orgs = process_bill_organizations(raw_bill, bill_steps)
                     chamber_schema = find_organization_schema(
                         bill_orgs,
-                        org_name="Cámara de Diputados",
                         org_type="Cámara",
                     )
 
@@ -1189,12 +1301,12 @@ class OpenPeruOrchestrator:
                         continue
                     chamber = crud_core.find_organization(
                         db,
-                        org_name="Cámara de Diputados",
+                        org_name=chamber_schema.org_name,
                         org_type="Cámara",
                     )
                     if chamber is None:
                         logger.warning(
-                            f"Skipping RawBill id={raw_bill.id}: Cámara de Diputados organization not found"
+                            f"Skipping RawBill id={raw_bill.id}: {chamber_schema.org_name} organization not found"
                         )
                         stats.skipped += 1
                         continue
@@ -1210,10 +1322,20 @@ class OpenPeruOrchestrator:
                         crud_bills.upsert_bill_step(db, step_schema)
 
                     for org_schema in bill_orgs:
+                        # The chamber's own entry (org_schema.org_type == "Cámara")
+                        # must NOT be scoped by chamber.org_id as its own parent —
+                        # only committee-type entries are actually children of this
+                        # bill's chamber.
+                        org_parent_org_id = (
+                            chamber.org_id
+                            if org_schema.org_type != TypeOrganization.CHAMBER
+                            else None
+                        )
                         org = crud_core.find_organization(
                             db=db,
                             org_name=org_schema.org_name,
                             org_type=org_schema.org_type,
+                            parent_org_id=org_parent_org_id,
                         )
                         if org is None:
                             logger.warning(
@@ -1521,7 +1643,6 @@ class OpenPeruOrchestrator:
                     motion_orgs = process_motion_organizations(raw_motion, motion_steps)
                     chamber_schema = find_organization_schema(
                         motion_orgs,
-                        org_name="Cámara de Diputados",
                         org_type="Cámara",
                     )
                     if chamber_schema is None:
@@ -1533,12 +1654,12 @@ class OpenPeruOrchestrator:
 
                     chamber = crud_core.find_organization(
                         db,
-                        org_name="Cámara de Diputados",
+                        org_name=chamber_schema.org_name,
                         org_type="Cámara",
                     )
                     if chamber is None:
                         logger.warning(
-                            f"Skipping RawMotion id={raw_motion.id}: Cámara de Diputados organization not found"
+                            f"Skipping RawMotion id={raw_motion.id}: {chamber_schema.org_name} organization not found"
                         )
                         stats.skipped += 1
                         continue
@@ -1554,10 +1675,18 @@ class OpenPeruOrchestrator:
                         crud_motions.upsert_motion_step(db, step_schema)
 
                     for org_schema in motion_orgs:
+                        # Same rule as _process_bills: don't scope the chamber's
+                        # own entry by its own org_id as parent.
+                        org_parent_org_id = (
+                            chamber.org_id
+                            if org_schema.org_type != TypeOrganization.CHAMBER
+                            else None
+                        )
                         org = crud_core.find_organization(
                             db=db,
                             org_name=org_schema.org_name,
                             org_type=org_schema.org_type,
+                            parent_org_id=org_parent_org_id,
                         )
                         if org is None:
                             logger.warning(

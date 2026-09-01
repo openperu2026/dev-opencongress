@@ -8,6 +8,8 @@ from backend.core.parsers import (
     classify_des_estado,
     classify_motion_des_estado,
     normalize_membership_role,
+    get_processable_year_range,
+    resolve_processable_leg_periods,
 )
 
 
@@ -148,3 +150,40 @@ def test_normalize_membership_role_maps_presidency_encargado_variant():
     )
 
     assert role is RoleOrganization.VICEPRESIDENTE
+
+
+def test_get_processable_year_range_is_curated_not_all_history():
+    """CRITICAL (found in CEO review): naively taking min/max across all of
+    LEG_PERIOD_RANGES (8 entries back to 1995) would derive range(1995, 2032),
+    not the intended range(2016, 2032) scoped to PROCESSABLE_LEG_PERIODS. A
+    too-wide window would pass any test that only checks inclusion of
+    2016-2031 -- this explicitly asserts the lower bound too."""
+    result = get_processable_year_range()
+
+    assert result == range(2016, 2032)
+    assert 2015 not in result
+    assert 1995 not in result
+    assert 2016 in result
+    assert 2031 in result
+
+
+def test_get_processable_year_range_scoped_to_single_period():
+    result = get_processable_year_range("2026-2031")
+
+    assert result == range(2026, 2032)
+
+
+def test_resolve_processable_leg_periods_default_returns_full_curated_list():
+    result = resolve_processable_leg_periods()
+
+    assert result == [
+        "Parlamentario 2021 - 2026",
+        "Parlamentario 2016 - 2021",
+        "Parlamentario 2026 - 2031",
+    ]
+
+
+def test_resolve_processable_leg_periods_filters_to_single_period():
+    result = resolve_processable_leg_periods("2026-2031")
+
+    assert result == ["Parlamentario 2026 - 2031"]

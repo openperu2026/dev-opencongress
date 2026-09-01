@@ -7,6 +7,7 @@ from backend.core.constants import (
     BILL_ROLE_MAPS,
     LEG_PERIOD_ALIASES,
     LEGISLATURE_ALIASES,
+    PROCESSABLE_LEG_PERIODS,
 )
 from backend.core.enums import (
     TypeBillStep,
@@ -29,6 +30,45 @@ LEG_PERIOD_RANGES = [
     (LegPeriod.PERIODO_2000_2001, date(2000, 7, 28), date(2001, 7, 27)),
     (LegPeriod.PERIODO_1995_2000, date(1995, 7, 28), date(2000, 7, 27)),
 ]
+
+_LEG_PERIOD_RANGE_BY_ENUM = {
+    period: (start, end) for period, start, end in LEG_PERIOD_RANGES
+}
+
+
+def resolve_processable_leg_periods(leg_period: str | None = None) -> list[str]:
+    """Return the raw-label subset of PROCESSABLE_LEG_PERIODS to process.
+
+    leg_period=None (default) returns the full curated list, preserving current
+    behavior exactly. A canonical value (e.g. "2026-2031", a LegPeriod.value)
+    narrows to just the raw label(s) resolving to that period via
+    LEG_PERIOD_ALIASES -- lets an operator reprocess/verify a single period
+    without touching the others.
+    """
+    if leg_period is None:
+        return PROCESSABLE_LEG_PERIODS
+    return [
+        raw_label
+        for raw_label in PROCESSABLE_LEG_PERIODS
+        if LEG_PERIOD_ALIASES[raw_label] == leg_period
+    ]
+
+
+def get_processable_year_range(leg_period: str | None = None) -> range:
+    """Derive the acceptable legislative_year window from PROCESSABLE_LEG_PERIODS only
+    (not all of LEG_PERIOD_RANGES's history back to 1995) — resolves each raw label to
+    its LegPeriod enum via LEG_PERIOD_ALIASES, looks up that enum's date range, and takes
+    the min start-year / max end-year across just those resolved ranges. Naively taking
+    min/max across all of LEG_PERIOD_RANGES would silently widen the window to accept
+    historical periods PROCESSABLE_LEG_PERIODS deliberately excludes.
+    """
+    years = []
+    for raw_label in resolve_processable_leg_periods(leg_period):
+        period_enum = LegPeriod(LEG_PERIOD_ALIASES[raw_label])
+        start, end = _LEG_PERIOD_RANGE_BY_ENUM[period_enum]
+        years.append(start.year)
+        years.append(end.year)
+    return range(min(years), max(years) + 1)
 
 
 def _normalize_leg_period(value: str) -> str:
