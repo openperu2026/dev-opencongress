@@ -427,3 +427,128 @@ def test_upload_documents_continues_after_failures():
     assert stats.total == 3
     assert stats.succeeded == 1
     assert stats.failed == 2
+
+
+# ---------- Phase B1: 2026-2031 chamber scraper dispatch ----------
+
+
+class DummyChamberScraper:
+    """Tracks instantiation only -- used for all 4 reference scraper
+    classes, since with _recent_raw_exists always True (below) none of
+    their methods actually get called."""
+
+    instances: list["DummyChamberScraper"] = []
+
+    def __init__(self):
+        DummyChamberScraper.instances.append(self)
+
+
+def test_run_scrapers_legacy_leg_period_skips_chamber_scrapers(monkeypatch):
+    """Regression: leg_period="2021-2026" (or any value other than None/
+    "2026-2031") must not touch the new chamber-scraper classes at all."""
+    DummyChamberScraper.instances = []
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+
+    monkeypatch.setattr(orchestrator_module, "log_manager", DummyLogManager())
+    monkeypatch.setattr(orch, "_recent_raw_exists", lambda *a, **k: True)
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.committees", "RawCommitteeScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period="2021-2026",
+    )
+
+    assert DummyChamberScraper.instances == []
+
+
+def test_run_scrapers_default_leg_period_invokes_chamber_scrapers(monkeypatch):
+    """leg_period=None (default) must run the 2026-2031 chamber scrapers
+    IN ADDITION TO the legacy scrape -- not instead of it."""
+    DummyChamberScraper.instances = []
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+
+    monkeypatch.setattr(orchestrator_module, "log_manager", DummyLogManager())
+    monkeypatch.setattr(orch, "_recent_raw_exists", lambda *a, **k: True)
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.committees", "RawCommitteeScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period=None,
+    )
+
+    # One instance each for congresistas/bancadas/committees/organizations,
+    # created unconditionally at the top of the new chamber block (legacy
+    # instantiation is skipped since _recent_raw_exists always returns True).
+    assert len(DummyChamberScraper.instances) == 4
+
+
+def test_run_scrapers_2026_2031_leg_period_invokes_chamber_scrapers(monkeypatch):
+    DummyChamberScraper.instances = []
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+
+    monkeypatch.setattr(orchestrator_module, "log_manager", DummyLogManager())
+    monkeypatch.setattr(orch, "_recent_raw_exists", lambda *a, **k: True)
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.committees", "RawCommitteeScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period="2026-2031",
+    )
+
+    assert len(DummyChamberScraper.instances) == 4
+
+
+def test_recent_raw_exists_is_chamber_scoped(engine, session):
+    """Regression: a recent Senado scrape must not suppress the very next
+    Diputados scrape (or vice versa) for `days`."""
+    from backend.database.raw_models import RawCongresista
+
+    session.add(
+        RawCongresista(
+            timestamp=datetime.now(),
+            leg_period="Parlamentario 2026 - 2031",
+            chamber="Senadores",
+            website="https://senado.congreso.gob.pe/senador/a/",
+            profile_content="<html></html>",
+        )
+    )
+    session.commit()
+
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+    orch.DBSession = lambda: session
+
+    assert orch._recent_raw_exists(RawCongresista, days=1, chamber="Senadores") is True
+    assert orch._recent_raw_exists(RawCongresista, days=1, chamber="Diputados") is False
+    assert orch._recent_raw_exists(RawCongresista, days=1, chamber=None) is False
+    # Default ("_ANY_") preserves the original table-wide behavior.
+    assert orch._recent_raw_exists(RawCongresista, days=1) is True

@@ -108,8 +108,37 @@ CHAMBER_LABEL_TO_ORG_NAME = {
     None: "Cámara de Diputados",
 }
 
+# Per-chamber site roots for the 2026-2031 term (confirmed live 2026-08-31 --
+# see Phase B plan, Step B0). These are separate WordPress microsites, not a
+# chamber query param on the legacy www3.congreso.gob.pe site.
+CHAMBER_BASE_URLS = {
+    "Senadores": "https://senado.congreso.gob.pe",
+    "Diputados": "https://diputados.congreso.gob.pe",
+}
+
+# The one raw leg_period label used for every 2026-2031 chamber-scraped row
+# (RawCongresista.leg_period, RawBancada.legislative_period) -- matches
+# LEG_PERIOD_ALIASES/PROCESSABLE_LEG_PERIODS, which already expect this exact
+# string, so no changes needed there.
+CHAMBER_LEG_PERIOD_LABEL = "Parlamentario 2026 - 2031"
+
 LEGISLATURE_ALIASES = {
     # Congress wording → canonical legislature code
+    # 2030
+    "Primera Legislatura Ordinaria 2030": "2030-II",
+    "Segunda Legislatura Ordinaria 2030": "2031-I",
+    # 2029
+    "Primera Legislatura Ordinaria 2029": "2029-II",
+    "Segunda Legislatura Ordinaria 2029": "2030-I",
+    # 2028
+    "Primera Legislatura Ordinaria 2028": "2028-II",
+    "Segunda Legislatura Ordinaria 2028": "2029-I",
+    # 2027
+    "Primera Legislatura Ordinaria 2027": "2027-II",
+    "Segunda Legislatura Ordinaria 2027": "2028-I",
+    # 2026
+    "Primera Legislatura Ordinaria 2026": "2026-II",
+    "Segunda Legislatura Ordinaria 2026": "2027-I",
     # 2025
     "Primera Legislatura Ordinaria 2025": "2025-II",
     "Segunda Legislatura Ordinaria 2025": "2026-I",

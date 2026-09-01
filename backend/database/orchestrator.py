@@ -125,13 +125,29 @@ class OpenPeruOrchestrator:
     # -----------------------------
     # Public API
     # -----------------------------
-    def _recent_raw_exists(self, raw_model: RawBase, days: int = 1) -> bool:
+    def _recent_raw_exists(
+        self,
+        raw_model: RawBase,
+        days: int = 1,
+        *,
+        chamber: str | None | Literal["_ANY_"] = "_ANY_",
+    ) -> bool:
         """
         Query to check recent changes in a period of time in any RawDB table (default 1 day)
+
+        chamber: scope the "recently scraped" check to one chamber value
+        (including None for legacy rows) so scraping Senado doesn't suppress
+        the very next Diputados run (or vice versa) for `days`. Default
+        "_ANY_" preserves the original table-wide behavior for callers that
+        don't pass it (e.g. bills/motions/leyes, which have no chamber
+        column at all).
         """
         cutoff = datetime.now() - timedelta(days=days)
         with self.DBSession() as raw_db:
-            last_ts = raw_db.query(func.max(raw_model.timestamp)).scalar()
+            query = raw_db.query(func.max(raw_model.timestamp))
+            if chamber != "_ANY_":
+                query = query.filter(raw_model.chamber == chamber)
+            last_ts = query.scalar()
             return bool(last_ts and last_ts >= cutoff)
 
     def _get_approved_ids(self, model: Type[Bill] | Type[Motion]) -> list[str]:
@@ -220,11 +236,13 @@ class OpenPeruOrchestrator:
         """
         Run raw scrapers. Bills/motions scraping requires explicit ranges.
 
-        leg_period: accepted for CLI symmetry with run_processing, but has no
-        effect yet -- the scraper functions this would dispatch to
-        (per-chamber congresistas/bancadas/committees/organizations scraping)
-        don't exist until Phase B (see the bicameral migration plan's Step 2).
-        Reserved here so the CLI flag doesn't need a signature change later.
+        leg_period: when None (default) or "2026-2031", also runs the
+        2026-2031 chamber-specific congresistas/bancadas/committees/
+        organizations scrapers (Phase B1) in addition to -- not instead of --
+        the legacy scrape above, since both periods' data must keep flowing.
+        Any other value only runs the legacy scrape (no effect on bills/
+        motions/leyes scraping either way -- chamber for those is resolved
+        per-row from the bill/motion's own id once Phase B2 lands).
         """
         console = log_manager.console_logger()
         console.info("Starting scraper pipeline")
@@ -239,6 +257,13 @@ class OpenPeruOrchestrator:
             console.info(
                 "Running reference scrapers (congresistas, bancadas, committees, organizations)"
             )
+
+            # =================================================================
+            # LEGACY (through 2021-2026) -- unicameral www3.congreso.gob.pe,
+            # runs unconditionally regardless of leg_period. See the
+            # "2026-2031 BICAMERAL TERM" block below for the new-term scrape,
+            # which runs IN ADDITION TO this, not instead of it.
+            # =================================================================
 
             with log_manager.stage("scraper", "congresistas") as stage_logger:
                 if self._recent_raw_exists(RawCongresista, days=1):
@@ -317,6 +342,87 @@ class OpenPeruOrchestrator:
                         start_time, end_time, scraped_orgs
                     )
                     self._load_scraper_results("organizations.py")
+
+            # =================================================================
+            # 2026-2031 BICAMERAL TERM -- per-chamber senado/diputados
+            # microsites (see RawCongresistasScraper/RawBancadaScraper/
+            # RawCommitteeScraper/RawOrganizationScraper's "2026-2031 BICAMERAL
+            # TERM" sections). Runs additively alongside the legacy scrape
+            # above whenever leg_period is None (default) or "2026-2031".
+            # =================================================================
+
+            if leg_period in (None, "2026-2031"):
+                with log_manager.stage("scraper", "chamber_reference") as stage_logger:
+                    console.info(
+                        "Starting 2026-2031 chamber scrapers "
+                        "(congresistas, bancadas, committees, organizations)"
+                    )
+                    stage_logger.info("Starting 2026-2031 chamber scrapers")
+                    chamber_cong = RawCongresistasScraper()
+                    chamber_banc = RawBancadaScraper()
+                    chamber_comm = RawCommitteeScraper()
+                    chamber_org = RawOrganizationScraper()
+                    start_time = datetime.now()
+                    total_scraped = 0
+
+                    for chamber in ("Senadores", "Diputados"):
+                        if self._recent_raw_exists(
+                            RawCongresista, days=1, chamber=chamber
+                        ):
+                            console.info(
+                                f"Skipping {chamber} congresistas scrape: "
+                                "latest raw scrape is within 1 day"
+                            )
+                        else:
+                            roster = chamber_cong.get_chamber_roster(chamber)
+                            scraped = chamber_cong.extract_chamber_congresistas(
+                                chamber, roster
+                            )
+                            if scraped:
+                                chamber_cong.add_congresistas_to_db()
+                                total_scraped += len(scraped)
+
+                                # Bancada membership for 2026-2031 is derived
+                                # from this same roster (see
+                                # RawBancadaScraper.build_chamber_bancada_html)
+                                # -- only scrape it when the roster actually
+                                # came back, so a failed congresista fetch
+                                # doesn't silently write an empty bancada row.
+                                if not self._recent_raw_exists(
+                                    RawBancada, days=1, chamber=chamber
+                                ):
+                                    chamber_banc.get_chamber_bancadas(chamber, roster)
+                                    chamber_banc.add_bancadas_to_db()
+
+                        if not self._recent_raw_exists(
+                            RawCommittee, days=1, chamber=chamber
+                        ):
+                            chamber_comm.get_chamber_committees(chamber)
+                            if chamber_comm.committee_list:
+                                chamber_comm.add_committees_to_db()
+                                total_scraped += len(chamber_comm.committee_list)
+
+                        if not self._recent_raw_exists(
+                            RawOrganization, days=1, chamber=chamber
+                        ):
+                            chamber_org.get_chamber_organizations(chamber)
+                            if chamber_org.organizations_list:
+                                chamber_org.add_organizations_to_db()
+                                total_scraped += len(chamber_org.organizations_list)
+
+                    if not self._recent_raw_exists(
+                        RawOrganization, days=1, chamber="Congreso"
+                    ):
+                        chamber_org.get_joint_comision_permanente()
+                        if chamber_org.organizations_list:
+                            chamber_org.add_organizations_to_db()
+                            total_scraped += len(chamber_org.organizations_list)
+
+                    end_time = datetime.now()
+                    self.scraper_results["chamber_reference.py"] = ScraperStats(
+                        start_time, end_time, total_scraped
+                    )
+                    self._load_scraper_results("chamber_reference.py")
 
         if scrape_bills:
             from backend.scrapers.bills import RawBillScraper

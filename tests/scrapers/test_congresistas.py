@@ -368,3 +368,107 @@ def test_add_congresistas_to_db_handles_sqlalchemy_error(monkeypatch):
     ok = cong_scraper.add_congresistas_to_db()
     assert ok is False
     assert dummy_session.rolled_back is True
+
+
+# ---------- 2026-2031 chamber scraping (Phase B1) ----------
+
+_ROSTER_ENTRY = {
+    "name": "Aguinaga Recuenco, Alejandro Aurelio",
+    "partido": "Fuerza Popular",
+    "group": "Fuerza Popular",
+    "district": "Lambayeque",
+    "gender": "Masculino",
+    "condition": "En Ejercicio",
+    "period": "2026 - 2031",
+    "email": "aaguinaga@congreso.gob.pe",
+    "photo": "https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto.png",
+    "url": "https://senado.congreso.gob.pe/senador/aguinaga-recuenco-alejandro-aurelio/",
+}
+
+
+def test_get_chamber_roster_parses_embedded_json(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    import json as _json
+
+    html = f"""
+    <html><body>
+      <div data-congresista-app="">
+        <script type="application/json">{_json.dumps([_ROSTER_ENTRY])}</script>
+      </div>
+    </body></html>
+    """
+
+    def fake_parse_url(url, *args, **kwargs):
+        assert url == "https://senado.congreso.gob.pe/senador/"
+        return fromstring(html)
+
+    monkeypatch.setattr("backend.scrapers.congresistas.parse_url", fake_parse_url)
+
+    roster = cong_scraper.get_chamber_roster("Senadores")
+    assert roster == [_ROSTER_ENTRY]
+
+
+def test_get_chamber_roster_missing_script_returns_empty(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda *a, **k: fromstring("<html><body>no data here</body></html>"),
+    )
+    assert cong_scraper.get_chamber_roster("Diputados") == []
+
+
+def test_get_chamber_roster_fetch_failure_returns_empty(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr("backend.scrapers.congresistas.parse_url", lambda *a, **k: None)
+    assert cong_scraper.get_chamber_roster("Senadores") == []
+
+
+def test_create_chamber_congresista_sets_chamber_and_leg_period(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    assert raw.chamber == "Senadores"
+    assert raw.leg_period == "Parlamentario 2026 - 2031"
+    assert raw.website == _ROSTER_ENTRY["url"]
+    assert raw.memberships_content is None
+
+
+def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
+    monkeypatch,
+):
+    """CRITICAL: proves the scraper's synthetic HTML is byte-compatible with
+    process_profile_content()'s existing xpath contract -- the adapter
+    pattern this Phase B1 design relies on for zero process-layer changes."""
+    from backend.process.congresistas import process_profile_content
+
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    cong, orgs, memberships = process_profile_content(raw, {})
+
+    assert cong.full_name == "Aguinaga Recuenco, Alejandro Aurelio"
+    assert cong.photo_url == _ROSTER_ENTRY["photo"]
+    assert [o.org_name for o in orgs] == ["Fuerza Popular", "Senado de la República"]
+    assert memberships[0].org_name == "Fuerza Popular"
+    assert memberships[1].org_name == "Senado de la República"
+    assert memberships[1].votes_in_election == 25642
+    assert memberships[1].role.value == "Senador"
+
+
+def test_extract_chamber_congresistas_tracks_all_entries(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
+    monkeypatch.setattr(cong_scraper, "update_tracking", lambda c: c)
+
+    second_entry = dict(_ROSTER_ENTRY, name="Otro, Congresista")
+    result = cong_scraper.extract_chamber_congresistas(
+        "Diputados", [_ROSTER_ENTRY, second_entry]
+    )
+
+    assert len(result) == 2
+    assert all(r.chamber == "Diputados" for r in result)
+    assert cong_scraper.raw_congresistas == result

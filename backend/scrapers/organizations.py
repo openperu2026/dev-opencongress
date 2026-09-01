@@ -1,3 +1,4 @@
+import html as html_lib
 from loguru import logger
 from typing import Literal
 from datetime import datetime
@@ -9,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings
+from backend.core.constants import CHAMBER_BASE_URLS
 from backend.database.raw_models import RawOrganization
 from backend.scrapers.utils import parse_url
 
@@ -22,10 +24,34 @@ BASE_URLS = {
 
 DB_PATH = settings.DB_URL
 
+# 2026-2031 term. "Consejo Directivo" is deliberately absent -- confirmed
+# live 2026-08-31 that diputados.congreso.gob.pe/consejo-directivo/ 404s;
+# treated as removed under the new structure (Phase B plan, Step B0 item 4).
+# Comisión Permanente is scraped once as a single joint entity, not per
+# chamber -- see get_chamber_organizations.
+CHAMBER_ADMIN_ORG_SLUGS = {
+    "Junta de Portavoces": "junta-de-portavoces",
+    "Mesa Directiva": "mesa-directiva",
+}
+COMISION_PERMANENTE_URL = "https://www.congreso.gob.pe/comision-permanente/"
+CHAMBER_ORG_YEAR = "2026"
+
 
 class RawOrganizationScraper:
     """
-    Class to scrape Grupos Parlamentarios' raw data from the congress web page
+    Class to scrape admin-org raw data from the congress web page (Junta de
+    Portavoces, Consejo Directivo, Mesa Directiva, Comisión Permanente).
+
+    Two independent scraping paths (see section headers below): LEGACY
+    (through 2021-2026) scrapes www3.congreso.gob.pe's year dropdown per
+    admin org, one row per (type_org, year). 2026-2031 BICAMERAL TERM
+    scrapes the new per-chamber Junta de Portavoces/Mesa Directiva pages
+    (Consejo Directivo dropped -- 404-confirmed live 2026-08-31, see
+    CHAMBER_ADMIN_ORG_SLUGS) plus the single joint Comisión Permanente page,
+    tagged chamber="Congreso". Both paths write RawOrganization rows to the
+    same table (chamber column: NULL for legacy, "Senadores"/"Diputados"/
+    "Congreso" for the new term) and are both consumed unmodified by
+    process_admin_org() (backend/process/organizations.py).
     """
 
     def __init__(self):
@@ -33,6 +59,11 @@ class RawOrganizationScraper:
         self.engine = create_engine(DB_PATH)
         self.urls = BASE_URLS
         self.Session = sessionmaker(bind=self.engine)
+
+    # =====================================================================
+    # LEGACY (through 2021-2026) -- www3.congreso.gob.pe, year dropdown
+    # per admin org
+    # =====================================================================
 
     def get_options(
         self,
@@ -160,6 +191,7 @@ class RawOrganizationScraper:
             f"Successfully extracted {len(self.organizations_list)} raw html organization"
         )
 
+    # SHARED (used by update_tracking() below, for both paths)
     @staticmethod
     def _snapshot_changed(current: RawOrganization, previous: RawOrganization) -> bool:
         return (
@@ -168,8 +200,138 @@ class RawOrganizationScraper:
             or current.raw_html != previous.raw_html
         )
 
+    # =====================================================================
+    # 2026-2031 BICAMERAL TERM -- {senado|diputados}.../junta-de-portavoces/,
+    # .../mesa-directiva/, plus the single joint Comisión Permanente page
+    # =====================================================================
+
+    @staticmethod
+    def _parse_parliament_table(html_doc) -> list[dict]:
+        """Parse a `table#parliamentTable`-shaped page (confirmed live
+        2026-08-31 for Junta de Portavoces) into row dicts keyed by header
+        label -- column set/order varies by page (e.g. committees have 5
+        columns incl. Foto, this admin-org table has 4), so cells are
+        matched by header text, not position.
+        """
+        table = html_doc.xpath('//*[@id="parliamentTable"]')
+        if not table:
+            return []
+        headers = [
+            th.text_content().strip().upper() for th in table[0].xpath(".//thead//th")
+        ]
+        if not headers:
+            return []
+        rows = []
+        for tr in table[0].xpath(".//tbody/tr"):
+            cells = tr.xpath("./td")
+            if len(cells) != len(headers):
+                continue
+            rows.append(dict(zip(headers, cells)))
+        return rows
+
+    @staticmethod
+    def _build_admin_org_html(rows: list[dict]) -> str:
+        """Synthesize the `.congresistas`-shaped HTML (5 cells: _, name,
+        website, _, cargo, with a throwaway header row) that
+        process_admin_org() (backend/process/organizations.py) already
+        parses -- keeps that function's contract stable, zero changes needed
+        there for the 2026-2031 path.
+        """
+        body_rows = ["<tr><td>h</td><td>h</td><td>h</td><td>h</td><td>h</td></tr>"]
+        for row in rows:
+            name_cell = row.get("APELLIDOS Y NOMBRES")
+            cargo_cell = row.get("CARGO")
+            if name_cell is None or cargo_cell is None:
+                continue
+            name_text = html_lib.escape(name_cell.text_content().strip())
+            cargo_text = html_lib.escape(cargo_cell.text_content().strip())
+            links = name_cell.xpath(".//a/@href")
+            website = links[0] if links else "#"
+            body_rows.append(
+                "<tr><td></td>"
+                f"<td>{name_text}</td>"
+                f'<td><a href="{html_lib.escape(website)}">link</a></td>'
+                "<td></td>"
+                f"<td>{cargo_text}</td></tr>"
+            )
+        return (
+            f'<table class="congresistas"><tbody>{"".join(body_rows)}</tbody></table>'
+        )
+
+    def _scrape_admin_org_page(
+        self, url: str, type_org: str, chamber: str, year: str
+    ) -> RawOrganization | None:
+        html_doc = parse_url(url)
+        if html_doc is None:
+            logger.warning(f"Failed to fetch {type_org} page: {url}")
+            return None
+        rows = self._parse_parliament_table(html_doc)
+        if not rows:
+            logger.warning(f"No table#parliamentTable found for {type_org} at {url}")
+            return None
+        return RawOrganization(
+            timestamp=datetime.now(),
+            org_link=url,
+            legislative_year=year,
+            chamber=chamber,
+            type_org=type_org,
+            raw_html=self._build_admin_org_html(rows),
+            processed=False,
+            last_update=True,
+        )
+
+    def get_chamber_organizations(self, chamber: str) -> list[RawOrganization]:
+        """Scrape 2026-2031 per-chamber admin orgs: Junta de Portavoces and
+        Mesa Directiva. "Consejo Directivo" is deliberately not scraped for
+        this term (404-confirmed, see CHAMBER_ADMIN_ORG_SLUGS). Comisión
+        Permanente is joint, not per-chamber -- see
+        get_joint_comision_permanente, called separately/once.
+
+        Confirmed live 2026-08-31: Junta de Portavoces exposes
+        table#parliamentTable. Mesa Directiva did not expose that table in
+        this pass (likely prose/a different layout) -- handled defensively
+        below, producing no row rather than guessing a wrong structure.
+        """
+        base_url = CHAMBER_BASE_URLS[chamber]
+        results = [
+            org
+            for type_org, slug in CHAMBER_ADMIN_ORG_SLUGS.items()
+            if (
+                org := self._scrape_admin_org_page(
+                    f"{base_url}/{slug}/", type_org, chamber, CHAMBER_ORG_YEAR
+                )
+            )
+            is not None
+        ]
+        self.organizations_list = [self.update_tracking(org) for org in results]
+        return self.organizations_list
+
+    def get_joint_comision_permanente(self) -> list[RawOrganization]:
+        """Scrape the single joint Comisión Permanente page, tagged
+        chamber="Congreso" per CHAMBER_LABEL_TO_ORG_NAME's existing
+        joint-entity convention. Call once, not per chamber.
+        """
+        org = self._scrape_admin_org_page(
+            COMISION_PERMANENTE_URL,
+            "Comisión Permanente",
+            "Congreso",
+            CHAMBER_ORG_YEAR,
+        )
+        self.organizations_list = [self.update_tracking(org)] if org else []
+        return self.organizations_list
+
+    # =====================================================================
+    # SHARED -- used by both the legacy and 2026-2031 code paths above
+    # =====================================================================
+
     def update_tracking(self, org: RawOrganization) -> RawOrganization:
-        """Update the tracking columns of a RawOrganization object"""
+        """Update the tracking columns of a RawOrganization object.
+
+        Scoped by (type_org, legislative_year, chamber) -- the chamber
+        filter matters for the 2026-2031 path specifically, since e.g.
+        "Junta de Portavoces" for Senadores and Diputados would otherwise
+        share the same (type_org, year) pair and collide.
+        """
 
         with self.Session() as session:
             last_org = (
@@ -177,6 +339,7 @@ class RawOrganizationScraper:
                 .filter(
                     RawOrganization.type_org == org.type_org,
                     RawOrganization.legislative_year == org.legislative_year,
+                    RawOrganization.chamber == org.chamber,
                     RawOrganization.last_update,
                 )
                 .order_by(RawOrganization.timestamp.desc())
