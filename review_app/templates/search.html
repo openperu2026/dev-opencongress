@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Search — Vote Review{% endblock %}
+{% block content %}
+<form method="get" action="{{ url_for('review.search') }}" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" placeholder="Vote event ID, bill or motion ID">
+  <label>From <input type="date" name="date_from" value="{{ date_from }}"></label>
+  <label>To <input type="date" name="date_to" value="{{ date_to }}"></label>
+  <input type="number" name="org_id" value="{{ org_id }}" placeholder="Org ID">
+  <button type="submit">Search</button>
+</form>
+
+<table class="queue-table">
+  <thead>
+    <tr>
+      <th>Vote event</th>
+      <th>Bill / Motion</th>
+      <th>Date</th>
+      <th>Result</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for e in events %}
+    <tr>
+      <td>{{ e.vote_event_id }}</td>
+      <td>{{ e.bill_id or e.motion_id }}</td>
+      <td>{{ e.event_date }}</td>
+      <td>{{ e.result.value if e.result else "" }}</td>
+      <td>
+        <a href="{{ url_for('review.detail', vote_event_id=e.vote_event_id) }}?ids={{ event_ids_csv }}&pos={{ loop.index0 }}">Open</a>
+      </td>
+    </tr>
+    {% else %}
+    <tr><td colspan="5">No vote events match these filters.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<div class="pagination">
+  {% if page > 1 %}
+  <a href="?q={{ q }}&date_from={{ date_from }}&date_to={{ date_to }}&org_id={{ org_id }}&page={{ page - 1 }}">&laquo; Prev page</a>
+  {% endif %}
+  <a href="?q={{ q }}&date_from={{ date_from }}&date_to={{ date_to }}&org_id={{ org_id }}&page={{ page + 1 }}">Next page &raquo;</a>
+</div>
+{% endblock %}

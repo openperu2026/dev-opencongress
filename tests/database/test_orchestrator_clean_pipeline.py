@@ -278,6 +278,172 @@ def test_process_motions_loads_motion_when_author_is_missing(orchestrator):
         assert db.query(db_models.MotionCongresistas).count() == 0
 
 
+def test_process_bills_sets_bancada_from_membership_as_of_presentation_date(
+    orchestrator,
+):
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        bancada = db_models.Organization(
+            org_name="Bancada Test",
+            org_type="Bancada",
+        )
+        db.add(bancada)
+        db.flush()
+
+        cong = db_models.Congresista(
+            full_name="Ana Torres",
+            photo_url="https://x/a.jpg",
+            website="https://x/ana-torres",
+        )
+        db.add(cong)
+        db.flush()
+
+        cong_id = cong.id
+        bancada_org_id = bancada.org_id
+
+        db.add(
+            db_models.BancadaMembership(
+                person_id=cong_id,
+                org_id=bancada_org_id,
+                leg_period="2021-2026",
+                org_type="Bancada",
+                role="Miembro",
+                start_date=date(2025, 1, 1),
+                end_date=date(2026, 12, 31),
+            )
+        )
+
+        db.add(
+            RawBill(
+                id="2026_1",
+                timestamp=datetime(2026, 1, 10),
+                general=json.dumps(
+                    {
+                        "fecPresentacion": "2026-01-10",
+                        "titulo": "Proyecto de Ley X",
+                        "sumilla": "Resumen",
+                        "observaciones": "",
+                        "desEstado": "Presentado",
+                        "desProponente": "Ministerio Público",
+                        "desGpar": "Bancada Test",
+                        "proyectoLey": "2026_1",
+                    }
+                ),
+                congresistas=json.dumps(
+                    [
+                        {
+                            "nombre": "TORRES, Ana",
+                            "pagWeb": None,
+                            "tipoFirmanteId": 1,
+                        }
+                    ]
+                ),
+                steps=json.dumps([]),
+                committees=json.dumps([]),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_bills(limit=None)
+
+    with orchestrator.DBSession() as db:
+        assert stats.processed == 1
+        assert stats.errors == 0
+
+        rel = db.get(db_models.BillCongresistas, ("2026_1", cong_id))
+        assert rel is not None
+        assert rel.bancada_id == bancada_org_id
+
+
+def test_process_motions_sets_bancada_from_membership_as_of_presentation_date(
+    orchestrator,
+):
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        bancada = db_models.Organization(
+            org_name="Bancada Test",
+            org_type="Bancada",
+        )
+        db.add(bancada)
+        db.flush()
+
+        cong = db_models.Congresista(
+            full_name="Ana Torres",
+            photo_url="https://x/a.jpg",
+            website="https://x/ana-torres",
+        )
+        db.add(cong)
+        db.flush()
+
+        cong_id = cong.id
+        bancada_org_id = bancada.org_id
+
+        db.add(
+            db_models.BancadaMembership(
+                person_id=cong_id,
+                org_id=bancada_org_id,
+                leg_period="2021-2026",
+                org_type="Bancada",
+                role="Miembro",
+                start_date=date(2025, 1, 1),
+                end_date=date(2026, 12, 31),
+            )
+        )
+
+        db.add(
+            RawMotion(
+                id="2026_2",
+                timestamp=datetime(2026, 1, 10),
+                general=json.dumps(
+                    {
+                        "fecPresentacion": "2026-01-10",
+                        "desTipoMocion": "Otras",
+                        "sumilla": "Resumen",
+                        "observacion": None,
+                        "desEstadoMocion": "Presentado",
+                    }
+                ),
+                congresistas=json.dumps(
+                    [
+                        {
+                            "nombre": "TORRES, Ana",
+                            "pagWeb": None,
+                            "tipoFirmanteId": 1,
+                        }
+                    ]
+                ),
+                steps=json.dumps([]),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_motions(include_documents=False, limit=None)
+
+    with orchestrator.DBSession() as db:
+        assert stats.processed == 1
+        assert stats.errors == 0
+
+        rel = db.get(db_models.MotionCongresistas, ("2026_2", cong_id))
+        assert rel is not None
+        assert rel.bancada_id == bancada_org_id
+
+
 def test_process_leyes_leaves_parsed_missing_bill_pending(orchestrator):
     xml = """
     <root>

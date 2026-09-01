@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "OpenPeru"
 version = "0.1.0"
@@ -25,6 +29,7 @@ dependencies = [
     "marshmallow>=4.3.1",
     "matplotlib>=3.10.8",
     "numpy>=2.4.4",
+    "openai>=2.45.0",
     "opencv-python>=4.11.0.86",
     "pandas>=3.0.2",
     "pathlib>=1.0.1",
@@ -35,6 +40,7 @@ dependencies = [
     "polars>=1.30.0",
     "pre-commit>=4.2.0",
     "psycopg[binary]>=3.3.4",
+    "pyarrow>=25.0.1",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
     "pymupdf>=1.27.2.2",
@@ -43,6 +49,7 @@ dependencies = [
     "pytesseract>=0.3.13",
     "pytest>=8.4.1",
     "pytest-asyncio>=1.0.0",
+    "requests>=2.34.2",
     "ruff>=0.12.0",
     "scikit-learn>=1.8.0",
     "selenium>=4.33.0",
@@ -60,3 +67,7 @@ dev = [
     "zensical>=0.0.34",
     "openpyxl>=3.1.5",
 ]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*", "app*", "review_app*"]

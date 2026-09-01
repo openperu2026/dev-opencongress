@@ -1,6 +1,3 @@
-migration:
-	docker compose run --rm initial-migration
-
 scrape-others:
 	uv run -m backend --scrape --skip-processing --only-others --only-current
 
@@ -24,3 +21,15 @@ process:
 
 process-bill-documents:
 	uv run -m backend --only-bills --process-documents	
+
+process-votes-sync:
+	uv run -m backend --only-votes --votes-limit 10 --votes-max-cost-usd 5.0
+
+backfill-bancadas-bills:
+	uv run python scripts/backfill_bancada_snapshots.py --only bills
+
+backfill-bancadas-motions:
+	uv run python scripts/backfill_bancada_snapshots.py --only motions
+
+process-votes-from-raw:
+	uv run -m backend --only-votes --skip-vote-extraction

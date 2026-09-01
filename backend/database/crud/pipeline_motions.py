@@ -49,6 +49,7 @@ def upsert_motion_congresista(
     motion_id: str,
     person_id: int,
     role_type: Enum | str,
+    bancada_id: int | None = None,
 ) -> db_models.MotionCongresistas:
     existing = db.get(db_models.MotionCongresistas, (motion_id, person_id))
     role_type = _enum_value(role_type)
@@ -57,12 +58,14 @@ def upsert_motion_congresista(
             motion_id=motion_id,
             person_id=person_id,
             role_type=role_type,
+            bancada_id=bancada_id,
         )
         db.add(obj)
         db.flush()
         return obj
 
     existing.role_type = role_type
+    existing.bancada_id = bancada_id
     db.flush()
     return existing
 

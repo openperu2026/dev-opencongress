@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from collections import defaultdict
 
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, func, case
 from sqlalchemy.orm import Session
 
 from backend import OcrModel
@@ -58,6 +58,7 @@ def upsert_bill_congresista(
     bill_id: str,
     person_id: int,
     role_type: Enum | str,
+    bancada_id: int | None = None,
 ) -> db_models.BillCongresistas:
     existing = db.get(db_models.BillCongresistas, (bill_id, person_id))
     role_type = _enum_value(role_type)
@@ -67,12 +68,14 @@ def upsert_bill_congresista(
             bill_id=bill_id,
             person_id=person_id,
             role_type=role_type,
+            bancada_id=bancada_id,
         )
         db.add(obj)
         db.flush()
         return obj
 
     existing.role_type = role_type
+    existing.bancada_id = bancada_id
     db.flush()
     return existing
 
@@ -347,3 +350,60 @@ def refresh_bill_diff_flag(db: Session, bill_id: str) -> bool:
         bill.bill_diff = has_diff
         db.flush()
     return has_diff
+
+
+def refresh_bill_votes_flag(db: Session, bill_id: str) -> bool:
+    """Recompute and persist Bill.votes from bill_differences rows."""
+
+    qualifying_steps = (
+        select(RawBillPage.bill_id, RawBillPage.step_id)
+        .distinct()
+        .join(
+            RawBillDocument,
+            (RawBillDocument.bill_id == RawBillPage.bill_id)
+            & (RawBillDocument.step_id == RawBillPage.step_id)
+            & (RawBillDocument.file_id == RawBillPage.file_id),
+        )
+        .where(
+            RawBillPage.ocr_model == "gpt-5.6-luna",
+            RawBillPage.bill_id == bill_id,
+        )
+        .cte("qualifying_steps")
+    )
+
+    vote_counts = (
+        select(
+            db_models.Vote.vote_event_id,
+            func.count().label("n_votes"),
+        )
+        .group_by(db_models.Vote.vote_event_id)
+        .cte("vote_counts")
+    )
+
+    stmt = (
+        select(
+            func.max(case((vote_counts.c.n_votes >= 129, 1), else_=0)).label(
+                "has_complete_vote"
+            )
+        )
+        .select_from(db_models.BillStep)
+        .join(
+            qualifying_steps,
+            (qualifying_steps.c.bill_id == db_models.BillStep.bill_id)
+            & (qualifying_steps.c.step_id == db_models.BillStep.step_id),
+        )
+        .join(
+            vote_counts, vote_counts.c.vote_event_id == db_models.BillStep.vote_event_id
+        )
+    )
+
+    flag_value = db.execute(stmt).scalar()
+    has_complete_vote = bool(flag_value) if flag_value is not None else False
+
+    # Persist the flag on the Bill row
+    bill = db.get(db_models.Bill, bill_id)
+    if bill is not None:
+        bill.has_complete_vote = has_complete_vote
+        db.flush()
+
+    return has_complete_vote

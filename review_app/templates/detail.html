@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}{{ event.vote_event_id }} — Vote Review{% endblock %}
+
+{% macro add_row_fields(is_disabled) %}
+  <select name="congresista_id" class="edit-gated"{% if is_disabled %} disabled{% endif %}>
+    <option value="">Add a congresista not shown above…</option>
+    {% for cid, name in addable_congresistas %}
+    <option value="{{ cid }}">{{ name }}</option>
+    {% endfor %}
+  </select>
+  <select name="attendance_status" class="edit-gated"{% if is_disabled %} disabled{% endif %}>
+    <option value="">Attendance…</option>
+    {% for opt in attendance_statuses %}<option value="{{ opt.value }}">{{ opt.value }}</option>{% endfor %}
+  </select>
+  <select name="vote_option" class="edit-gated"{% if is_disabled %} disabled{% endif %}>
+    <option value="">Vote…</option>
+    {% for opt in vote_options %}<option value="{{ opt.value }}">{{ opt.value }}</option>{% endfor %}
+  </select>
+  <button type="button" class="edit-gated remove-row-btn"{% if is_disabled %} disabled{% endif %}>×</button>
+{% endmacro %}
+
+{% block content %}
+<div class="detail-header">
+  <div>
+    <h1>{{ event.vote_event_id }}</h1>
+    <span class="meta">{{ event.event_date }} — {{ event.result.value if event.result else "" }}</span>
+  </div>
+  <div class="nav-buttons" id="prev-next" data-ids="{{ ids_csv }}" data-pos="{{ pos }}"></div>
+</div>
+
+<div class="summary-panel">
+  <table class="summary-table">
+    <thead>
+      <tr>
+        <th>Party</th>
+        {% for opt in vote_options %}<th>{{ opt.value }}</th>{% endfor %}
+        <th>{{ unrecorded_label }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for party, counts in summary.items() %}
+      <tr class="{{ 'summary-total' if party == 'TOTAL' else '' }}">
+        <td>{{ party }}</td>
+        {% for opt in vote_options %}<td>{{ counts[opt.value] }}</td>{% endfor %}
+        <td>{{ counts[unrecorded_label] }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="edit-toggle-bar" id="edit-toggle-bar">
+  <label><input type="checkbox" id="edit-mode-toggle"> Edit Mode</label>
+</div>
+
+<div class="split-view">
+  <div class="pdf-pane">
+    {% if document_status == "resolved" %}
+      <iframe src="{{ document_url }}" title="Source PDF"></iframe>
+    {% elif document_status == "not_archived" %}
+      <div class="banner banner-warning">
+        Document not yet archived.
+        <a href="{{ fallback_url }}" target="_blank" rel="noopener">Open source URL</a>
+      </div>
+    {% elif document_status == "ambiguous" %}
+      <div class="banner banner-danger">
+        Multiple candidate documents found for this vote event — data may be unreliable.
+      </div>
+    {% else %}
+      <div class="banner banner-muted">No source document found.</div>
+    {% endif %}
+  </div>
+
+  <div class="table-pane">
+    <form method="post" action="{{ url_for('review.save', vote_event_id=event.vote_event_id, ids=ids_csv, pos=pos) }}" id="review-form">
+      <table class="review-table">
+        <thead>
+          <tr>
+            <th>Congresista</th>
+            <th>Bancada</th>
+            <th>Attendance</th>
+            <th>Vote</th>
+            <th>Verified</th>
+            <th>Flag</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in rows %}
+          <tr>
+            <td>{{ row.display_name }}</td>
+            <td>{{ row.bancada_name or "" }}</td>
+            <td>
+              <select name="attendance-{{ row.congresista_id }}" class="edit-gated" disabled>
+                <option value="" {% if row.attendance_status is none %}selected{% endif %}>— not recorded —</option>
+                {% for opt in attendance_statuses %}
+                <option value="{{ opt.value }}" {% if opt.value == row.attendance_status %}selected{% endif %}>{{ opt.value }}</option>
+                {% endfor %}
+              </select>
+              {% if row.attendance_action %}<span class="badge badge-{{ row.attendance_action }}">{{ row.attendance_action }}</span>{% endif %}
+            </td>
+            <td>
+              <select name="vote-{{ row.congresista_id }}" class="edit-gated" disabled>
+                <option value="" {% if row.vote_option is none %}selected{% endif %}>— not recorded —</option>
+                {% for opt in vote_options %}
+                <option value="{{ opt.value }}" {% if opt.value == row.vote_option %}selected{% endif %}>{{ opt.value }}</option>
+                {% endfor %}
+              </select>
+              {% if row.vote_action %}<span class="badge badge-{{ row.vote_action }}">{{ row.vote_action }}</span>{% endif %}
+            </td>
+            <td><input type="checkbox" name="verified-{{ row.congresista_id }}" class="edit-gated" disabled></td>
+            <td><input type="checkbox" name="flag-{{ row.congresista_id }}" class="edit-gated" disabled></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6">No roster or vote/attendance records for this event.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </form>
+  </div>
+</div>
+
+<div class="below-split-view">
+  <button type="submit" form="review-form" id="save-button" class="edit-gated" disabled>Save changes</button>
+
+  <form method="post" action="{{ url_for('review.add_congresista', vote_event_id=event.vote_event_id) }}" class="add-congresista-form">
+    <div id="add-rows">
+      <div class="add-row">
+        {{ add_row_fields(true) }}
+      </div>
+    </div>
+    <div class="add-congresista-actions">
+      <button type="button" id="add-row-btn" class="edit-gated" disabled>+ Add another</button>
+      <button type="submit" class="edit-gated" disabled>Add all</button>
+    </div>
+  </form>
+  <template id="add-row-template">
+    <div class="add-row">
+      {{ add_row_fields(false) }}
+    </div>
+  </template>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('review.static', filename='review.js') }}"></script>
+{% endblock %}
