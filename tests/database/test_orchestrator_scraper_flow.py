@@ -641,14 +641,17 @@ def test_run_scrapers_legacy_leg_period_still_runs_bills_motions_legacy_scrape(
     monkeypatch.setattr(
         orch,
         "_scrape_range",
-        lambda **kwargs: calls.append(("_scrape_range", kwargs["entity_name"]))
-        or _stats(1, 2, 0),
+        lambda **kwargs: (
+            calls.append(("_scrape_range", kwargs["entity_name"])) or _stats(1, 2, 0)
+        ),
     )
     monkeypatch.setattr(
         orch,
         "_scrape_pending_daily",
-        lambda **kwargs: calls.append(("_scrape_pending_daily", kwargs["entity_name"]))
-        or _stats(1, 2, 0),
+        lambda **kwargs: (
+            calls.append(("_scrape_pending_daily", kwargs["entity_name"]))
+            or _stats(1, 2, 0)
+        ),
     )
     monkeypatch.setattr(orch, "_scrape_chamber_range", lambda **kwargs: _stats(1, 2, 0))
     monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
