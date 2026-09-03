@@ -397,16 +397,22 @@ class OpenPeruOrchestrator:
             # =================================================================
 
             if leg_period in (None, settings.LEG_PERIOD):
-                with log_manager.stage("scraper", "chamber_reference") as stage_logger:
-                    console.info(
-                        "Starting 2026-2031 chamber scrapers "
-                        "(congresistas, bancadas, committees, organizations)"
-                    )
-                    stage_logger.info("Starting 2026-2031 chamber scrapers")
-                    chamber_cong = RawCongresistasScraper()
-                    chamber_banc = RawBancadaScraper()
-                    chamber_comm = RawCommitteeScraper()
-                    chamber_org = RawOrganizationScraper()
+                chamber_cong = RawCongresistasScraper()
+                chamber_banc = RawBancadaScraper()
+                chamber_comm = RawCommitteeScraper()
+                chamber_org = RawOrganizationScraper()
+                # Bancada membership is derived from the same roster fetched
+                # during the congresistas stage below (see
+                # RawBancadaScraper.build_chamber_bancada_html) -- cached
+                # here per chamber so the bancadas stage can reuse it
+                # without a second roster fetch.
+                chamber_rosters: dict[str, list[dict]] = {}
+
+                with log_manager.stage(
+                    "scraper", "congresistas_chamber"
+                ) as stage_logger:
+                    console.info("Starting 2026-2031 congresistas scraper")
+                    stage_logger.info("Starting 2026-2031 congresistas scraper")
                     start_time = datetime.now()
                     total_scraped = 0
 
@@ -418,35 +424,78 @@ class OpenPeruOrchestrator:
                                 f"Skipping {chamber} congresistas scrape: "
                                 "latest raw scrape is within 1 day"
                             )
-                        else:
-                            roster = chamber_cong.get_chamber_roster(chamber)
-                            scraped = chamber_cong.extract_chamber_congresistas(
-                                chamber, roster
-                            )
-                            if scraped:
-                                chamber_cong.add_congresistas_to_db()
-                                total_scraped += len(scraped)
+                            continue
+                        roster = chamber_cong.get_chamber_roster(chamber)
+                        scraped = chamber_cong.extract_chamber_congresistas(
+                            chamber, roster
+                        )
+                        if scraped:
+                            chamber_cong.add_congresistas_to_db()
+                            total_scraped += len(scraped)
+                            chamber_rosters[chamber] = roster
 
-                                # Bancada membership for 2026-2031 is derived
-                                # from this same roster (see
-                                # RawBancadaScraper.build_chamber_bancada_html)
-                                # -- only scrape it when the roster actually
-                                # came back, so a failed congresista fetch
-                                # doesn't silently write an empty bancada row.
-                                if not self._recent_raw_exists(
-                                    RawBancada, days=1, chamber=chamber
-                                ):
-                                    chamber_banc.get_chamber_bancadas(chamber, roster)
-                                    chamber_banc.add_bancadas_to_db()
+                    end_time = datetime.now()
+                    self.scraper_results["congresistas_chamber.py"] = ScraperStats(
+                        start_time, end_time, total_scraped
+                    )
+                    self._load_scraper_results("congresistas_chamber.py")
 
-                        if not self._recent_raw_exists(
+                with log_manager.stage("scraper", "bancadas_chamber") as stage_logger:
+                    console.info("Starting 2026-2031 bancadas scraper")
+                    stage_logger.info("Starting 2026-2031 bancadas scraper")
+                    start_time = datetime.now()
+                    total_scraped = 0
+
+                    for chamber in ("Senadores", "Diputados"):
+                        roster = chamber_rosters.get(chamber)
+                        if roster is None:
+                            # Congresistas were skipped (recent) or came back
+                            # empty this run -- nothing new to derive bancada
+                            # membership from.
+                            continue
+                        if self._recent_raw_exists(RawBancada, days=1, chamber=chamber):
+                            continue
+                        chamber_banc.get_chamber_bancadas(chamber, roster)
+                        chamber_banc.add_bancadas_to_db()
+                        total_scraped += len(chamber_banc.bancadas_list)
+
+                    end_time = datetime.now()
+                    self.scraper_results["bancadas_chamber.py"] = ScraperStats(
+                        start_time, end_time, total_scraped
+                    )
+                    self._load_scraper_results("bancadas_chamber.py")
+
+                with log_manager.stage("scraper", "committees_chamber") as stage_logger:
+                    console.info("Starting 2026-2031 committees scraper")
+                    stage_logger.info("Starting 2026-2031 committees scraper")
+                    start_time = datetime.now()
+                    total_scraped = 0
+
+                    for chamber in ("Senadores", "Diputados"):
+                        if self._recent_raw_exists(
                             RawCommittee, days=1, chamber=chamber
                         ):
-                            chamber_comm.get_chamber_committees(chamber)
-                            if chamber_comm.committee_list:
-                                chamber_comm.add_committees_to_db()
-                                total_scraped += len(chamber_comm.committee_list)
+                            continue
+                        chamber_comm.get_chamber_committees(chamber)
+                        if chamber_comm.committee_list:
+                            chamber_comm.add_committees_to_db()
+                            total_scraped += len(chamber_comm.committee_list)
 
+                    end_time = datetime.now()
+                    self.scraper_results["committees_chamber.py"] = ScraperStats(
+                        start_time, end_time, total_scraped
+                    )
+                    self._load_scraper_results("committees_chamber.py")
+
+                with log_manager.stage(
+                    "scraper", "organizations_chamber"
+                ) as stage_logger:
+                    console.info("Starting 2026-2031 organizations scraper")
+                    stage_logger.info("Starting 2026-2031 organizations scraper")
+                    start_time = datetime.now()
+                    total_scraped = 0
+
+                    for chamber in ("Senadores", "Diputados"):
                         if not self._recent_raw_exists(
                             RawOrganization, days=1, chamber=chamber
                         ):
@@ -464,10 +513,10 @@ class OpenPeruOrchestrator:
                             total_scraped += len(chamber_org.organizations_list)
 
                     end_time = datetime.now()
-                    self.scraper_results["chamber_reference.py"] = ScraperStats(
+                    self.scraper_results["organizations_chamber.py"] = ScraperStats(
                         start_time, end_time, total_scraped
                     )
-                    self._load_scraper_results("chamber_reference.py")
+                    self._load_scraper_results("organizations_chamber.py")
 
         # =====================================================================
         # LEGACY (through 2021-2026) -- bills/motions ALWAYS scrape the

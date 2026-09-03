@@ -591,7 +591,7 @@ def test_run_scrapers_default_leg_period_skips_legacy_reference_scrape(monkeypat
         log_mgr.messages
     )
     # Current-period chamber block must still be entered.
-    assert any("Starting 2026-2031 chamber scrapers" in m for m in log_mgr.messages)
+    assert any("Starting 2026-2031 congresistas scraper" in m for m in log_mgr.messages)
 
 
 def test_run_scrapers_legacy_leg_period_runs_legacy_reference_scrape(monkeypatch):
@@ -623,7 +623,9 @@ def test_run_scrapers_legacy_leg_period_runs_legacy_reference_scrape(monkeypatch
     assert "Skipping congresistas scrape: latest raw scrape is within 1 day" in (
         log_mgr.messages
     )
-    assert not any("Starting 2026-2031 chamber scrapers" in m for m in log_mgr.messages)
+    assert not any(
+        "Starting 2026-2031 congresistas scraper" in m for m in log_mgr.messages
+    )
 
 
 def test_run_scrapers_legacy_leg_period_still_runs_bills_motions_legacy_scrape(
