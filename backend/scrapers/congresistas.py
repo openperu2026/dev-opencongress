@@ -264,6 +264,101 @@ class RawCongresistasScraper:
         return value_node.text_content().strip() or "0"
 
     @staticmethod
+    def _parse_cargos_date(value: str | None) -> str | None:
+        """Convert the cargos-table's dd/mm/yyyy date text to an ISO date
+        string, matching what to_datetime() (backend/process/utils.py)
+        already expects. Kept scoped to this one new page's date format
+        rather than widening to_datetime() itself, which parses ISO/epoch
+        values used broadly elsewhere.
+        """
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value.strip(), "%d/%m/%Y").date().isoformat()
+        except ValueError:
+            return None
+
+    def _get_chamber_cargos(self, profile_url: str) -> str | None:
+        """Fetch and parse a 2026-2031 congresista's own cargos sub-page.
+
+        Confirmed live 2026-09-02 (both chambers, same URL pattern):
+        {profile_url}sobre-el-integrante/cargos/ holds a table.cargos-table
+        with one row per membership (committee, admin org, or bancada),
+        each row's org name in a <small title="..."> and its dates as
+        plain dd/mm/yyyy text. This is now the SOLE source of 2026-2031
+        membership data for admin orgs AND committees -- see
+        organizations.py::_build_admin_org_html's docstring for the other
+        half of this decision (org-page scrapes build Organization records
+        only, never Membership rows, for this term).
+
+        Synthesizes the same {"data": [...]} JSON shape the legacy cargos
+        API already produces, so process_cong_memberships() (backend/
+        process/congresistas.py) needs zero changes -- dates are converted
+        to ISO here since that function's to_datetime() only parses
+        ISO/epoch.
+        """
+        cargos_url = urljoin(profile_url, "sobre-el-integrante/cargos/")
+        html_doc = parse_url(cargos_url)
+        if html_doc is None:
+            logger.warning(f"Failed to fetch cargos page: {cargos_url}")
+            return None
+
+        rows = html_doc.xpath(
+            '//table[contains(@class, "cargos-table")]//tr[@data-cargos-row]'
+        )
+        memberships = []
+        for row in rows:
+            small_nodes = row.xpath(".//small")
+            org_name = small_nodes[0].text_content().strip() if small_nodes else ""
+            if not org_name:
+                logger.warning(f"Skipping cargos row with no org name at {cargos_url}")
+                continue
+
+            strong_nodes = row.xpath(".//strong")
+            strong_text = strong_nodes[0].text_content().strip() if strong_nodes else ""
+            if strong_text.lower() == "grupo parlamentario":
+                # Bancada membership -- already scraped via the dedicated
+                # RawBancadaScraper.get_chamber_bancadas path (Phase B1);
+                # routing it through here too would double-source the same
+                # fact, and map_org_fields() has no Bancada case at all
+                # (it would silently default to org_type="Comisión").
+                continue
+
+            cargo_nodes = row.xpath(
+                './/td[@data-label="Cargo"]//span[contains(@class, "cargos-badge--role")]'
+            )
+            cargo_text = cargo_nodes[0].text_content().strip() if cargo_nodes else ""
+
+            desde_nodes = row.xpath('.//td[@data-label="Desde"]')
+            hasta_nodes = row.xpath('.//td[@data-label="Hasta"]')
+            fecha_inicio = self._parse_cargos_date(
+                desde_nodes[0].text_content() if desde_nodes else None
+            )
+            fecha_fin = self._parse_cargos_date(
+                hasta_nodes[0].text_content() if hasta_nodes else None
+            )
+            if fecha_inicio is None:
+                logger.warning(
+                    f"Skipping cargos row for {org_name!r} with unparseable "
+                    f"Desde date at {cargos_url}"
+                )
+                continue
+
+            memberships.append(
+                {
+                    "desOrgano": org_name,
+                    "desOrganoCongresista": org_name,
+                    "desCargo": cargo_text,
+                    "fechaInicio": fecha_inicio,
+                    "fechaFin": fecha_fin,
+                }
+            )
+
+        if not memberships:
+            return None
+        return json.dumps({"data": memberships})
+
+    @staticmethod
     def _synthesize_chamber_profile_html(entry: dict, votes: str) -> str:
         """Build a minimal HTML doc using the SAME class names
         process_profile_content() (backend/process/congresistas.py) already
@@ -293,13 +388,16 @@ class RawCongresistasScraper:
         profile_url = entry.get("url", "")
         votes = self._get_chamber_votes(profile_url) if profile_url else "0"
         profile_content = self._synthesize_chamber_profile_html(entry, votes)
+        memberships_content = (
+            self._get_chamber_cargos(profile_url) if profile_url else None
+        )
         return RawCongresista(
             timestamp=datetime.now(),
             leg_period=CHAMBER_LEG_PERIOD_LABEL,
             chamber=chamber,
             website=profile_url,
             profile_content=profile_content,
-            memberships_content=None,
+            memberships_content=memberships_content,
         )
 
     def extract_chamber_congresistas(

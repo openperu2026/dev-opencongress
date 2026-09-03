@@ -628,6 +628,77 @@ def test_get_chamber_committees_synthesizes_index_and_roundtrips_process_committ
     assert all(o.org_subtype == "Comisión Ordinaria" for o in orgs)
 
 
+_WP_COMISIONES_HTML = """
+<html><body>
+<div class="wp-comisiones">
+<div class="titulo-seccion">Comisiones Ordinarias Legislativas</div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/constitucion-reglamento-y-relaciones-exteriores/">Comisión de Constitución, Reglamento y Relaciones Exteriores</a></div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/justicia-y-derechos-humanos/">Comisión de Justicia y Derechos Humanos.</a></div>
+<div class="titulo-seccion">Comisiones Ordinarias No Legislativas (art.45)</div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/etica/">Comisión de Ética Parlamentaria.</a></div>
+<div class="titulo-seccion">Comisiones Extraordinarias</div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/futura-comision/">Comisión Futura</a></div>
+</div>
+</body></html>
+"""
+
+
+def test_get_chamber_committees_tags_rows_by_section_title(monkeypatch):
+    """CRITICAL: confirms the real wp-comisiones/titulo-seccion structure
+    (confirmed live 2026-09-02) tags each committee with its own section's
+    title, not a single hardcoded "Comisión Ordinaria" for every row --
+    and that an unrecognized future section title ("Comisiones
+    Extraordinarias") is written through verbatim by the scraper, then
+    logged and skipped (not raised) by process_committee(), so it doesn't
+    block the OTHER committees sharing the same chamber's RawCommittee
+    row/raw_html blob."""
+    from backend.process.organizations import process_committee
+
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring(_WP_COMISIONES_HTML),
+    )
+
+    result = scraper.get_chamber_committees("Diputados")
+    assert len(result) == 1
+    raw_comm = result[0]
+
+    # The unrecognized section's committee is NOT silently dropped by the
+    # scraper -- its raw section title is still present verbatim in
+    # raw_html, confirming the scraper layer doesn't do any filtering.
+    assert "Comisión Futura" in raw_comm.raw_html
+    assert "Comisiones Extraordinarias" in raw_comm.raw_html
+
+    orgs = process_committee(raw_comm)
+    by_name = {o.org_name: o for o in orgs}
+    assert (
+        by_name[
+            "Comisión de Constitución, Reglamento y Relaciones Exteriores"
+        ].org_subtype
+        == "Comisión Ordinaria Legislativa"
+    )
+    assert (
+        by_name["Comisión de Justicia y Derechos Humanos."].org_subtype
+        == "Comisión Ordinaria Legislativa"
+    )
+    # Classified by SECTION membership (it's under "No Legislativas" on
+    # the index page), not by parse_comm_type's name-based rule for this
+    # committee -- that rule matches when the type text is literally
+    # "Comisión de Ética Parlamentaria" (e.g. a legacy dropdown value),
+    # which isn't the case here.
+    assert (
+        by_name["Comisión de Ética Parlamentaria."].org_subtype
+        == "Comisión Ordinaria No Legislativa"
+    )
+    # Unrecognized type: logged and skipped, not raised -- the other 3
+    # committees in the same batch still process correctly.
+    assert "Comisión Futura" not in by_name
+    assert len(orgs) == 3
+
+
 def test_get_chamber_committees_excludes_index_self_link(monkeypatch):
     """Regression: the page's own nav link back to /comisiones/ (plural)
     also starts with "{base_url}/comision" -- must not be scraped as a

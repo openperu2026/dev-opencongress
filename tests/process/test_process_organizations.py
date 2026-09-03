@@ -95,6 +95,45 @@ def test_process_committee_builds_organizations(monkeypatch, committee_html_two_
     assert out[1].org_link == "/comisiones/salud"
 
 
+def test_process_committee_classifies_legislativa_and_no_legislativa_subtypes():
+    """2026-2031 term: committees now get tagged with their committees-
+    index SECTION title (see committees.py::get_chamber_committees), not
+    a single generic "Comisión Ordinaria" -- confirms both new subtypes
+    classify correctly and an unrecognized future section type is logged
+    and skipped rather than raising for the whole batch."""
+    html = """
+    <table class="congresistas">
+      <tbody>
+        <tr>
+          <td>Comisiones Ordinarias Legislativas</td>
+          <td><a href="/comision-justicia/">Comisión de Justicia y Derechos Humanos</a></td>
+        </tr>
+        <tr>
+          <td>Comisiones Ordinarias No Legislativas (art.45)</td>
+          <td><a href="/comision-etica/">Comisión de Ética Parlamentaria.</a></td>
+        </tr>
+        <tr>
+          <td>Comisiones Extraordinarias</td>
+          <td><a href="/comision-futura/">Comisión Futura</a></td>
+        </tr>
+      </tbody>
+    </table>
+    """
+    raw = _raw_committee(raw_html=html, legislative_year="2026", chamber="Diputados")
+
+    out = mod.process_committee(raw)
+
+    assert len(out) == 2
+    by_name = {o.org_name: o for o in out}
+    assert by_name["Comisión de Justicia y Derechos Humanos"].org_subtype == (
+        TypeCommittee.COM_ORD_LEG
+    )
+    assert by_name["Comisión de Ética Parlamentaria."].org_subtype == (
+        TypeCommittee.COM_ORD_NO_LEG
+    )
+    assert "Comisión Futura" not in by_name
+
+
 def test_process_committee_senadores_chamber_sets_senado_parent(
     committee_html_two_rows,
 ):

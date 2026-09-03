@@ -1,4 +1,5 @@
 import html as html_lib
+import json
 from loguru import logger
 from typing import Literal
 from datetime import datetime
@@ -206,27 +207,133 @@ class RawOrganizationScraper:
     # =====================================================================
 
     @staticmethod
-    def _parse_parliament_table(html_doc) -> list[dict]:
-        """Parse a `table#parliamentTable`-shaped page (confirmed live
-        2026-08-31 for Junta de Portavoces) into row dicts keyed by header
-        label -- column set/order varies by page (e.g. committees have 5
-        columns incl. Foto, this admin-org table has 4), so cells are
-        matched by header text, not position.
+    def _find_admin_org_table(html_doc):
+        """Locate the members table for an admin-org page. Tries
+        id="parliamentTable" first (Junta de Portavoces, confirmed live
+        2026-08-31); falls back to any <table> whose <thead> contains a
+        header matching "APELLIDOS" (case/accent-insensitive) -- confirmed
+        live 2026-09-02 for Comisión Permanente, which has the same
+        4-column shape but no id at all. Content-based, not positional, so
+        it doesn't depend on this being the only <table> on the page.
         """
         table = html_doc.xpath('//*[@id="parliamentTable"]')
-        if not table:
+        if table:
+            return table[0]
+        lower = "abcdefghijklmnopqrstuvwxyzáéíóúñ"
+        upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZÁÉÍÓÚÑ"
+        fallback = html_doc.xpath(
+            f"//table[.//thead//th[contains(translate(normalize-space(text()), "
+            f'"{upper}", "{lower}"), "apellidos")]]'
+        )
+        return fallback[0] if fallback else None
+
+    @staticmethod
+    def _parse_parliament_table(html_doc) -> list[dict]:
+        """Parse an admin-org members table into normalized row dicts
+        {"name": str, "website": str | None, "cargo": str | None}. Column
+        set/order varies by page (e.g. Comisión Permanente has no Cargo
+        column at all -- confirmed live 2026-09-02), so cells are matched
+        by header text, not position, and a missing CARGO header simply
+        yields cargo=None for every row rather than dropping them.
+        """
+        table = RawOrganizationScraper._find_admin_org_table(html_doc)
+        if table is None:
             return []
         headers = [
-            th.text_content().strip().upper() for th in table[0].xpath(".//thead//th")
+            th.text_content().strip().upper() for th in table.xpath(".//thead//th")
         ]
-        if not headers:
+        if "APELLIDOS Y NOMBRES" not in headers:
             return []
+        name_idx = headers.index("APELLIDOS Y NOMBRES")
+        cargo_idx = headers.index("CARGO") if "CARGO" in headers else None
+
         rows = []
-        for tr in table[0].xpath(".//tbody/tr"):
+        for tr in table.xpath(".//tbody/tr"):
             cells = tr.xpath("./td")
             if len(cells) != len(headers):
                 continue
-            rows.append(dict(zip(headers, cells)))
+            name_cell = cells[name_idx]
+            links = name_cell.xpath(".//a/@href")
+            rows.append(
+                {
+                    "name": name_cell.text_content().strip(),
+                    "website": links[0] if links else None,
+                    "cargo": (
+                        cells[cargo_idx].text_content().strip()
+                        if cargo_idx is not None
+                        else None
+                    ),
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _parse_mesa_directiva_senado(html_doc) -> list[dict]:
+        """Parse the Senado Mesa Directiva page -- div-based, not a table.
+        Confirmed live 2026-09-02: `#mesa-directiva-section` holds
+        `.md-profile` divs (inside `.md-top-row`/`.md-bottom-row`), each
+        with a `.md-name` link (name + profile url) and a `.md-role` span.
+        """
+        profiles = html_doc.xpath(
+            '//*[@id="mesa-directiva-section"]//div[@class="md-profile"]'
+        )
+        rows = []
+        for profile in profiles:
+            name_links = profile.xpath('.//a[@class="md-name"]')
+            if not name_links:
+                continue
+            role_nodes = profile.xpath('.//span[@class="md-role"]')
+            rows.append(
+                {
+                    "name": name_links[0].text_content().strip(),
+                    "website": name_links[0].get("href"),
+                    "cargo": (
+                        role_nodes[0].text_content().strip() if role_nodes else None
+                    ),
+                }
+            )
+        return rows
+
+    @staticmethod
+    def _parse_mesa_directiva_diputados(html_doc) -> list[dict]:
+        """Parse the Diputados Mesa Directiva page.
+
+        Correction (2026-09-02, live spot-check after implementation): the
+        page's `.congresista-results__body[data-results-body]` div-based
+        rows (as rendered in a browser) are populated by client-side
+        JavaScript -- the raw HTTP response `parse_url` fetches has that
+        container present but EMPTY, so an xpath over `.congresista-row`
+        children always finds zero rows against real traffic (caught by a
+        live spot-check, not by the unit tests, which used a pre-rendered
+        fixture). The real data source is a `<script type="application/
+        json" data-congresista-dataset>` payload embedded earlier in the
+        same raw HTML -- same idiom as get_chamber_roster()'s embedded-JSON
+        pattern, just a different attribute name and shape: each entry has
+        `name`, `campo_adicional` (role/cargo, e.g. "Presidencia"), and
+        `url` (profile link).
+        """
+        scripts = html_doc.xpath("//script[@data-congresista-dataset]/text()")
+        if not scripts:
+            return []
+        try:
+            entries = json.loads(scripts[0])
+        except (ValueError, TypeError):
+            return []
+        if not isinstance(entries, list):
+            return []
+
+        rows = []
+        for entry in entries:
+            name = (entry.get("name") or "").strip()
+            if not name:
+                continue
+            rows.append(
+                {
+                    "name": name,
+                    "website": entry.get("url") or None,
+                    "cargo": (entry.get("campo_adicional") or "").strip() or None,
+                }
+            )
         return rows
 
     @staticmethod
@@ -234,25 +341,32 @@ class RawOrganizationScraper:
         """Synthesize the `.congresistas`-shaped HTML (5 cells: _, name,
         website, _, cargo, with a throwaway header row) that
         process_admin_org() (backend/process/organizations.py) already
-        parses -- keeps that function's contract stable, zero changes needed
-        there for the 2026-2031 path.
+        parses -- keeps that function's contract stable, zero changes
+        needed there for the 2026-2031 path.
+
+        The cargo cell is ALWAYS left blank here, regardless of what any
+        parser found: per the confirmed 2026-2031 design, ALL memberships
+        for this term (admin-org and committee alike) come from each
+        congresista's own cargos page (congresistas.py::_get_chamber_cargos),
+        not from these org-page scrapes. This function is exclusively used
+        by the 2026-2031 path (legacy's get_raw_organizations never calls
+        it), so this is safe and doesn't touch legacy behavior.
+        process_admin_org()'s existing "skip rows with blank cargo" logic
+        then naturally guarantees zero Membership rows here, while org
+        creation (independent of row content) is unaffected.
         """
         body_rows = ["<tr><td>h</td><td>h</td><td>h</td><td>h</td><td>h</td></tr>"]
         for row in rows:
-            name_cell = row.get("APELLIDOS Y NOMBRES")
-            cargo_cell = row.get("CARGO")
-            if name_cell is None or cargo_cell is None:
+            name_text = (row.get("name") or "").strip()
+            if not name_text:
                 continue
-            name_text = html_lib.escape(name_cell.text_content().strip())
-            cargo_text = html_lib.escape(cargo_cell.text_content().strip())
-            links = name_cell.xpath(".//a/@href")
-            website = links[0] if links else "#"
+            website = row.get("website") or "#"
             body_rows.append(
                 "<tr><td></td>"
-                f"<td>{name_text}</td>"
+                f"<td>{html_lib.escape(name_text)}</td>"
                 f'<td><a href="{html_lib.escape(website)}">link</a></td>'
                 "<td></td>"
-                f"<td>{cargo_text}</td></tr>"
+                "<td></td></tr>"
             )
         return (
             f'<table class="congresistas"><tbody>{"".join(body_rows)}</tbody></table>'
@@ -265,9 +379,16 @@ class RawOrganizationScraper:
         if html_doc is None:
             logger.warning(f"Failed to fetch {type_org} page: {url}")
             return None
-        rows = self._parse_parliament_table(html_doc)
+
+        if type_org == "Mesa Directiva" and chamber == "Senadores":
+            rows = self._parse_mesa_directiva_senado(html_doc)
+        elif type_org == "Mesa Directiva" and chamber == "Diputados":
+            rows = self._parse_mesa_directiva_diputados(html_doc)
+        else:
+            rows = self._parse_parliament_table(html_doc)
+
         if not rows:
-            logger.warning(f"No table#parliamentTable found for {type_org} at {url}")
+            logger.warning(f"No members found for {type_org} at {url}")
             return None
         return RawOrganization(
             timestamp=datetime.now(),
@@ -287,10 +408,14 @@ class RawOrganizationScraper:
         Permanente is joint, not per-chamber -- see
         get_joint_comision_permanente, called separately/once.
 
-        Confirmed live 2026-08-31: Junta de Portavoces exposes
-        table#parliamentTable. Mesa Directiva did not expose that table in
-        this pass (likely prose/a different layout) -- handled defensively
-        below, producing no row rather than guessing a wrong structure.
+        Confirmed live 2026-09-02: Junta de Portavoces still exposes
+        table#parliamentTable (unchanged); Mesa Directiva uses a different
+        div-based structure per chamber, with no table at all -- see
+        _parse_mesa_directiva_senado/_parse_mesa_directiva_diputados. Only
+        org existence is built from any of these pages -- membership comes
+        from each congresista's own cargos page instead (see
+        congresistas.py::_get_chamber_cargos and _build_admin_org_html's
+        docstring).
         """
         base_url = CHAMBER_BASE_URLS[chamber]
         results = [

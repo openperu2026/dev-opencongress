@@ -745,6 +745,23 @@ _COMM_TYPE_RULES: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"^sub\s*comisi[oó]n\s+de\s+seguimiento\s+del\s+tlc", re.I),
         "Sub Comisión de Seguimiento del TLC",
     ),
+    # 2026-2031 term: the committees index section titles are plural
+    # ("Comisiones Ordinarias Legislativas"/"...No Legislativas", with or
+    # without a trailing "(art.45)" -- confirmed live 2026-09-02, both
+    # chambers). No Legislativa must precede plain Legislativa so a
+    # No-Legislativa title (which also contains the substring
+    # "legislativas") doesn't fall through to the wrong canonical value --
+    # though by construction they're already mutually exclusive here,
+    # since "no" between "ordinarias" and "legislativas" fails the plain
+    # rule's direct adjacency requirement.
+    (
+        re.compile(r"^comisi[oó]n(?:es)?\s+ordinarias?\s+no\s+legislativas?\b", re.I),
+        "Comisión Ordinaria No Legislativa",
+    ),
+    (
+        re.compile(r"^comisi[oó]n(?:es)?\s+ordinarias?\s+legislativas?\b", re.I),
+        "Comisión Ordinaria Legislativa",
+    ),
     # Common noisy cases
     (re.compile(r"^comisi[oó]n\s+ordinaria\b", re.I), "Comisión Ordinaria"),
     (

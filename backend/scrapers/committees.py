@@ -286,21 +286,28 @@ class RawCommitteeScraper:
         """Scrape the 2026-2031 committee INDEX for one chamber (existence
         only, not membership -- see module docstring note below).
 
-        Confirmed live 2026-08-31 (Phase B plan, Step B0 item 3):
-        {senado|diputados}.../comisiones/ lists committee name+URL pairs (no
-        year/type dropdown on the new site at all). Synthesizes the same
+        Confirmed live 2026-09-02: {senado|diputados}.../comisiones/ groups
+        committees under section headers -- "Comisiones Ordinarias
+        Legislativas" and "Comisiones Ordinarias No Legislativas" (with or
+        without a trailing "(art.45)" on Diputados) -- via a `.wp-comisiones`
+        container of alternating `.titulo-seccion`/`.nombre-comision` divs
+        in document order. Each committee's raw_html row is now tagged with
+        its own section's title text (see _extract_section_tagged_committees)
+        instead of a single hardcoded "Comisión Ordinaria" for every row --
+        parse_comm_type() (backend/core/parsers.py) does the actual
+        Legislativa/No-Legislativa classification downstream from that cell
+        text, unchanged calling contract. Synthesizes the same
         `.congresistas`-index-shaped HTML process_committee()
         (backend/process/organizations.py) already parses, so that function
         needs zero changes.
 
         NOT built here: visiting each committee's own subpage for its real
-        membership table (found live at table#parliamentTable -- Foto |
-        Apellidos y Nombres | Grupo Parlamentario | Cargo | e-Mail). There is
-        no existing process-layer consumer for a per-committee membership
-        table (process_committee() only builds Organization definitions,
-        unlike process_admin_org() which handles org+membership together) --
-        wiring that up is real new process/orchestrator scope, deliberately
-        left as a follow-up rather than folded in here.
+        membership table. There is no existing process-layer consumer for a
+        per-committee membership table (process_committee() only builds
+        Organization definitions, unlike process_admin_org() which handles
+        org+membership together) -- wiring that up is real new
+        process/orchestrator scope, deliberately left as a follow-up rather
+        than folded in here.
         """
         base_url = CHAMBER_BASE_URLS[chamber]
         index_url = f"{base_url}/comisiones/"
@@ -309,20 +316,8 @@ class RawCommitteeScraper:
             logger.warning(f"Failed to fetch committee index: {index_url}")
             return []
 
-        # "comision-" (hyphen) matches individual committee pages
-        # (comision-de-justicia-.../) but deliberately excludes the index's
-        # own self-link to "comisiones/" (plural, no hyphen at that
-        # position) and "comisiones-especiales-visor" (different domain,
-        # already excluded by the base_url prefix).
-        links = index_html.xpath(f'//a[starts-with(@href, "{base_url}/comision-")]')
-        seen: dict[str, str] = {}
-        for link in links:
-            name = link.text_content().strip()
-            href = link.get("href")
-            if name and href and name not in seen:
-                seen[name] = href
-
-        if not seen:
+        entries = self._extract_section_tagged_committees(index_html, base_url)
+        if not entries:
             logger.warning(f"No committees found at {index_url}")
             return []
 
@@ -330,9 +325,9 @@ class RawCommitteeScraper:
         # does not skip raw_lst[0]; it filters rows where type_comm=="Comisión"
         # instead, so simply never emitting such a row is correct.
         rows = []
-        for name, href in seen.items():
+        for section_title, name, href in entries:
             rows.append(
-                "<tr><td>Comisión Ordinaria</td>"
+                f"<tr><td>{html_lib.escape(section_title)}</td>"
                 f'<td><a href="{html_lib.escape(href)}">{html_lib.escape(name)}</a></td></tr>'
             )
         raw_html = f'<table class="congresistas"><tbody>{"".join(rows)}</tbody></table>'
@@ -349,6 +344,50 @@ class RawCommitteeScraper:
         )
         self.committee_list = [self.update_tracking(new_committee)]
         return self.committee_list
+
+    @staticmethod
+    def _extract_section_tagged_committees(
+        index_html, base_url: str
+    ) -> list[tuple[str, str, str]]:
+        """Walk the committee index in document order, tagging each
+        committee link with its most recently preceding `.titulo-seccion`
+        title. Falls back to the flat "every comision-* link, untagged as
+        'Comisión Ordinaria'" behavior (this method's pre-2026-09-02 shape)
+        if the `.wp-comisiones` section structure isn't present at all --
+        defensive against another site change, not just this one.
+        """
+        container = index_html.xpath('//*[@class="wp-comisiones"]')
+        seen: dict[str, tuple[str, str]] = {}
+
+        if container:
+            current_section = "Comisión Ordinaria"
+            for node in container[0].xpath("./*"):
+                classes = (node.get("class") or "").split()
+                if "titulo-seccion" in classes:
+                    current_section = node.text_content().strip() or current_section
+                    continue
+                if "nombre-comision" in classes:
+                    links = node.xpath(".//a[@href]")
+                    if not links:
+                        continue
+                    name = links[0].text_content().strip()
+                    href = links[0].get("href")
+                    if name and href and name not in seen:
+                        seen[name] = (current_section, href)
+        else:
+            # "comision-" (hyphen) matches individual committee pages
+            # (comision-de-justicia-.../) but deliberately excludes the
+            # index's own self-link to "comisiones/" (plural, no hyphen at
+            # that position) and different-domain links (already excluded
+            # by the base_url prefix).
+            links = index_html.xpath(f'//a[starts-with(@href, "{base_url}/comision-")]')
+            for link in links:
+                name = link.text_content().strip()
+                href = link.get("href")
+                if name and href and name not in seen:
+                    seen[name] = ("Comisión Ordinaria", href)
+
+        return [(section, name, href) for name, (section, href) in seen.items()]
 
     # =====================================================================
     # SHARED -- used by both the legacy and 2026-2031 code paths above

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from backend.core.enums import RoleOrganization, TypeBillStep, TypeMotionStep
 from backend.core.parsers import (
     classify_des_estado,
@@ -10,6 +12,7 @@ from backend.core.parsers import (
     normalize_membership_role,
     get_processable_year_range,
     resolve_processable_leg_periods,
+    parse_comm_type,
 )
 
 
@@ -187,3 +190,38 @@ def test_resolve_processable_leg_periods_filters_to_single_period():
     result = resolve_processable_leg_periods("2026-2031")
 
     assert result == ["Parlamentario 2026 - 2031"]
+
+
+def test_parse_comm_type_classifies_legislativa_both_chambers():
+    """2026-2031 committees index section titles -- confirmed live
+    2026-09-02, both chambers."""
+    assert (
+        parse_comm_type("Comisiones Ordinarias Legislativas")
+        == "Comisión Ordinaria Legislativa"
+    )
+
+
+def test_parse_comm_type_classifies_no_legislativa_with_art45_suffix():
+    """Diputados' section title has a trailing "(art.45)" annotation --
+    must not need to match to end-of-string."""
+    assert (
+        parse_comm_type("Comisiones Ordinarias No Legislativas (art.45)")
+        == "Comisión Ordinaria No Legislativa"
+    )
+
+
+def test_parse_comm_type_classifies_no_legislativa_without_art45_suffix():
+    """Senado's section title omits the "(art.45)" suffix entirely."""
+    assert (
+        parse_comm_type("Comisiones Ordinarias No Legislativas")
+        == "Comisión Ordinaria No Legislativa"
+    )
+
+
+def test_parse_comm_type_legacy_singular_form_unaffected():
+    assert parse_comm_type("Comisión Ordinaria") == "Comisión Ordinaria"
+
+
+def test_parse_comm_type_unknown_future_type_raises():
+    with pytest.raises(ValueError):
+        parse_comm_type("Comisiones Extraordinarias")

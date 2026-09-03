@@ -1,3 +1,5 @@
+from loguru import logger
+
 from backend.database.raw_models import RawCommittee, RawOrganization
 from backend.process.schema import Organization, Membership
 from backend.process.utils import split_and_sort_name
@@ -42,6 +44,21 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
         name_comm = content.text_content().strip()
 
         if type_comm and name_comm and type_comm != "Comisión":
+            try:
+                org_subtype = parse_comm_type(type_comm)
+            except ValueError:
+                # A genuinely new/unrecognized committee type (e.g. a
+                # future "Comisiones Extraordinarias" section) -- skip just
+                # this one committee, not the whole chamber's batch (all
+                # committees for a chamber share one RawCommittee row/
+                # raw_html -- see committees.py::get_chamber_committees).
+                # Logged so it's visible; add a parse_comm_type rule once
+                # the real category is known.
+                logger.warning(
+                    f"Skipping committee {name_comm!r}: unrecognized type {type_comm!r}"
+                )
+                continue
+
             link = content.xpath(".//a/@href")
             link = link[0] if link else ""
 
@@ -49,7 +66,7 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
                 Organization(
                     org_name=name_comm,
                     org_type="Comisión",
-                    org_subtype=parse_comm_type(type_comm),
+                    org_subtype=org_subtype,
                     org_short_name=COMISION_SHORT_NAMES.get(name_comm),
                     org_link=link,
                     parent_org_name=parent_org_name,
