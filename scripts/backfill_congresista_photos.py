@@ -1,4 +1,11 @@
-"""Backfill `photo_bytes` for congresistas that don't yet have one."""
+"""Backfill `photo_bytes` for congresistas that don't yet have one.
+
+Pass --force to instead resync EVERY congresista's photo_bytes from their
+current photo_url, regardless of whether one is already stored -- useful
+for a one-time refresh of already-drifted data (photo_url updated to a new
+term's URL while photo_bytes still holds the old download, with no stored
+record of which URL a given photo_bytes came from to detect that
+automatically)."""
 
 from __future__ import annotations
 
@@ -18,6 +25,15 @@ from backend.database import models as db_models
 from backend.scrapers.congresista_photos import sync_photo
 
 
+def build_query(*, force: bool, limit: int | None = None):
+    stmt = select(db_models.Congresista).order_by(db_models.Congresista.id)
+    if not force:
+        stmt = stmt.where(db_models.Congresista.photo_bytes.is_(None))
+    if limit:
+        stmt = stmt.limit(limit)
+    return stmt
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=None)
@@ -27,18 +43,20 @@ def main() -> int:
         default=0.25,
         help="Seconds to sleep between downloads (default: 0.25).",
     )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help=(
+            "Resync ALL congresistas' photos from their current photo_url, "
+            "not just ones missing a photo."
+        ),
+    )
     args = parser.parse_args()
 
     engine = create_engine(settings.DB_URL)
     Session = sessionmaker(bind=engine)
 
-    stmt = (
-        select(db_models.Congresista)
-        .where(db_models.Congresista.photo_bytes.is_(None))
-        .order_by(db_models.Congresista.id)
-    )
-    if args.limit:
-        stmt = stmt.limit(args.limit)
+    stmt = build_query(force=args.force, limit=args.limit)
 
     updated = 0
     skipped = 0
@@ -50,7 +68,7 @@ def main() -> int:
 
         for cong in rows:
             try:
-                if sync_photo(db, cong):
+                if sync_photo(db, cong, force=args.force):
                     db.commit()
                     updated += 1
                 else:

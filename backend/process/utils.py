@@ -91,45 +91,80 @@ def to_datetime(value):
     return None
 
 
-def gen_congresistas_df(session: Session, save: bool = False) -> None:
+def gen_congresistas_df(
+    session: Session, save: bool = False, *, leg_period: str | None = None
+) -> pl.DataFrame:
     """
     Extracts additional information from congresistas that are not in their
-    profile page, but in the bills responses.
+    profile page, but in the bills/motions "firmantes" (signatories)
+    sections already stored on RawBill.congresistas/RawMotion.congresistas.
 
     Saves a JSON file at the processed directory.
 
     Args:
         session (Session): database Session
+        leg_period: None (default, UNCHANGED) includes every RawBill/
+            RawMotion row regardless of id format, requires "dni" present
+            (both preserve cong_info_2021_2026.json's exact existing
+            output). "2026-2031" restricts to new-format (chamber-suffixed)
+            ids only (via chamber_label_from_id(), since neither table has
+            a leg_period column) and relaxes the required-field filter to
+            just "congresistaId" -- 2026-2031 motion firmantes never carry
+            a "dni" but do carry "sexo", so this broadens gender coverage
+            to bills+motions while dni stays sourced from bills alone,
+            wherever available (confirmed live 2026-09-03). Writes to
+            cong_info_2026_2031.json instead.
     """
     bills_congresistas = (
-        session.query(RawBill.congresistas).filter(RawBill.last_update).distinct().all()
+        session.query(RawBill.id, RawBill.congresistas)
+        .filter(RawBill.last_update)
+        .distinct()
+        .all()
     )
     motions_congresistas = (
-        session.query(RawMotion.congresistas)
+        session.query(RawMotion.id, RawMotion.congresistas)
         .filter(RawMotion.last_update)
         .distinct()
         .all()
     )
-    all_cong = []
 
-    for (json_str,) in bills_congresistas + motions_congresistas:
+    def _keep_row(entity_id: str) -> bool:
+        is_new_format = chamber_label_from_id(entity_id) is not None
+        if leg_period == "2026-2031":
+            return is_new_format
+        if leg_period is not None:
+            return not is_new_format
+        return True
+
+    all_cong = []
+    for entity_id, json_str in bills_congresistas + motions_congresistas:
+        if not _keep_row(entity_id):
+            continue
         try:
             parsed = json.loads(json_str)
             if isinstance(parsed, list):
                 all_cong.extend(parsed)
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, TypeError):
             continue
 
+    def _has_required_fields(d: dict) -> bool:
+        if leg_period == "2026-2031":
+            return "congresistaId" in d
+        return ("congresistaId" in d) and ("dni" in d)
+
     unique_by_congresista = {
-        d["congresistaId"]: d
-        for d in all_cong
-        if ("congresistaId" in d) and ("dni" in d)
+        d["congresistaId"]: d for d in all_cong if _has_required_fields(d)
     }
 
     df = pl.DataFrame(list(unique_by_congresista.values()))
 
     if save:
-        df.write_json(directories.PROCESSED_DATA / "cong_info_2021_2026.json")
+        filename = (
+            "cong_info_2026_2031.json"
+            if leg_period == "2026-2031"
+            else "cong_info_2021_2026.json"
+        )
+        df.write_json(directories.PROCESSED_DATA / filename)
 
     return df
 

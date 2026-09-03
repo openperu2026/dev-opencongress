@@ -102,3 +102,14 @@ backfill-bancadas-motions:
 # job has been collected, or to reprocess existing extractions.
 process-votes-from-raw:
 	uv run -m backend --only-votes --skip-vote-extraction
+
+# Regenerate cong_info_2026_2031.json: mines dni/gender/congresista_id for
+# 2026-2031 congresistas from bill/motion "firmantes" (signatory) sections
+# already scraped -- same technique cong_info_2021_2026.json was built
+# with, adapted for the new term's id format and lack of a website field.
+# Safe to rerun anytime (dedups by congresistaId): coverage only grows as
+# more 2026-2031 bills/motions get scraped and signed, so re-running this
+# periodically is expected, not a one-time setup step. See
+# backend/process/utils.py::gen_congresistas_df's leg_period docstring.
+gen-congresistas-2026-2031:
+	uv run python -c "from backend.database.session import get_db; from backend.process.utils import gen_congresistas_df; gen_congresistas_df(next(get_db()), save=True, leg_period='2026-2031')"

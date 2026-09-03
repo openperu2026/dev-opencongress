@@ -141,6 +141,64 @@ def test_process_profile_content_reorders_comma_formatted_chamber_name():
     assert cong.last_name == "Aguinaga Recuenco"
 
 
+def test_process_profile_content_enriches_from_2026_2031_dict_by_normalized_name():
+    """The 2026-2031 mined dict is keyed by normalized name (no website
+    available for this term, confirmed live 2026-09-03) -- dni/gender/
+    congresista_id must be pulled in via that lookup, not left None just
+    because they're genuinely absent from the profile HTML itself."""
+    html = """
+    <html>
+      <div class="nombres"><span>Label</span><span>Aguinaga Recuenco, Alejandro Aurelio</span></div>
+      <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+      <div class="votacion"><span>Label</span><span>0</span></div>
+      <div class="representa"><span>Label</span><span>Lima</span></div>
+      <div class="condicion"><span>Label</span><span>Titular</span></div>
+      <div class="foto"><img src="https://example.org/photo.png"/></div>
+    </html>
+    """
+    raw = _raw_cong(profile_content=html, leg_period="2026-2031", chamber="Senadores")
+    dict_cong_data_current = {
+        mod.normalize_name("Alejandro Aurelio Aguinaga Recuenco", sort_tokens=True): {
+            "dni": "08236035",
+            "gender": "Masculino",
+            "congresista_id": 4,
+        }
+    }
+
+    cong, orgs, memberships = mod.process_profile_content(
+        raw, {}, dict_cong_data_current=dict_cong_data_current
+    )
+
+    assert cong.dni == "08236035"
+    assert cong.gender == "Masculino"
+    assert cong.congresista_id == 4
+
+
+def test_process_profile_content_no_2026_2031_match_stays_none():
+    """Coverage grows over time as more 2026-2031 bills/motions get
+    scraped -- must degrade gracefully (no error) when nothing matches
+    yet, same as when dict_cong_data_current is omitted entirely."""
+    html = """
+    <html>
+      <div class="nombres"><span>Label</span><span>Someone New, Not Yet Mined</span></div>
+      <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+      <div class="votacion"><span>Label</span><span>0</span></div>
+      <div class="representa"><span>Label</span><span>Lima</span></div>
+      <div class="condicion"><span>Label</span><span>Titular</span></div>
+      <div class="foto"><img src="https://example.org/photo.png"/></div>
+    </html>
+    """
+    raw = _raw_cong(profile_content=html, leg_period="2026-2031", chamber="Senadores")
+
+    cong, orgs, memberships = mod.process_profile_content(
+        raw, {}, dict_cong_data_current={"someone else": {"dni": "1"}}
+    )
+
+    assert cong.dni is None
+    assert cong.gender is None
+    assert cong.congresista_id is None
+
+
 def test_process_profile_content_legacy_no_comma_name_unchanged(profile_html):
     """Regression: the legacy scraper's .nombres text has no comma and is
     already "Nombres Apellidos" -- split_and_sort_name must pass it

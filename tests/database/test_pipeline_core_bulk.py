@@ -18,6 +18,7 @@ def create_congresista(session):
         gender: str = "F",
         photo_url: str = "www.congreso.gob.pe/photo1",
         website: str = "https://www.congreso.gob.pe/congresistas2021/GrimanezaAcuna/",
+        congresista_id: int | None = None,
     ) -> db_models.Congresista:
         cong = db_models.Congresista(
             full_name=full_name,
@@ -27,6 +28,7 @@ def create_congresista(session):
             gender=gender,
             photo_url=photo_url,
             website=website,
+            congresista_id=congresista_id,
         )
         session.add(cong)
         session.flush()
@@ -75,6 +77,34 @@ def test_upsert_congresista_does_not_wipe_fields_missing_from_new_payload(
     assert (
         updated.website == "https://senado.congreso.gob.pe/senador/aguinaga-recuenco/"
     )
+
+
+def test_upsert_congresista_matches_by_congresista_id_despite_name_mismatch(
+    session, create_congresista
+):
+    """congresista_id is a confirmed-stable cross-term identifier (found
+    2026-09-03) -- upsert_congresista must use it to find the existing row
+    even when full_name/website differ (e.g. a name-order glitch or a
+    completely new term profile), rather than risking a fuzzy-match miss
+    that would create a duplicate person."""
+    existing = create_congresista(
+        full_name="Fernando Miguel Rospigliosi Capurro",
+        website="https://www.congreso.gob.pe/congresistas2021/Rospigliosi/",
+        congresista_id=135,
+    )
+
+    updated = crud_core.upsert_congresista(
+        session,
+        schema.Congresista(
+            full_name="Rospigliosi Capurro, Fernando Miguel",  # unconverted, on purpose
+            photo_url="https://senado.congreso.gob.pe/photo2.png",
+            website="https://senado.congreso.gob.pe/senador/fernando-rospigliosi/",
+            congresista_id=135,
+        ),
+    )
+
+    assert updated.id == existing.id
+    assert updated.congresista_id == 135
 
 
 def test_upsert_congresista_real_value_overwrites_existing(session, create_congresista):

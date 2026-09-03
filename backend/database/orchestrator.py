@@ -1311,8 +1311,13 @@ class OpenPeruOrchestrator:
         chamber_tally = {"Diputados": 0, "Senadores": 0, "None": 0}
 
         CONG_JSON = directories.PROCESSED_DATA / "cong_info_2021_2026.json"
+        CONG_JSON_2026 = directories.PROCESSED_DATA / "cong_info_2026_2031.json"
 
         dict_cong_data = get_cong_data(CONG_JSON)
+        # Mined from 2026-2031 bill/motion firmantes (see gen_congresistas_df/
+        # get_cong_data's leg_period="2026-2031" docstrings) -- coverage
+        # grows as the term progresses, gracefully empty/partial early on.
+        dict_cong_data_current = get_cong_data(CONG_JSON_2026, leg_period="2026-2031")
         processable_periods = resolve_processable_leg_periods(leg_period)
         with self.DBSession() as db:
             rows = (
@@ -1330,12 +1335,20 @@ class OpenPeruOrchestrator:
                         stats.skipped += 1
                         continue
                     cong_schema, org_schemas, profile_memberships = (
-                        process_profile_content(raw_cong, dict_cong_data)
+                        process_profile_content(
+                            raw_cong,
+                            dict_cong_data,
+                            dict_cong_data_current=dict_cong_data_current,
+                        )
                     )
                     pre = crud_core.find_congresista(
                         db,
                         name=cong_schema.full_name,
                         website=cong_schema.website,
+                        congresista_id=cong_schema.congresista_id,
+                    )
+                    photo_url_changed = (
+                        pre is not None and pre.photo_url != cong_schema.photo_url
                     )
                     cong = crud_core.upsert_congresista(db, cong_schema)
                     if pre is None:
@@ -1348,6 +1361,13 @@ class OpenPeruOrchestrator:
                             )
                     else:
                         clean_updated += 1
+                        if photo_url_changed:
+                            try:
+                                sync_congresista_photo(db, cong, force=True)
+                            except Exception as photo_exc:
+                                logger.warning(
+                                    f"Photo re-sync failed for congresista {cong.id}: {photo_exc}"
+                                )
 
                     chamber_org_id = None
                     for org_schema in org_schemas:

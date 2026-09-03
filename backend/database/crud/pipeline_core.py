@@ -64,13 +64,22 @@ def find_congresista(
     db: Session,
     name: str,
     website: str | None = None,
+    *,
+    congresista_id: int | None = None,
     threshold: float = 0.9,
 ) -> db_models.Congresista | None:
     """
-    Find a congressperson using website, aliases, or fuzzy name matching.
+    Find a congressperson using congresista_id, website, aliases, or fuzzy
+    name matching.
 
     Matching is attempted in the following order:
 
+    0. congresista_id exact match, when provided -- a stable, national,
+       cross-term/cross-chamber person identifier mined from bill/motion
+       firmantes data (confirmed live 2026-09-03: the same congresistaId
+       persists across a legacy Diputados term and a later Senado term for
+       the same reelected person). This is the only genuinely reliable
+       signal in this cascade -- everything below it is a heuristic.
     1. Website exact match.
     2. Known alias exact match.
     3. Canonical full-name fuzzy match (Jaro-Winkler), after reordering a
@@ -80,6 +89,10 @@ def find_congresista(
         db (Session): Active SQLAlchemy database session.
         name (str): Name of the congressperson.
         website (str | None, optional): Congressperson website URL.
+        congresista_id (int | None, optional): Cross-term person identifier,
+            when known (see backend/process/schema.py::Congresista's
+            docstring for provenance). Tried first, before every other
+            signal.
         threshold (float, optional): Minimum Jaro-Winkler similarity.
             Defaults to 0.9.
 
@@ -87,6 +100,16 @@ def find_congresista(
         db_models.Congresista | None: The matching congressperson if found;
         otherwise, None.
     """
+
+    # 0. congresista_id (most reliable -- try first)
+    if congresista_id is not None:
+        by_congresista_id = db.scalar(
+            select(db_models.Congresista).where(
+                db_models.Congresista.congresista_id == congresista_id
+            )
+        )
+        if by_congresista_id is not None:
+            return by_congresista_id
 
     # 1. Website
     if website:
@@ -289,7 +312,12 @@ def _upsert_model(
 def upsert_congresista(
     db: Session, schema: schema.Congresista
 ) -> db_models.Congresista:
-    existing = find_congresista(db, schema.full_name, schema.website)
+    existing = find_congresista(
+        db,
+        schema.full_name,
+        schema.website,
+        congresista_id=schema.congresista_id,
+    )
     payload = schema.model_dump()
 
     return _upsert_model(

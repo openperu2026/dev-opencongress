@@ -84,7 +84,9 @@ def test_process_congresistas_creates_party_and_chamber_memberships(
     (parent_org_id=NULL) and would be searched for under a non-existent
     "parent of themselves". Confirms the org_type-conditional branch fix
     (orchestrator.py:884) actually works end-to-end."""
-    monkeypatch.setattr("backend.database.orchestrator.get_cong_data", lambda path: {})
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
 
     with orchestrator.DBSession() as db:
         db.add(
@@ -155,7 +157,9 @@ def test_first_load_seeds_2026_2031_first_membership_with_term_start_date(
     2026-07-28 -- a timestamp still within the first legislative year
     (e.g. Oct 2026) would accidentally derive the same date either way and
     not actually prove this fix does anything."""
-    monkeypatch.setattr("backend.database.orchestrator.get_cong_data", lambda path: {})
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
 
     with orchestrator.DBSession() as db:
         db.add(
@@ -196,7 +200,9 @@ def test_first_load_does_not_affect_legacy_2021_2026_memberships(
 ):
     """Regression: first_load=True must never force-reset legacy (pre-2026)
     memberships' start_date to 2026-07-28."""
-    monkeypatch.setattr("backend.database.orchestrator.get_cong_data", lambda path: {})
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
 
     with orchestrator.DBSession() as db:
         db.add(
@@ -231,6 +237,103 @@ def test_first_load_does_not_affect_legacy_2021_2026_memberships(
             # (legislative year containing 2025-08-01 -> starts 2025-07-28),
             # unaffected by first_load.
             assert ms.start_date == date(2025, 7, 28)
+
+
+def test_process_congresistas_resyncs_photo_when_photo_url_changed(
+    orchestrator, monkeypatch
+):
+    """Found 2026-09: a matched (reelected) congresista never got their
+    photo refreshed at all -- sync was only ever called for brand-new
+    rows. Confirms a matched congresista whose photo_url actually changed
+    (e.g. legacy profile -> new 2026-2031 chamber profile) now triggers a
+    forced re-sync."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+    calls = []
+    monkeypatch.setattr(
+        "backend.database.orchestrator.sync_congresista_photo",
+        lambda db, cong, **kwargs: calls.append((cong.id, kwargs.get("force", False))),
+    )
+
+    with orchestrator.DBSession() as db:
+        existing = db_models.Congresista(
+            full_name="Ana Maria Torres Vega",
+            website="https://www.congreso.gob.pe/congresistas2021/AnaTorres/",
+            photo_url="https://www.congreso.gob.pe/old-photo.jpg",
+        )
+        db.add(existing)
+        db.commit()
+
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2026 - 2031",
+                chamber="Senadores",
+                website="https://senado.congreso.gob.pe/senador/ana-torres/",
+                profile_content=_SENADOR_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2027, 10, 15),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        assert calls == [(cong.id, True)]
+
+
+def test_process_congresistas_skips_photo_resync_when_photo_url_unchanged(
+    orchestrator, monkeypatch
+):
+    """Regression: a matched congresista whose photo_url hasn't actually
+    changed must NOT trigger a re-download on every reprocess."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+    calls = []
+    monkeypatch.setattr(
+        "backend.database.orchestrator.sync_congresista_photo",
+        lambda db, cong, **kwargs: calls.append((cong.id, kwargs.get("force", False))),
+    )
+
+    with orchestrator.DBSession() as db:
+        # xpath2('//*[@class="foto"]/img/@src') resolves relative to
+        # website via urljoin -- matches _SENADOR_PROFILE_HTML's
+        # "/FotosCongresista/ana.jpg" against this website exactly.
+        existing = db_models.Congresista(
+            full_name="Ana Maria Torres Vega",
+            website="https://senado.congreso.gob.pe/senador/ana-torres/",
+            photo_url="https://senado.congreso.gob.pe/FotosCongresista/ana.jpg",
+        )
+        db.add(existing)
+        db.commit()
+
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2026 - 2031",
+                chamber="Senadores",
+                website="https://senado.congreso.gob.pe/senador/ana-torres/",
+                profile_content=_SENADOR_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2027, 10, 15),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+    assert stats.errors == 0
+    assert calls == []
 
 
 def test_first_load_does_not_override_start_date_when_membership_already_exists(

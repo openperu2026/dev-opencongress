@@ -1,7 +1,12 @@
 from backend import normalize_membership_role, REGIONS_MAP
 from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership, Organization
-from backend.process.utils import gen_congresistas_df, to_datetime, split_and_sort_name
+from backend.process.utils import (
+    gen_congresistas_df,
+    to_datetime,
+    split_and_sort_name,
+    normalize_name,
+)
 from backend.database.session import get_db
 from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
@@ -23,37 +28,54 @@ _CHAMBER_LABEL_TO_ROLE = {
 }
 
 
-def get_cong_data(json_path: Path) -> dict[str, dict[str, str]]:
+def get_cong_data(
+    json_path: Path, *, leg_period: str | None = None
+) -> dict[str, dict[str, str]]:
     """
     Load and process congressmembers data from a JSON file.
 
     If the JSON file does not exist, the function generates it using the
     current database session. It then reads the JSON data, processes each
-    congressperson record, and returns a dictionary indexed by website URL.
+    congressperson record, and returns a dictionary indexed by lookup key.
 
     Args:
         json_path (Path): Path to the JSON file containing raw congressperson
             data.
+        leg_period: None (default, UNCHANGED) reads the legacy shape and
+            keys the returned dict by website (`cong_dict["pagWeb"]`).
+            "2026-2031" reads the 2026-2031 mined shape instead and keys by
+            normalized name (`normalize_name(full_name, sort_tokens=True)`)
+            since 2026-2031 firmante records never carry a website
+            (confirmed live 2026-09-03, `pagWeb` is always null for this
+            term) -- see gen_congresistas_df's own leg_period docstring for
+            where this file comes from.
 
     Returns:
-        dict[str, dict[str, str]]: Dictionary where each key is a congressperson
-        website URL and each value is the processed congressperson data.
+        dict[str, dict[str, str]]: Dictionary where each key is either a
+        congressperson website URL (leg_period=None) or a normalized name
+        (leg_period="2026-2031"), and each value is the processed
+        congressperson data.
     """
     if not json_path.exists():
-        gen_congresistas_df(next(get_db()), True)
+        gen_congresistas_df(next(get_db()), True, leg_period=leg_period)
 
     with open(json_path, "r", encoding="utf-8") as file:
         data = json.load(file)
 
     final_dict = dict()
     for cong in data:
-        data_cong = _process_cong_data(cong)
-        final_dict[data_cong["website"]] = data_cong
+        data_cong = _process_cong_data(cong, leg_period=leg_period)
+        key = (
+            data_cong["name_key"] if leg_period == "2026-2031" else data_cong["website"]
+        )
+        final_dict[key] = data_cong
 
     return final_dict
 
 
-def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
+def _process_cong_data(
+    cong_dict: dict[str, str | int], *, leg_period: str | None = None
+) -> dict[str, str]:
     """
     Normalize a raw congressperson dictionary into a standard schema.
 
@@ -64,13 +86,34 @@ def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
     Args:
         cong_dict (dict[str, str | int]): Raw congressperson data containing
             fields such as "nombre", "dni", "sexo", and "pagWeb".
+        leg_period: None (default, UNCHANGED) processes the legacy shape
+            (requires "dni" present, keys by "pagWeb"/website, applies the
+            historical Hernando Guerra García website fix). "2026-2031"
+            processes the 2026-2031 mined shape: "dni" may genuinely be
+            absent (motion-only signers, confirmed live 2026-09-03), keys
+            by normalized name instead of website (never populated for
+            this term), and carries "congresista_id" through -- the
+            confirmed-stable cross-term person identifier (see
+            find_congresista's congresista_id matching).
 
     Returns:
         dict[str, str]: Processed congressperson data with first name, last
-        name, full name, DNI (Documento Nacional de Identidad), gender, and website.
+        name, full name, DNI (Documento Nacional de Identidad), gender, and
+        a lookup key (website or normalized name, depending on leg_period).
     """
     last_name, first_name = [sub.strip() for sub in cong_dict["nombre"].split(",")]
     full_name = f"{first_name} {last_name}"
+
+    if leg_period == "2026-2031":
+        return {
+            "first_name": first_name,
+            "last_name": last_name,
+            "full_name": full_name,
+            "dni": cong_dict.get("dni"),
+            "gender": "Masculino" if cong_dict["sexo"] == "M" else "Femenino",
+            "congresista_id": cong_dict["congresistaId"],
+            "name_key": normalize_name(full_name, sort_tokens=True),
+        }
 
     if cong_dict["dni"] == "07202572":
         # This is due to an error in the website, where it points to HernandoGarcia
@@ -86,6 +129,7 @@ def _process_cong_data(cong_dict: dict[str, str | int]) -> dict[str, str]:
         "dni": str(cong_dict["dni"]),
         "gender": "Masculino" if cong_dict["sexo"] == "M" else "Femenino",
         "website": str(website),
+        "congresista_id": cong_dict.get("congresistaId"),
     }
 
 
@@ -109,7 +153,10 @@ def xpath2(xpath_query: str, parse: HtmlElement) -> str | None:
 
 
 def process_profile_content(
-    raw_cong: RawCongresista, dict_cong_data: dict[str, dict]
+    raw_cong: RawCongresista,
+    dict_cong_data: dict[str, dict],
+    *,
+    dict_cong_data_current: dict[str, dict] | None = None,
 ) -> tuple[Congresista, list[Organization], list[Membership]]:
     """
     Process raw congressperson profile HTML into a Congresista schema.
@@ -124,7 +171,15 @@ def process_profile_content(
         raw_cong (RawCongresista): Raw congressperson record containing profile
             HTML, website, and legislative period.
         dict_cong_data (dict[str, dict]): Dictionary of processed congressperson
-            data indexed by website URL.
+            data indexed by website URL (legacy, 2021-2026 shape).
+        dict_cong_data_current (dict[str, dict] | None): Optional dictionary of
+            mined 2026-2031 congressperson data (dni/gender/congresista_id),
+            indexed by normalized name (see get_cong_data's leg_period="2026-2031"
+            docstring for why website can't be used as the key for this term).
+            Used for every row that doesn't take the legacy branch below.
+            Coverage grows as more 2026-2031 bills/motions get scraped and
+            signed -- gracefully absent (None or no match) is the normal
+            case early in the term, never an error.
 
     Returns:
         Congresista: Processed congressperson schema with available profile
@@ -150,23 +205,31 @@ def process_profile_content(
             gender=data_cong.get("gender"),
             photo_url=photo_url,
             website=data_cong.get("website"),
+            congresista_id=data_cong.get("congresista_id"),
         )
     else:
         # split_and_sort_name reorders "Apellidos, Nombres" (the 2026-2031
         # chamber roster's raw name format) to "Nombres Apellidos" and is a
         # no-op pass-through for the legacy scraper's already-correctly-
         # ordered, comma-free name text -- safe for both sources. Also
-        # gives first_name/last_name for the chamber path for free (dni/
-        # gender genuinely aren't available from that source, stay None).
+        # gives first_name/last_name for the chamber path for free.
         full_name, first_name, last_name = split_and_sort_name(
             xpath2('//*[@class="nombres"]/span[2]', html)
+        )
+        enrichment = (
+            dict_cong_data_current.get(normalize_name(full_name, sort_tokens=True))
+            if dict_cong_data_current
+            else None
         )
         cong = Congresista(
             full_name=full_name,
             first_name=first_name,
             last_name=last_name,
+            dni=enrichment.get("dni") if enrichment else None,
+            gender=enrichment.get("gender") if enrichment else None,
             photo_url=photo_url,
             website=raw_cong.website,
+            congresista_id=enrichment.get("congresista_id") if enrichment else None,
         )
 
     votes_text = xpath2('//*[@class="votacion"]/span[2]', html) or "0"
