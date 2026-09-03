@@ -1050,3 +1050,99 @@ def test_run_scrapers_legacy_leg_period_skips_bills_motions_chamber_blocks(
     assert calls == []
     assert "bills_chamber_senadores.py" not in orch.scraper_results
     assert "motions_chamber_senadores.py" not in orch.scraper_results
+
+
+def test_run_scrapers_default_leg_period_invokes_joint_committees(monkeypatch):
+    """The committees_chamber stage must also scrape joint/bicameral
+    committees (chamber="Congreso"), gated independently from the two
+    per-chamber calls -- mirrors organizations_chamber's
+    get_joint_comision_permanente wiring."""
+    calls = []
+
+    class DummyCommitteeScraper:
+        committee_list = [object()]
+
+        def get_chamber_committees(self, chamber):
+            calls.append(("get_chamber_committees", chamber))
+            return self.committee_list
+
+        def get_joint_committees(self):
+            calls.append(("get_joint_committees",))
+            return self.committee_list
+
+        def add_committees_to_db(self):
+            pass
+
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+    monkeypatch.setattr(orchestrator_module, "log_manager", DummyLogManager())
+    monkeypatch.setattr(
+        "backend.scrapers.committees.RawCommitteeScraper", DummyCommitteeScraper
+    )
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+    # Only the committees stage should actually run its calls -- everything
+    # else reports "recently scraped" so DummyChamberScraper's lack of real
+    # methods (get_chamber_roster etc.) never gets exercised.
+    monkeypatch.setattr(
+        orch,
+        "_recent_raw_exists",
+        lambda raw_model, *a, **k: raw_model is not orchestrator_module.RawCommittee,
+    )
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period=None,
+    )
+
+    assert ("get_chamber_committees", "Senadores") in calls
+    assert ("get_chamber_committees", "Diputados") in calls
+    assert ("get_joint_committees",) in calls
+
+
+def test_run_scrapers_skips_joint_committees_when_recent(monkeypatch):
+    calls = []
+
+    class DummyCommitteeScraper:
+        committee_list = [object()]
+
+        def get_chamber_committees(self, chamber):
+            return self.committee_list
+
+        def get_joint_committees(self):
+            calls.append("get_joint_committees")
+            return self.committee_list
+
+        def add_committees_to_db(self):
+            pass
+
+    orch = OpenPeruOrchestrator.__new__(OpenPeruOrchestrator)
+    monkeypatch.setattr(orchestrator_module, "log_manager", DummyLogManager())
+    monkeypatch.setattr(
+        "backend.scrapers.committees.RawCommitteeScraper", DummyCommitteeScraper
+    )
+    for mod, name in [
+        ("backend.scrapers.congresistas", "RawCongresistasScraper"),
+        ("backend.scrapers.bancadas", "RawBancadaScraper"),
+        ("backend.scrapers.organizations", "RawOrganizationScraper"),
+    ]:
+        monkeypatch.setattr(f"{mod}.{name}", DummyChamberScraper)
+    monkeypatch.setattr(orch, "_recent_raw_exists", lambda *a, **k: True)
+    monkeypatch.setattr(orch, "_load_scraper_results", lambda name: None)
+
+    orch.run_scrapers(
+        scrape_bills=False,
+        scrape_motions=False,
+        scrape_leyes=False,
+        scrape_others=True,
+        leg_period=None,
+    )
+
+    assert calls == []

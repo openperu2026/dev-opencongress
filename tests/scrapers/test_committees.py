@@ -699,6 +699,87 @@ def test_get_chamber_committees_tags_rows_by_section_title(monkeypatch):
     assert len(orgs) == 3
 
 
+_JOINT_COMMITTEE_PAGE_HTML = """
+<html><body>
+  <h1>Comisión Bicameral de Presupuesto y Cuenta General de la República</h1>
+  <table>
+    <thead><tr>
+      <th>Foto</th><th>Apellidos y Nombres</th>
+      <th>Grupo Parlamentario</th><th>Cargo</th><th>e-Mail</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><img/></td>
+        <td><a href="https://senado.congreso.gob.pe/senador/arista-arbildo-jose-berley">
+          Arista Arbildo, Jose Berley</a></td>
+        <td>FUERZA POPULAR</td>
+        <td>Presidente</td>
+        <td>jarista@congreso.gob.pe</td>
+      </tr>
+    </tbody>
+  </table>
+</body></html>
+"""
+
+
+def test_get_joint_committees_builds_congreso_tagged_committee(monkeypatch):
+    """CRITICAL: proves the joint committee scrape resolves through
+    process_committee() as a parentless (chamber="Congreso") entity --
+    the member table itself is irrelevant (existence-only scrape, see
+    get_joint_committees' docstring), only the <h1> name is used."""
+    from backend.process.organizations import process_committee
+
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring(_JOINT_COMMITTEE_PAGE_HTML),
+    )
+
+    result = scraper.get_joint_committees()
+    assert len(result) == 1
+    raw_comm = result[0]
+    assert raw_comm.chamber == "Congreso"
+    assert raw_comm.committee_type == "Comisión Bicameral"
+
+    orgs = process_committee(raw_comm)
+    assert len(orgs) == 1
+    org = orgs[0]
+    assert (
+        org.org_name
+        == "Comisión Bicameral de Presupuesto y Cuenta General de la República"
+    )
+    assert org.org_subtype == "Comisión Bicameral"
+    assert org.parent_org_name is None
+    assert org.parent_org_type is None
+
+
+def test_get_joint_committees_skips_page_missing_h1(monkeypatch):
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring("<html><body>no h1 here</body></html>"),
+    )
+
+    result = scraper.get_joint_committees()
+    assert result == []
+
+
+def test_get_joint_committees_skips_failed_fetch(monkeypatch):
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url", lambda url, *a, **k: None
+    )
+
+    result = scraper.get_joint_committees()
+    assert result == []
+
+
 def test_get_chamber_committees_excludes_index_self_link(monkeypatch):
     """Regression: the page's own nav link back to /comisiones/ (plural)
     also starts with "{base_url}/comision" -- must not be scraped as a

@@ -27,6 +27,18 @@ DB_PATH = settings.DB_URL
 # _process_organization_definitions()'s `int(raw_comm.legislative_year)`).
 CHAMBER_COMMITTEE_YEAR = "2026"
 
+# 2026-2031 term: joint/bicameral committees (members from BOTH chambers,
+# no single chamber parent -- see CHAMBER_LABEL_TO_ORG_NAME["Congreso"] in
+# backend/core/constants.py). Confirmed live 2026-09-02: no index of "all
+# bicameral committees" exists anywhere on congreso.gob.pe, so these have
+# to be hardcoded by URL, same as organizations.py's COMISION_PERMANENTE_URL.
+JOINT_COMMITTEE_URLS = {
+    "Comisión Bicameral de Presupuesto y Cuenta General de la República": (
+        "https://www.congreso.gob.pe/"
+        "comision-bicameral-de-presupuesto-y-cuenta-general-de-la-republica/"
+    ),
+}
+
 YEAR_SELECT = 'select[name="idRegistroPadre"]'
 COMMITTEE_SELECT = 'select[name="fld_78_Comision"]'
 TABLE_SELECTOR = "table.congresistas"
@@ -388,6 +400,63 @@ class RawCommitteeScraper:
                     seen[name] = ("Comisión Ordinaria", href)
 
         return [(section, name, href) for name, (section, href) in seen.items()]
+
+    def get_joint_committees(self) -> list[RawCommittee]:
+        """Scrape hardcoded joint/bicameral committee pages (existence
+        only, not membership -- see get_chamber_committees' docstring for
+        why: process_committee() never builds Membership rows from
+        RawCommittee at all, so there's no membership path to worry about
+        here either -- any congresista serving on one of these already
+        gets a correctly-resolved Membership via their own cargos page,
+        see congresistas.py::_get_chamber_cargos).
+
+        Confirmed live 2026-09-02 (JOINT_COMMITTEE_URLS): a plain
+        www.congreso.gob.pe page, not JS-rendered, whose <h1> holds the
+        committee's exact canonical name -- used as the authoritative
+        org_name rather than trusting the dict key to stay in sync with
+        the live page.
+
+        Batches every entry into ONE RawCommittee row (chamber="Congreso"),
+        same as get_chamber_committees batches one chamber's committees
+        into one row -- keeps them all under a single
+        (legislative_year, committee_type, chamber) update_tracking scope
+        instead of colliding if a second joint committee is ever added to
+        JOINT_COMMITTEE_URLS (update_tracking has no per-committee key,
+        only that triple).
+        """
+        rows = []
+        for url in JOINT_COMMITTEE_URLS.values():
+            page_html = parse_url(url)
+            if page_html is None:
+                logger.warning(f"Failed to fetch joint committee page: {url}")
+                continue
+            h1_nodes = page_html.xpath("//h1")
+            name = h1_nodes[0].text_content().strip() if h1_nodes else ""
+            if not name:
+                logger.warning(f"No <h1> found for joint committee at {url}")
+                continue
+            rows.append(
+                "<tr><td>Comisión Bicameral</td>"
+                f'<td><a href="{html_lib.escape(url)}">{html_lib.escape(name)}</a></td></tr>'
+            )
+
+        if not rows:
+            logger.warning("No joint committees found")
+            return []
+
+        raw_html = f'<table class="congresistas"><tbody>{"".join(rows)}</tbody></table>'
+        new_committee = RawCommittee(
+            timestamp=datetime.now(),
+            legislative_year=CHAMBER_COMMITTEE_YEAR,
+            chamber="Congreso",
+            committee_type="Comisión Bicameral",
+            raw_html=raw_html,
+            changed=False,
+            processed=False,
+            last_update=True,
+        )
+        self.committee_list = [self.update_tracking(new_committee)]
+        return self.committee_list
 
     # =====================================================================
     # SHARED -- used by both the legacy and 2026-2031 code paths above

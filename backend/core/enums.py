@@ -214,6 +214,10 @@ class TypeCommittee(str, Enum):
     # Legacy committees keep the generic COM_ORD value untouched.
     COM_ORD_LEG = "Comisión Ordinaria Legislativa"
     COM_ORD_NO_LEG = "Comisión Ordinaria No Legislativa"
+    # 2026-2031 term: joint/bicameral committees (members from both
+    # chambers, no single chamber parent) -- see
+    # backend/scrapers/committees.py::JOINT_COMMITTEE_URLS.
+    COM_BICAMERAL = "Comisión Bicameral"
     SUBCOM_TLC = "Sub Comisión de Seguimiento del TLC"
     COM_ESP = "Comisiones Especiales"
     COM_ETICA = "Comisión de Ética Parlamentaria"

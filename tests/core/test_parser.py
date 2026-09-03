@@ -225,3 +225,12 @@ def test_parse_comm_type_legacy_singular_form_unaffected():
 def test_parse_comm_type_unknown_future_type_raises():
     with pytest.raises(ValueError):
         parse_comm_type("Comisiones Extraordinarias")
+
+
+def test_parse_comm_type_classifies_bicameral():
+    assert (
+        parse_comm_type(
+            "Comisión Bicameral de Presupuesto y Cuenta General de la República"
+        )
+        == "Comisión Bicameral"
+    )

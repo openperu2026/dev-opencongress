@@ -762,6 +762,10 @@ _COMM_TYPE_RULES: list[tuple[re.Pattern[str], str]] = [
         re.compile(r"^comisi[oó]n(?:es)?\s+ordinarias?\s+legislativas?\b", re.I),
         "Comisión Ordinaria Legislativa",
     ),
+    # 2026-2031 term: joint/bicameral committees (e.g. "Comisión Bicameral
+    # de Presupuesto y Cuenta General de la República") -- see
+    # backend/scrapers/committees.py::JOINT_COMMITTEE_URLS/get_joint_committees.
+    (re.compile(r"^comisi[oó]n\s+bicameral\b", re.I), "Comisión Bicameral"),
     # Common noisy cases
     (re.compile(r"^comisi[oó]n\s+ordinaria\b", re.I), "Comisión Ordinaria"),
     (

@@ -481,6 +481,14 @@ class OpenPeruOrchestrator:
                             chamber_comm.add_committees_to_db()
                             total_scraped += len(chamber_comm.committee_list)
 
+                    if not self._recent_raw_exists(
+                        RawCommittee, days=1, chamber="Congreso"
+                    ):
+                        chamber_comm.get_joint_committees()
+                        if chamber_comm.committee_list:
+                            chamber_comm.add_committees_to_db()
+                            total_scraped += len(chamber_comm.committee_list)
+
                     end_time = datetime.now()
                     self.scraper_results["committees_chamber.py"] = ScraperStats(
                         start_time, end_time, total_scraped
