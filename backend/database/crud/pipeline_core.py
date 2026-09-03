@@ -271,8 +271,16 @@ def _upsert_model(
         db.flush()
         return obj
 
+    # Coalesce, don't blindly overwrite: a matched source can legitimately
+    # carry less data than what's already stored (e.g. the 2026-2031
+    # chamber congresista scrape has no dni/gender/first_name/last_name at
+    # all) -- a None in the payload must never clobber an existing value.
+    # Found 2026-09: this exact gap silently wiped dni/gender/first_name/
+    # last_name for every reelected congresista matched against their
+    # pre-existing legacy row.
     for key, value in payload.items():
-        setattr(existing, key, value)
+        if value is not None:
+            setattr(existing, key, value)
 
     db.flush()
     return existing

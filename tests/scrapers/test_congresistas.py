@@ -615,17 +615,26 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
 ):
     """CRITICAL: proves the scraper's synthetic HTML is byte-compatible with
     process_profile_content()'s existing xpath contract -- the adapter
-    pattern this Phase B1 design relies on for zero process-layer changes."""
+    pattern this Phase B1 design relies on for zero process-layer changes.
+
+    full_name is asserted in "Nombres Apellidos" order: process_profile_content
+    now runs the .nombres text through split_and_sort_name, correctly
+    reordering the roster's raw "Apellidos, Nombres" format (found 2026-09
+    -- the previous version of this test asserted the unconverted comma
+    string as if it were correct, which is exactly the bug that shipped)."""
     from backend.process.congresistas import process_profile_content
 
     cong_scraper = RawCongresistasScraper()
     monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
 
     raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
 
     cong, orgs, memberships = process_profile_content(raw, {})
 
-    assert cong.full_name == "Aguinaga Recuenco, Alejandro Aurelio"
+    assert cong.full_name == "Alejandro Aurelio Aguinaga Recuenco"
+    assert cong.first_name == "Alejandro Aurelio"
+    assert cong.last_name == "Aguinaga Recuenco"
     assert cong.photo_url == _ROSTER_ENTRY["photo"]
     assert [o.org_name for o in orgs] == ["Fuerza Popular", "Senado de la República"]
     assert memberships[0].org_name == "Fuerza Popular"

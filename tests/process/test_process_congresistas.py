@@ -115,6 +115,48 @@ def test_process_profile_content_chamber_none_is_byte_identical_to_diputados(
     assert memberships_none[1].role == memberships_diputados[1].role
 
 
+def test_process_profile_content_reorders_comma_formatted_chamber_name():
+    """Found 2026-09: the 2026-2031 chamber roster's raw name is
+    "Apellidos, Nombres" (comma), synthesized verbatim into the same
+    .nombres div the legacy scraper's already-correctly-ordered
+    "Nombres Apellidos" text fills -- process_profile_content's else
+    branch must reorder it via split_and_sort_name, not pass it through,
+    and should also populate first_name/last_name from it."""
+    html = """
+    <html>
+      <div class="nombres"><span>Label</span><span>Aguinaga Recuenco, Alejandro Aurelio</span></div>
+      <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+      <div class="votacion"><span>Label</span><span>0</span></div>
+      <div class="representa"><span>Label</span><span>Lima</span></div>
+      <div class="condicion"><span>Label</span><span>Titular</span></div>
+      <div class="foto"><img src="https://example.org/photo.png"/></div>
+    </html>
+    """
+    raw = _raw_cong(profile_content=html, leg_period="2026-2031", chamber="Senadores")
+
+    cong, orgs, memberships = mod.process_profile_content(raw, {})
+
+    assert cong.full_name == "Alejandro Aurelio Aguinaga Recuenco"
+    assert cong.first_name == "Alejandro Aurelio"
+    assert cong.last_name == "Aguinaga Recuenco"
+
+
+def test_process_profile_content_legacy_no_comma_name_unchanged(profile_html):
+    """Regression: the legacy scraper's .nombres text has no comma and is
+    already "Nombres Apellidos" -- split_and_sort_name must pass it
+    through unchanged (its documented no-comma fallback), not corrupt it."""
+    raw = _raw_cong(profile_content=profile_html, leg_period="2021-2026", chamber=None)
+
+    cong, orgs, memberships = mod.process_profile_content(raw, {})
+
+    assert cong.full_name == "Juan Alberto Perez Quispe"
+    # split_and_sort_name's no-comma fallback returns (name, None, None) --
+    # first_name/last_name stay unavailable, same as before this fix, since
+    # there's no reliable way to split a no-comma string into parts.
+    assert cong.first_name is None
+    assert cong.last_name is None
+
+
 def test_process_profile_content_senadores_chamber_maps_to_senado(
     profile_html, dict_data_cong
 ):

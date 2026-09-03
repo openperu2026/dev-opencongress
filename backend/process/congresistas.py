@@ -1,7 +1,7 @@
 from backend import normalize_membership_role, REGIONS_MAP
 from backend.database.raw_models import RawCongresista
 from backend.process.schema import Congresista, Membership, Organization
-from backend.process.utils import gen_congresistas_df, to_datetime
+from backend.process.utils import gen_congresistas_df, to_datetime, split_and_sort_name
 from backend.database.session import get_db
 from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
@@ -152,8 +152,19 @@ def process_profile_content(
             website=data_cong.get("website"),
         )
     else:
+        # split_and_sort_name reorders "Apellidos, Nombres" (the 2026-2031
+        # chamber roster's raw name format) to "Nombres Apellidos" and is a
+        # no-op pass-through for the legacy scraper's already-correctly-
+        # ordered, comma-free name text -- safe for both sources. Also
+        # gives first_name/last_name for the chamber path for free (dni/
+        # gender genuinely aren't available from that source, stay None).
+        full_name, first_name, last_name = split_and_sort_name(
+            xpath2('//*[@class="nombres"]/span[2]', html)
+        )
         cong = Congresista(
-            full_name=xpath2('//*[@class="nombres"]/span[2]', html),
+            full_name=full_name,
+            first_name=first_name,
+            last_name=last_name,
             photo_url=photo_url,
             website=raw_cong.website,
         )

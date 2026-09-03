@@ -391,6 +391,7 @@ class RawCongresistasScraper:
         memberships_content = (
             self._get_chamber_cargos(profile_url) if profile_url else None
         )
+
         return RawCongresista(
             timestamp=datetime.now(),
             leg_period=CHAMBER_LEG_PERIOD_LABEL,
@@ -405,10 +406,16 @@ class RawCongresistasScraper:
     ) -> list[RawCongresista]:
         """Build+track RawCongresista rows for one chamber from an
         already-fetched roster (see get_chamber_roster)."""
-        congresistas = [
-            self.update_tracking(self.create_chamber_congresista(chamber, entry))
-            for entry in roster
-        ]
+
+        congresistas = []
+        for entry in roster:
+            congresistas.append(
+                self.update_tracking(self.create_chamber_congresista(chamber, entry))
+            )
+            logger.success(
+                f"Congresista successfully extracted from {entry.get('url')}"
+            )
+
         self.raw_congresistas = congresistas
         return congresistas
 

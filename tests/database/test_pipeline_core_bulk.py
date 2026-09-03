@@ -35,6 +35,67 @@ def create_congresista(session):
     return _create_congresista
 
 
+def test_upsert_congresista_does_not_wipe_fields_missing_from_new_payload(
+    session, create_congresista
+):
+    """Found 2026-09: a matched update whose schema has None for
+    dni/gender/first_name/last_name (e.g. the 2026-2031 chamber scrape,
+    which structurally never carries those fields) must NOT clobber
+    already-known values from a prior scrape (e.g. legacy) -- this is
+    exactly what wiped reelected congresistas' data."""
+    existing = create_congresista(
+        full_name="Alejandro Aurelio Aguinaga Recuenco",
+        first_name="Alejandro Aurelio",
+        last_name="Aguinaga Recuenco",
+        dni="12345678",
+        gender="M",
+        website="https://www.congreso.gob.pe/congresistas2021/Aguinaga/",
+    )
+
+    updated = crud_core.upsert_congresista(
+        session,
+        schema.Congresista(
+            full_name="Alejandro Aurelio Aguinaga Recuenco",
+            first_name=None,
+            last_name=None,
+            dni=None,
+            gender=None,
+            photo_url="https://senado.congreso.gob.pe/photo2.png",
+            website="https://senado.congreso.gob.pe/senador/aguinaga-recuenco/",
+        ),
+    )
+
+    assert updated.id == existing.id
+    assert updated.first_name == "Alejandro Aurelio"
+    assert updated.last_name == "Aguinaga Recuenco"
+    assert updated.dni == "12345678"
+    assert updated.gender == "M"
+    # Fields the new payload DOES carry a real value for still update.
+    assert updated.photo_url == "https://senado.congreso.gob.pe/photo2.png"
+    assert (
+        updated.website == "https://senado.congreso.gob.pe/senador/aguinaga-recuenco/"
+    )
+
+
+def test_upsert_congresista_real_value_overwrites_existing(session, create_congresista):
+    """Regression: the coalesce fix must not turn upsert into a no-op --
+    a genuinely new, non-None value still overwrites the old one."""
+    existing = create_congresista(dni="12345678")
+
+    updated = crud_core.upsert_congresista(
+        session,
+        schema.Congresista(
+            full_name=existing.full_name,
+            dni="87654321",
+            photo_url=existing.photo_url,
+            website=existing.website,
+        ),
+    )
+
+    assert updated.id == existing.id
+    assert updated.dni == "87654321"
+
+
 def test_upsert_bancada_uses_organization_rows(session):
     existing = crud_core.upsert_organization(
         session,
