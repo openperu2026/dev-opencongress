@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 
-import pytest
 from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -111,12 +110,13 @@ def test_add_bills_to_db_persists_raw_bills():
         assert db_bill.general == json.dumps({"foo": "bar"})
 
 
-def test_add_bills_to_db_raises_assertion_when_no_bills():
+def test_add_bills_to_db_returns_false_when_empty():
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
     scraper = RawBillScraper()
     scraper.raw_bills = []
 
-    with pytest.raises(AssertionError):
-        scraper.add_bills_to_db()
+    assert scraper.add_bills_to_db() is False
 
 
 def test_add_bills_to_db_handles_sqlalchemy_error(monkeypatch):
@@ -202,7 +202,7 @@ def test_scrape_bill_appends_raw_bill(monkeypatch, session):
     assert json.loads(bill.steps)[0]["evento"] == "ingreso"
 
 
-# ---------- 2026-2031 chamber bills (Phase B2) ----------
+# ---------- 2026-2031 chamber bills ----------
 
 
 def test_create_chamber_raw_bill_uses_explicit_id():

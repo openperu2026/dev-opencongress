@@ -1,8 +1,9 @@
 """
 Standalone local-only Flask app for reviewing/correcting vote and
 attendance records against their source PDF. Deliberately not wired into
-`docker-compose`'s public `open-congress-frontend` service -- see the
-approved plan at `~/.claude/plans/project-vote-buzzing-pillow.md` for why.
+`docker-compose`'s public `open-congress-frontend` service -- it has direct
+DB write access and no authentication, and is meant to stay off the
+internet.
 """
 
 import os

@@ -54,9 +54,9 @@ def test_update_tracking_first_time_marks_changed_and_last_update(scraper, db_se
     ley = scraper.create_raw_ley(ley_number, data)
     tracked = scraper.update_tracking(ley)
 
-    assert tracked is not None
-    assert tracked.changed is True
-    assert tracked.last_update is True
+    assert tracked == [ley]
+    assert ley.changed is True
+    assert ley.last_update is True
 
     # Nothing should exist in DB yet because update_tracking only flips old rows
     # New row will be inserted by add_leyes_to_db()
@@ -82,8 +82,9 @@ def test_update_tracking_second_time_flips_previous_last_update(scraper, db_sess
     second = scraper.create_raw_ley(ley_number, "<xml>v2</xml>")
     tracked = scraper.update_tracking(second)
 
-    assert tracked.changed is True
-    assert tracked.last_update is True
+    assert tracked == [second, first]
+    assert second.changed is True
+    assert second.last_update is True
 
     # Previous row should now be last_update False
     prev = (
@@ -96,7 +97,10 @@ def test_update_tracking_second_time_flips_previous_last_update(scraper, db_sess
     assert prev[0].last_update is False
 
 
-def test_update_tracking_second_time_same_data_sets_changed_false(scraper, db_session):
+def test_update_tracking_second_time_same_data_returns_empty_list(scraper, db_session):
+    """Regression test for the store-only-if-changed fix: an unchanged
+    snapshot must return [] so the caller's .extend() appends nothing,
+    instead of unconditionally storing a duplicate raw row forever."""
     ley_number = "32558"
 
     # Insert first version with some data
@@ -114,8 +118,13 @@ def test_update_tracking_second_time_same_data_sets_changed_false(scraper, db_se
     second = scraper.create_raw_ley(ley_number, "<xml>same</xml>")
     tracked = scraper.update_tracking(second)
 
-    assert tracked.changed is False
-    assert tracked.last_update is True
+    assert tracked == []
+
+    # The existing row must be untouched -- unchanged means no flip, no
+    # extra commit against the previous "last update" row.
+    rows = db_session.query(RawLey).filter(RawLey.id == ley_number).all()
+    assert len(rows) == 1
+    assert rows[0].last_update is True
 
 
 def test_add_leyes_to_db_inserts_and_clears_tracking(scraper, db_session):
@@ -123,13 +132,20 @@ def test_add_leyes_to_db_inserts_and_clears_tracking(scraper, db_session):
     ley = scraper.create_raw_ley(ley_number, "<xml>v1</xml>")
     tracked = scraper.update_tracking(ley)
 
-    scraper.raw_leyes.append(tracked)
+    scraper.raw_leyes.extend(tracked)
     ok = scraper.add_leyes_to_db()
 
     assert ok is True
     rows = db_session.query(RawLey).filter(RawLey.id == ley_number).all()
     assert len(rows) == 1
     assert rows[0].last_update is True
+
+
+def test_add_leyes_to_db_returns_false_when_empty(scraper):
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
+    assert scraper.raw_leyes == []
+    assert scraper.add_leyes_to_db() is False
 
 
 def test_add_leyes_to_db_failure_restores_last_update(scraper, db_session, monkeypatch):
@@ -150,9 +166,13 @@ def test_add_leyes_to_db_failure_restores_last_update(scraper, db_session, monke
     # Track a new version which will flip existing.last_update to False
     new = scraper.create_raw_ley(ley_number, "<xml>v2</xml>")
     tracked = scraper.update_tracking(new)
-    assert db_session.query(RawLey).first().last_update is False
+    assert db_session.query(RawLey).filter(RawLey.id == ley_number).count() == 1
+    assert (
+        db_session.query(RawLey).filter(RawLey.id == ley_number).first().last_update
+        is False
+    )
 
-    scraper.raw_leyes.append(tracked)
+    scraper.raw_leyes.extend(tracked)
 
     # Force bulk_save_objects to fail so add_leyes_to_db triggers restore
     def boom(*args, **kwargs):

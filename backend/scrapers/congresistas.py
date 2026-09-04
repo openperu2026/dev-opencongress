@@ -7,13 +7,9 @@ from datetime import datetime
 from lxml.html import HtmlElement
 from urllib.parse import urljoin
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-
-from backend.config import settings
 from backend.core.constants import CHAMBER_BASE_URLS, CHAMBER_LEG_PERIOD_LABEL
 from backend.database.raw_models import RawCongresista
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import (
     parse_url,
     get_url_text,
@@ -23,14 +19,13 @@ from backend.scrapers.utils import (
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/congresistas"
 API_MEMBERSHIP = "https://wb2server.congreso.gob.pe/vll/cargos/api/"
-DB_PATH = settings.DB_URL
 
 # 2026-2031 term: separate listing slug per chamber, confirmed live 2026-08-31
 # (senado.../senador/, diputados.../diputado/).
 CHAMBER_LISTING_SLUG = {"Senadores": "senador", "Diputados": "diputado"}
 
 
-class RawCongresistasScraper:
+class RawCongresistasScraper(SharedRawScraperBase):
     """
     Class to scrape congresistas raw data from the congress web page.
 
@@ -45,11 +40,9 @@ class RawCongresistasScraper:
     SHARED section at the bottom for the methods common to both paths.
     """
 
-    def __init__(self):
-        # Engine and session maker for DB
-        self.engine = create_engine(DB_PATH)
+    def __init__(self, session=None, engine=None):
+        super().__init__(session=session, engine=engine)
         self.url = BASE_URL
-        self.Session = sessionmaker(bind=self.engine)
 
         self.periods = {}
         self.raw_congresistas: list[RawCongresista] = []
@@ -201,9 +194,8 @@ class RawCongresistasScraper:
 
     # =====================================================================
     # 2026-2031 BICAMERAL TERM -- senado/diputados.congreso.gob.pe,
-    # confirmed live 2026-08-31 (Phase B plan, Step B0). No dropdown/period
-    # selector on these sites at all -- each domain serves only the current
-    # term's roster.
+    # confirmed live 2026-08-31. No dropdown/period selector on these sites
+    # at all -- each domain serves only the current term's roster.
     # =====================================================================
 
     def get_chamber_roster(self, chamber: str) -> list[dict]:
@@ -242,26 +234,41 @@ class RawCongresistasScraper:
 
         return roster if isinstance(roster, list) else []
 
-    def _get_chamber_votes(self, profile_url: str) -> str:
-        """Fetch "Votación obtenida" from a 2026-2031 profile page.
+    def _get_chamber_profile_data(self, profile_url: str) -> tuple[str, str | None]:
+        """Fetch a 2026-2031 congresista's own profile page ONCE, returning
+        (votes, higher_res_photo_url).
 
-        Confirmed live 2026-08-31: value found via a `*summary__label`/
-        `*summary__value` pair -- prefix (senador-/diputado-) varies by
-        chamber, so matched by class suffix rather than the full name.
+        Votes: confirmed live 2026-08-31, value found via a
+        `*summary__label`/`*summary__value` pair -- prefix (senador-/
+        diputado-) varies by chamber, so matched by class suffix rather
+        than the full name.
+
+        Photo: confirmed live 2026-09-04 -- the roster listing's own
+        `photo` field is a WordPress `-150x150` thumbnail (e.g. 4.7KB),
+        while this page's `<meta property="og:image">` points at a
+        meaningfully larger version (e.g. 35KB, 800x800) that isn't
+        exposed anywhere in the roster JSON. Extracted from this SAME
+        fetch (already needed for the votes count) rather than a second
+        request to the same URL.
         """
         html = parse_url(profile_url)
         if html is None:
-            return "0"
+            return "0", None
+
+        votes = "0"
         labels = html.xpath(
             '//*[contains(@class, "summary__label") '
             'and normalize-space(text())="Votación obtenida"]'
         )
-        if not labels:
-            return "0"
-        value_node = labels[0].getnext()
-        if value_node is None:
-            return "0"
-        return value_node.text_content().strip() or "0"
+        if labels:
+            value_node = labels[0].getnext()
+            if value_node is not None:
+                votes = value_node.text_content().strip() or "0"
+
+        photo_nodes = html.xpath('//meta[@property="og:image"]/@content')
+        photo_url = photo_nodes[0].strip() if photo_nodes and photo_nodes[0] else None
+
+        return votes, photo_url
 
     @staticmethod
     def _parse_cargos_date(value: str | None) -> str | None:
@@ -318,8 +325,8 @@ class RawCongresistasScraper:
             strong_text = strong_nodes[0].text_content().strip() if strong_nodes else ""
             if strong_text.lower() == "grupo parlamentario":
                 # Bancada membership -- already scraped via the dedicated
-                # RawBancadaScraper.get_chamber_bancadas path (Phase B1);
-                # routing it through here too would double-source the same
+                # RawBancadaScraper.get_chamber_bancadas path; routing it
+                # through here too would double-source the same
                 # fact, and map_org_fields() has no Bancada case at all
                 # (it would silently default to org_type="Comisión").
                 continue
@@ -359,19 +366,25 @@ class RawCongresistasScraper:
         return json.dumps({"data": memberships})
 
     @staticmethod
-    def _synthesize_chamber_profile_html(entry: dict, votes: str) -> str:
+    def _synthesize_chamber_profile_html(
+        entry: dict, votes: str, photo_url: str
+    ) -> str:
         """Build a minimal HTML doc using the SAME class names
         process_profile_content() (backend/process/congresistas.py) already
         parses for legacy congresistas -- keeps that function's contract
         (.nombres/.grupo/.foto/.votacion/.representa/.condicion) stable
         regardless of which site the data came from, so it needs zero
         changes for the 2026-2031 path.
+
+        photo_url is resolved by the caller (create_chamber_congresista) --
+        the higher-res profile-page photo when available, falling back to
+        the roster listing's own (lower-res) `photo` field otherwise.
         """
         name = html_lib.escape(entry.get("name") or "")
         group = html_lib.escape(entry.get("group") or entry.get("partido") or "")
         district = html_lib.escape(entry.get("district") or "")
         condition = html_lib.escape(entry.get("condition") or "")
-        photo = html_lib.escape(entry.get("photo") or "")
+        photo = html_lib.escape(photo_url or "")
         votes_escaped = html_lib.escape(votes)
         return (
             "<html><body>"
@@ -386,8 +399,12 @@ class RawCongresistasScraper:
 
     def create_chamber_congresista(self, chamber: str, entry: dict) -> RawCongresista:
         profile_url = entry.get("url", "")
-        votes = self._get_chamber_votes(profile_url) if profile_url else "0"
-        profile_content = self._synthesize_chamber_profile_html(entry, votes)
+        if profile_url:
+            votes, high_res_photo_url = self._get_chamber_profile_data(profile_url)
+        else:
+            votes, high_res_photo_url = "0", None
+        photo_url = high_res_photo_url or entry.get("photo") or ""
+        profile_content = self._synthesize_chamber_profile_html(entry, votes, photo_url)
         memberships_content = (
             self._get_chamber_cargos(profile_url) if profile_url else None
         )
@@ -409,7 +426,7 @@ class RawCongresistasScraper:
 
         congresistas = []
         for entry in roster:
-            congresistas.append(
+            congresistas.extend(
                 self.update_tracking(self.create_chamber_congresista(chamber, entry))
             )
             logger.success(
@@ -431,7 +448,7 @@ class RawCongresistasScraper:
         links = self.get_urls_from_table(period_value)
         for cong_link in links:
             new_cong = self.create_raw_congresista(period_key, cong_link)
-            congresistas.append(self.update_tracking(new_cong))
+            congresistas.extend(self.update_tracking(new_cong))
 
         return congresistas
 
@@ -439,7 +456,7 @@ class RawCongresistasScraper:
     # SHARED -- used by both the legacy and 2026-2031 code paths above
     # =====================================================================
 
-    def update_tracking(self, congresista: RawCongresista) -> RawCongresista:
+    def update_tracking(self, congresista: RawCongresista) -> list[RawCongresista]:
         """Update the tracking columns of a RawCongresista object.
 
         Period-agnostic: dedupes on `website` alone, which is already
@@ -448,31 +465,15 @@ class RawCongresistasScraper:
         RawOrganization's trackers, which do need one -- see those files).
         """
 
-        with self.Session() as session:
-            last_congresista = (
+        def lookup(session):
+            return (
                 session.query(RawCongresista)
                 .filter(RawCongresista.website == congresista.website)
                 .order_by(RawCongresista.timestamp.desc())
                 .first()
             )
 
-            # First ever version of this congresista
-            if last_congresista is None:
-                congresista.changed = True
-                congresista.last_update = True
-                congresista.processed = False
-            else:
-                # Compare last vs new
-                congresista.changed = congresista != last_congresista
-                congresista.last_update = True
-                congresista.processed = not congresista.changed
-
-                # Update the old version AFTER comparison
-                last_congresista.last_update = False
-                session.add(last_congresista)
-                session.commit()
-
-            return congresista
+        return self._update_tracking(congresista, lookup)
 
     # =====================================================================
     # LEGACY (through 2021-2026), continued
@@ -507,27 +508,7 @@ class RawCongresistasScraper:
         self.raw_congresistas, set by either extract_cong_from_period()
         (legacy) or extract_chamber_congresistas() (2026-2031).
         """
-
-        assert self.raw_congresistas, (
-            "Congresistas must be scraped before it can be saved"
-        )
-
-        session = self.Session()
-
-        try:
-            session.bulk_save_objects(self.raw_congresistas)
-            session.commit()
-            logger.success(
-                f"Added {len(self.raw_congresistas)} congresistas to Raw Congresistas table"
-            )
-            return True
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add committees: {str(e)}")
-            session.rollback()
-            return False
-        finally:
-            # Close Session
-            session.close()
+        return self._add_to_db(self.raw_congresistas, "Congresistas")
 
 
 if __name__ == "__main__":

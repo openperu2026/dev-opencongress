@@ -9,17 +9,12 @@ from playwright.sync_api import (
     TimeoutError as PlaywrightTimeoutError,
 )
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-
-from backend.config import settings
 from backend.core.constants import CHAMBER_BASE_URLS
 from backend.database.raw_models import RawCommittee
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import parse_url
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/comisiones-ordinarias"
-DB_PATH = settings.DB_URL
 
 # 2026-2031 term: legislative-year the current term's committee pages are
 # scoped to (confirmed live 2026-08-31: "PERIODO ANUAL DE SESIONES
@@ -46,7 +41,7 @@ ROWS_SELECTOR = "table.congresistas tbody tr:has(td)"
 LINKS_SELECTOR = "table.congresistas a[href]"
 
 
-class RawCommitteeScraper:
+class RawCommitteeScraper(SharedRawScraperBase):
     """
     Class to scrape committee raw data from the congress web page.
 
@@ -55,18 +50,17 @@ class RawCommitteeScraper:
     chain, one RawCommittee row per (year, type) covering many committees.
     2026-2031 BICAMERAL TERM scrapes the new per-chamber comisiones/ index
     (name+link pairs only, no year/type dropdown on that site at all --
-    confirmed live 2026-08-31, Phase B plan Step B0 item 3) and covers
-    committee EXISTENCE only, not membership -- see get_chamber_committees's
+    confirmed live 2026-08-31) and covers committee EXISTENCE only, not
+    membership -- see get_chamber_committees's
     docstring for why per-committee membership is deliberately not wired up
     here. Both paths write RawCommittee rows to the same table (chamber
     column: NULL for legacy, "Senadores"/"Diputados" for the new term).
     """
 
-    def __init__(self):
-        # Engine and session maker for DB
-        self.engine = create_engine(DB_PATH)
+    def __init__(self, session=None, engine=None):
+        super().__init__(session=session, engine=engine)
         self.url = BASE_URL
-        self.Session = sessionmaker(bind=self.engine)
+        self.committee_list: list[RawCommittee] = []
 
     # =====================================================================
     # LEGACY (through 2021-2026) -- www3.congreso.gob.pe, year+type
@@ -276,7 +270,7 @@ class RawCommitteeScraper:
                                 processed=False,
                                 last_update=True,
                             )
-                            final_lst.append(self.update_tracking(new_committee))
+                            final_lst.extend(self.update_tracking(new_committee))
 
                 finally:
                     browser.close()
@@ -354,7 +348,7 @@ class RawCommitteeScraper:
             processed=False,
             last_update=True,
         )
-        self.committee_list = [self.update_tracking(new_committee)]
+        self.committee_list = self.update_tracking(new_committee)
         return self.committee_list
 
     @staticmethod
@@ -455,14 +449,14 @@ class RawCommitteeScraper:
             processed=False,
             last_update=True,
         )
-        self.committee_list = [self.update_tracking(new_committee)]
+        self.committee_list = self.update_tracking(new_committee)
         return self.committee_list
 
     # =====================================================================
     # SHARED -- used by both the legacy and 2026-2031 code paths above
     # =====================================================================
 
-    def update_tracking(self, committee: RawCommittee) -> RawCommittee:
+    def update_tracking(self, committee: RawCommittee) -> list[RawCommittee]:
         """Update the tracking columns of a RawCommittee object.
 
         Scoped by (legislative_year, committee_type, chamber) -- the
@@ -470,8 +464,8 @@ class RawCommitteeScraper:
         both chambers could otherwise share the same (year, type) pair.
         """
 
-        with self.Session() as session:
-            last_committee = (
+        def lookup(session):
+            return (
                 session.query(RawCommittee)
                 .filter(
                     RawCommittee.legislative_year == committee.legislative_year,
@@ -483,47 +477,14 @@ class RawCommitteeScraper:
                 .first()
             )
 
-            # First ever version of this committee
-            if last_committee is None:
-                committee.changed = True
-                committee.last_update = True
-                committee.processed = False
-            else:
-                # Compare last vs new
-                committee.changed = committee != last_committee
-                committee.last_update = True
-                committee.processed = not committee.changed
-
-                # Update the old version AFTER comparison
-                last_committee.last_update = False
-                session.add(last_committee)
-                session.commit()
-
-            return committee
+        return self._update_tracking(committee, lookup)
 
     def add_committees_to_db(self) -> bool:
         """
         Add the committees to the database.
         Returns True on success, False on failure.
         """
-        assert self.committee_list, "Committees must be scraped before it can be saved"
-
-        session = self.Session()
-
-        try:
-            session.bulk_save_objects(self.committee_list)
-            session.commit()
-            logger.success(
-                f"Added {len(self.committee_list)} committees to Raw Committees table"
-            )
-            return True
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add committees: {e}")
-            session.rollback()
-            return False
-        finally:
-            # Close Session
-            session.close()
+        return self._add_to_db(self.committee_list, "Committees")
 
 
 if __name__ == "__main__":

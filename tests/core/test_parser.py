@@ -5,7 +5,13 @@ from pathlib import Path
 
 import pytest
 
-from backend.core.enums import RoleOrganization, TypeBillStep, TypeMotionStep
+from backend.core.enums import (
+    Proponents,
+    RoleOrganization,
+    TypeBillStep,
+    TypeMotion,
+    TypeMotionStep,
+)
 from backend.core.parsers import (
     classify_des_estado,
     classify_motion_des_estado,
@@ -13,6 +19,8 @@ from backend.core.parsers import (
     get_processable_year_range,
     resolve_processable_leg_periods,
     parse_comm_type,
+    parse_motion_type,
+    parse_proponent,
 )
 
 
@@ -145,6 +153,77 @@ def test_classify_motion_vote_detail_keeps_vote_family():
     )
 
     assert label is TypeMotionStep.VOTACION_O_DECISION
+
+
+@pytest.mark.parametrize(
+    "raw_value, expected",
+    [
+        ("MOCIÓN DE SALUDO", TypeMotion.SALUDO),
+        ("PEDIDO DE CONFORMACIÓN DE COMISIÓN ESPECIAL", TypeMotion.COMISION_ESPECIAL),
+        (
+            "Pedido de invitación al Consejo de Ministros o a los ministros "
+            "en forma individual para informar",
+            TypeMotion.INFORME_MINISTROS,
+        ),
+        ("DE INTERÉS NACIONAL", TypeMotion.INTERES),
+    ],
+)
+def test_parse_motion_type_recognizes_2026_2031_senado_labels(raw_value, expected):
+    """Regression test: these 4 real Senado desTipoMocion labels were missing
+    from MOTION_TYPE_ALIASES, causing every single 2026-2031 Senado motion
+    (64/64 at the time this was found) to fail process_motion() with an
+    unhandled Pydantic ValidationError."""
+    assert parse_motion_type(raw_value) is expected
+
+
+def test_parse_motion_type_still_recognizes_legacy_exact_enum_values():
+    assert parse_motion_type("Saludo") is TypeMotion.SALUDO
+    assert parse_motion_type("Interés Nacional") is TypeMotion.INTERES
+
+
+def test_parse_motion_type_raises_on_null():
+    with pytest.raises(ValueError, match="cannot be null"):
+        parse_motion_type(None)
+
+
+def test_parse_motion_type_raises_on_unrecognized_value():
+    with pytest.raises(ValueError, match="Unknown motion_type"):
+        parse_motion_type("Not a real motion type")
+
+
+def test_parse_proponent_recognizes_2026_2031_chamber_self_proposed_labels():
+    """Regression test: the bicameral term labels a chamber-self-proposed bill
+    per-chamber ("Senado de la República" / "Cámara de Diputados") instead
+    of the old unicameral "Congreso" bucket -- kept as distinct Proponents
+    values (not aliased to CONGRESO), so which chamber self-proposed a bill
+    stays visible in bicameral-era data."""
+    assert parse_proponent("Senado de la República") is Proponents.SENADO
+    assert parse_proponent("Cámara de Diputados") is Proponents.DIPUTADOS
+
+
+def test_parse_proponent_recognizes_executive_branch_variants():
+    """Regression test: 'PODER EJECUTIVO' (uppercase) is a pre-existing gap
+    affecting legacy bills, not just bicameral-era data; 'Presidente de la
+    República' is a new 2026-2031 Diputados label for the same executive
+    branch."""
+    assert parse_proponent("PODER EJECUTIVO") is Proponents.PODER_EJECUTIVO
+    assert parse_proponent("Presidente de la República") is Proponents.PODER_EJECUTIVO
+
+
+def test_parse_proponent_still_recognizes_legacy_exact_and_suffixed_values():
+    assert parse_proponent("Congreso") is Proponents.CONGRESO
+    assert parse_proponent("Congreso-Actualización") is Proponents.CONGRESO
+    assert parse_proponent("Poder Ejecutivo") is Proponents.PODER_EJECUTIVO
+
+
+def test_parse_proponent_raises_on_null():
+    with pytest.raises(ValueError, match="cannot be null"):
+        parse_proponent(None)
+
+
+def test_parse_proponent_raises_on_unrecognized_value():
+    with pytest.raises(ValueError, match="Unknown proponent"):
+        parse_proponent("Otros Poderes del Estado")
 
 
 def test_normalize_membership_role_maps_presidency_encargado_variant():

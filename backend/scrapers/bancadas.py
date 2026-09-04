@@ -5,21 +5,16 @@ from datetime import datetime
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-
-from backend.config import settings
 from backend.core.constants import CHAMBER_LEG_PERIOD_LABEL
 from backend.database.raw_models import RawBancada
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import parse_url
 
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/grupos-parlamentarios"
-DB_PATH = settings.DB_URL
 
 
-class RawBancadaScraper:
+class RawBancadaScraper(SharedRawScraperBase):
     """
     Class to scrape Grupos Parlamentarios' raw data from the congress web page.
 
@@ -27,19 +22,18 @@ class RawBancadaScraper:
     (through 2021-2026) scrapes a real per-bancada membership table from
     www3.congreso.gob.pe. 2026-2031 BICAMERAL TERM does NOT scrape a
     membership table at all -- the real grupos-parlamentarios/ page on the
-    new sites carries no member data (confirmed live 2026-08-31, Phase B
-    plan Step B0 item 2) -- membership is instead derived from the
+    new sites carries no member data (confirmed live 2026-08-31) --
+    membership is instead derived from the
     congresistas roster's own `group` field and synthesized into the same
     HTML shape process_bancada() already parses. Both paths write RawBancada
     rows to the same table (chamber column: NULL for legacy, "Senadores"/
     "Diputados" for the new term).
     """
 
-    def __init__(self):
-        # Engine and session maker for DB
-        self.engine = create_engine(DB_PATH)
+    def __init__(self, session=None, engine=None):
+        super().__init__(session=session, engine=engine)
         self.url = BASE_URL
-        self.Session = sessionmaker(bind=self.engine)
+        self.bancadas_list: list[RawBancada] = []
 
     # =====================================================================
     # LEGACY (through 2021-2026) -- www3.congreso.gob.pe, dropdown-driven,
@@ -188,7 +182,7 @@ class RawBancadaScraper:
                     processed=False,
                     last_update=True,
                 )
-                final_lst.append(self.update_tracking(new_bancada))
+                final_lst.extend(self.update_tracking(new_bancada))
 
         self.bancadas_list = final_lst
         logger.success(
@@ -206,9 +200,9 @@ class RawBancadaScraper:
         process_bancada() (backend/process/bancadas.py) already parses --
         from the congresistas roster's `group` field, grouped by bancada.
 
-        Confirmed live 2026-08-31 (Phase B plan, Step B0 item 2): the real
-        grupos-parlamentarios/ page carries no per-bancada membership table
-        for 2026-2031 (just a static name + regulations-doc-link list) --
+        Confirmed live 2026-08-31: the real grupos-parlamentarios/ page
+        carries no per-bancada membership table for 2026-2031 (just a
+        static name + regulations-doc-link list) --
         the congresistas roster is the only source of "who belongs to which
         bancada" for the new term, so this reconstructs process_bancada()'s
         expected internal shape instead of adding a second parser. Each
@@ -251,25 +245,30 @@ class RawBancadaScraper:
             processed=False,
             last_update=True,
         )
-        self.bancadas_list = [self.update_tracking(new_bancada)]
+        self.bancadas_list = self.update_tracking(new_bancada)
         return self.bancadas_list
 
     # =====================================================================
     # SHARED -- used by both the legacy and 2026-2031 code paths above
     # =====================================================================
 
-    def update_tracking(self, bancada: RawBancada) -> RawBancada:
+    def update_tracking(self, bancada: RawBancada) -> list[RawBancada]:
         """Update the tracking columns of a RawBancada object.
 
         Scoped by (legislative_period, chamber): the chamber filter matters
         for the 2026-2031 path specifically -- both chambers share the same
         legislative_period label ("Parlamentario 2026 - 2031"), so without
         it a Senado scrape and a Diputados scrape would collide and clobber
-        each other's last_update tracking.
+        each other's last_update tracking. Comparison uses RawBase.__eq__
+        (all mapped columns except id/timestamp/last_update/changed/
+        processed) -- a strict superset of the query's own scoping filter,
+        so it's behaviorally equivalent to the previous hand-rolled
+        legislative_period/raw_html-only comparator for any pair the query
+        can return.
         """
 
-        with self.Session() as session:
-            last_bancada = (
+        def lookup(session):
+            return (
                 session.query(RawBancada)
                 .filter(
                     RawBancada.legislative_period == bancada.legislative_period,
@@ -280,54 +279,14 @@ class RawBancadaScraper:
                 .first()
             )
 
-            # First ever version of this bancada
-            if last_bancada is None:
-                bancada.changed = True
-                bancada.last_update = True
-                bancada.processed = False
-            else:
-                # Compare last vs new
-                bancada.changed = self._snapshot_changed(bancada, last_bancada)
-                bancada.last_update = True
-                bancada.processed = not bancada.changed
-
-                # Update the old version AFTER comparison
-                last_bancada.last_update = False
-                session.add(last_bancada)
-                session.commit()
-
-            return bancada
-
-    @staticmethod
-    def _snapshot_changed(current: RawBancada, previous: RawBancada) -> bool:
-        return (
-            current.legislative_period != previous.legislative_period
-            or current.raw_html != previous.raw_html
-        )
+        return self._update_tracking(bancada, lookup)
 
     def add_bancadas_to_db(self) -> bool:
         """
         Add the bancadas to the database.
         Returns True on success, False on failure.
         """
-        assert self.bancadas_list, "Bancadas must be scraped before it can be saved"
-
-        session = self.Session()
-
-        try:
-            session.bulk_save_objects(self.bancadas_list)
-            session.commit()
-            logger.success(
-                f"Added {len(self.bancadas_list)} bancadas to Raw Bancadas table"
-            )
-            return True
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add bancadas: {e}")
-            session.rollback()
-            return False
-        finally:
-            # Close Session
-            session.close()
+        return self._add_to_db(self.bancadas_list, "Bancadas")
 
 
 if __name__ == "__main__":

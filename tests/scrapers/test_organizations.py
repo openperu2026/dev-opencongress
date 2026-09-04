@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import pytest
 from lxml.html import fromstring
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -23,6 +22,8 @@ def make_scraper():
     """
     scraper = RawOrganizationScraper.__new__(RawOrganizationScraper)
     scraper.urls = BASE_URLS
+    scraper.session = None
+    scraper._tracking_updates = []
     return scraper
 
 
@@ -241,7 +242,7 @@ def test_get_raw_organizations_builds_organization_list_only_current(monkeypatch
         "get_html_with_selections",
         fake_get_html_with_selections,
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda org: org)
+    monkeypatch.setattr(scraper, "update_tracking", lambda org: [org])
 
     scraper.get_raw_organizations(only_current=True)
 
@@ -275,7 +276,7 @@ def test_get_raw_organizations_all_years(monkeypatch):
         "get_html_with_selections",
         lambda url, period_value: f"<html>period={period_value}</html>",
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda org: org)
+    monkeypatch.setattr(scraper, "update_tracking", lambda org: [org])
 
     scraper.get_raw_organizations(only_current=False)
 
@@ -311,12 +312,17 @@ def test_update_tracking_first_version_marks_changed():
 
     result = scraper.update_tracking(org)
 
-    assert result.changed is True
-    assert result.processed is False
-    assert result.last_update is True
+    assert result == [org]
+    assert org.changed is True
+    assert org.processed is False
+    assert org.last_update is True
 
 
-def test_update_tracking_existing_same_version_marks_not_changed():
+def test_update_tracking_existing_same_version_returns_empty_list():
+    """Regression test for the store-only-if-changed fix: an unchanged
+    snapshot must return [] and must NOT flip the existing row's
+    last_update -- the original bug flipped it unconditionally in the
+    "else" branch regardless of whether anything actually changed."""
     engine, SessionLocal = setup_inmemory_db()
 
     scraper = make_scraper()
@@ -348,13 +354,11 @@ def test_update_tracking_existing_same_version_marks_not_changed():
 
     result = scraper.update_tracking(new)
 
-    assert result.changed is False
-    assert result.processed is True
-    assert result.last_update is True
+    assert result == []
 
     with SessionLocal() as session:
         old_from_db = session.query(RawOrganization).first()
-        assert old_from_db.last_update is False
+        assert old_from_db.last_update is True
 
 
 def test_update_tracking_existing_different_version_marks_changed():
@@ -389,9 +393,11 @@ def test_update_tracking_existing_different_version_marks_changed():
 
     result = scraper.update_tracking(new)
 
-    assert result.changed is True
-    assert result.processed is False
-    assert result.last_update is True
+    assert len(result) == 2
+    assert result[0] is new
+    assert new.changed is True
+    assert new.processed is False
+    assert new.last_update is True
 
     with SessionLocal() as session:
         old_from_db = session.query(RawOrganization).first()
@@ -430,12 +436,13 @@ def test_add_organizations_to_db_persists():
     assert rows[0].raw_html == "<html>data</html>"
 
 
-def test_add_organizations_to_db_asserts_when_empty():
+def test_add_organizations_to_db_returns_false_when_empty():
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
     scraper = make_scraper()
     scraper.organizations_list = []
 
-    with pytest.raises(AssertionError):
-        scraper.add_organizations_to_db()
+    assert scraper.add_organizations_to_db() is False
 
 
 def test_add_organizations_to_db_handles_sqlalchemy_error():
@@ -499,7 +506,7 @@ def test_get_raw_organizations_aborts_when_no_years(monkeypatch):
     assert any("No years found for type=Mesa Directiva" in msg for msg in warnings)
 
 
-# ---------- 2026-2031 chamber admin orgs (Phase B1) ----------
+# ---------- 2026-2031 chamber admin orgs ----------
 
 _PARLIAMENT_TABLE_HTML = """
 <html><body>
@@ -773,7 +780,7 @@ def test_get_chamber_organizations_skips_pages_without_table(monkeypatch):
     """Genuine failure case: neither org page has real structure -- must
     not crash, just skip both."""
     scraper = make_scraper()
-    scraper.update_tracking = lambda o: o
+    scraper.update_tracking = lambda o: [o]
 
     def fake_parse_url(url, *a, **k):
         if "junta-de-portavoces" in url:
@@ -791,7 +798,7 @@ def test_get_chamber_organizations_skips_pages_without_table(monkeypatch):
 
 def test_get_joint_comision_permanente_tags_congreso_chamber(monkeypatch):
     scraper = make_scraper()
-    scraper.update_tracking = lambda o: o
+    scraper.update_tracking = lambda o: [o]
     monkeypatch.setattr(
         "backend.scrapers.organizations.parse_url",
         lambda url, *a, **k: fromstring(_PARLIAMENT_TABLE_HTML),
@@ -820,7 +827,7 @@ def test_update_tracking_scopes_by_chamber():
     )
     tracked = scraper.update_tracking(senado_org)
     with SessionLocal() as session:
-        session.add(tracked)
+        session.add_all(tracked)
         session.commit()
 
     diputados_org = RawOrganization(
@@ -832,5 +839,6 @@ def test_update_tracking_scopes_by_chamber():
     )
     tracked_diputados = scraper.update_tracking(diputados_org)
 
-    assert tracked_diputados.changed is True
-    assert tracked_diputados.last_update is True
+    assert tracked_diputados == [diputados_org]
+    assert diputados_org.changed is True
+    assert diputados_org.last_update is True

@@ -1,7 +1,6 @@
 import json
 from datetime import datetime
 
-import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -109,12 +108,13 @@ def test_add_motions_to_db_persists_raw_motions():
         assert json.loads(db_motion.general)["titulo"] == "Guardado en DB"
 
 
-def test_add_motions_to_db_raises_assertion_when_no_motions():
+def test_add_motions_to_db_returns_false_when_empty():
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
     scraper = RawMotionScraper()
     scraper.raw_motions = []
 
-    with pytest.raises(AssertionError):
-        scraper.add_motions_to_db()
+    assert scraper.add_motions_to_db() is False
 
 
 def test_add_motions_to_db_handles_sqlalchemy_error(monkeypatch):
@@ -194,7 +194,7 @@ def test_scrape_motion_appends_raw_motion(monkeypatch, session):
     assert general_dict["titulo"] == "Moción X"
 
 
-# ---------- 2026-2031 chamber motions (Phase B2) ----------
+# ---------- 2026-2031 chamber motions ----------
 
 
 def test_create_chamber_raw_motion_uses_explicit_id():

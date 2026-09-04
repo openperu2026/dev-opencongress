@@ -4,13 +4,14 @@ import json
 import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from types import ModuleType
 from typing import Type, Callable, Literal
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
 from loguru import logger
 from sqlalchemy import create_engine, func, select, or_, update
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import (
@@ -42,6 +43,7 @@ from backend.database.raw_models import (
     RawMotion,
     RawOrganization,
     RawBillDocument,
+    ScrapeGapRetry,
 )
 from backend.process.bancadas import process_bancada
 from backend.process.bills import (
@@ -109,6 +111,69 @@ class _DocumentUploadStats:
     total: int
     succeeded: int
     failed: int
+
+
+@dataclass(frozen=True)
+class _LegislativeDocumentConfig:
+    """Everything that differs between _process_bills and _process_motions
+    -- both otherwise share identical control flow (query -> chamber
+    resolution -> upsert -> steps -> orgs -> congresistas). See
+    _process_legislative_documents, the shared implementation both are
+    thin wrappers around.
+
+    crud_module + the upsert_*_name fields are resolved via getattr at
+    call time (not bound to a function reference here) so that tests
+    monkeypatching e.g. crud_bills.upsert_bill still take effect -- a
+    frozen dataclass field bound at import time would capture the
+    pre-monkeypatch function object instead.
+    """
+
+    raw_model: Type[RawBill] | Type[RawMotion]
+    clean_model: Type[Bill] | Type[Motion]
+    crud_module: ModuleType
+    process_fn: Callable
+    process_organizations_fn: Callable
+    upsert_name: str
+    upsert_step_name: str
+    upsert_organization_name: str
+    upsert_congresista_name: str
+    entity_label: str  # "Bill" / "Motion" -- used in Raw{label}/{label}Organization/{label}Congresista warnings
+    id_field: str  # "bill_id" / "motion_id" -- used in warning messages
+    desc: str  # tqdm progress label
+    log_key: str  # "bills" / "motions" -- summary log line prefix
+
+
+_BILL_DOCUMENT_CONFIG = _LegislativeDocumentConfig(
+    raw_model=RawBill,
+    clean_model=Bill,
+    crud_module=crud_bills,
+    process_fn=process_bill,
+    process_organizations_fn=process_bill_organizations,
+    upsert_name="upsert_bill",
+    upsert_step_name="upsert_bill_step",
+    upsert_organization_name="upsert_bill_organization",
+    upsert_congresista_name="upsert_bill_congresista",
+    entity_label="Bill",
+    id_field="bill_id",
+    desc="Process bills",
+    log_key="bills",
+)
+
+_MOTION_DOCUMENT_CONFIG = _LegislativeDocumentConfig(
+    raw_model=RawMotion,
+    clean_model=Motion,
+    crud_module=crud_motions,
+    process_fn=process_motion,
+    process_organizations_fn=process_motion_organizations,
+    upsert_name="upsert_motion",
+    upsert_step_name="upsert_motion_step",
+    upsert_organization_name="upsert_motion_organization",
+    upsert_congresista_name="upsert_motion_congresista",
+    entity_label="Motion",
+    id_field="motion_id",
+    desc="Process motions",
+    log_key="motions",
+)
 
 
 class OpenPeruOrchestrator:
@@ -233,6 +298,127 @@ class OpenPeruOrchestrator:
             return 0
         return max(int(item.split("_", 1)[1]) for item in legacy_ids)
 
+    # Number of failed retry attempts a single gap id gets before it's
+    # marked permanently skipped (see _find_id_gaps/_record_gap_retry_outcomes).
+    # A legitimately-nonexistent id (withdrawn/renumbered legislative item)
+    # is indistinguishable from a transient failure by id alone, so this
+    # caps the cost of never finding out rather than trying to tell them
+    # apart up front.
+    MAX_GAP_RETRY_ATTEMPTS = 5
+
+    def _find_id_gaps(
+        self,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        id_suffix: str | None = None,
+    ) -> list[int]:
+        """Return numeric ids missing between the observed min and max id
+        in ``raw_model`` -- e.g. an id that failed to scrape mid-range on a
+        prior run and was never retried since only ids ABOVE the watermark
+        get picked up by _get_last_id_scraped. Uses the same three
+        id-format branches as _get_last_id_scraped (bare/id_suffix-tagged/
+        legacy year_number); ids already marked permanently skipped in
+        ScrapeGapRetry are excluded.
+
+        Note: the legacy branch (no id_suffix) inherits the same
+        single-legislative-year assumption _get_last_id_scraped already
+        depends on -- safe today only because _scrape_range hardcodes
+        `year = 2021` (see its own "TODO: update this for next congreso"),
+        so legacy bills/motions/leyes ids are single-year by construction.
+        Revisit this if that TODO is ever addressed.
+        """
+        with self.DBSession() as db:
+            ids = db.scalars(select(raw_model.id).distinct()).all()
+
+        if not ids:
+            return []
+
+        if raw_model is RawLey:
+            numbers = sorted(int(item) for item in ids)
+        elif id_suffix is not None:
+            matching = [item for item in ids if item.endswith(f"-{id_suffix}")]
+            if not matching:
+                return []
+            numbers = sorted(int(item.split("-", 1)[0]) for item in matching)
+        else:
+            legacy_ids = [item for item in ids if "_" in item]
+            if not legacy_ids:
+                return []
+            numbers = sorted(int(item.split("_", 1)[1]) for item in legacy_ids)
+
+        full_range = set(range(numbers[0], numbers[-1] + 1))
+        missing = sorted(full_range - set(numbers))
+        if not missing:
+            return []
+
+        raw_model_name = raw_model.__name__
+        with self.DBSession() as db:
+            skipped_ids = {
+                int(row.gap_id)
+                for row in db.query(ScrapeGapRetry).filter(
+                    ScrapeGapRetry.raw_model_name == raw_model_name,
+                    ScrapeGapRetry.skipped.is_(True),
+                )
+            }
+        return [n for n in missing if n not in skipped_ids]
+
+    def _record_gap_retry_outcomes(
+        self,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        attempted_ids: list[int],
+        id_suffix: str | None = None,
+    ) -> None:
+        """After attempting to re-scrape a batch of gap ids, bump the
+        retry count for any id still missing from ``raw_model`` and mark
+        it permanently skipped once MAX_GAP_RETRY_ATTEMPTS is reached. An
+        id that now exists is left alone -- it's no longer a gap, nothing
+        to track.
+        """
+        if not attempted_ids:
+            return
+
+        raw_model_name = raw_model.__name__
+        with self.DBSession() as db:
+            existing_ids = set(db.scalars(select(raw_model.id).distinct()).all())
+
+            def _id_exists(number: int) -> bool:
+                if raw_model is RawLey:
+                    return str(number) in existing_ids
+                if id_suffix is not None:
+                    return any(
+                        item.endswith(f"-{id_suffix}")
+                        and int(item.split("-", 1)[0]) == number
+                        for item in existing_ids
+                    )
+                return any(
+                    "_" in item and int(item.split("_", 1)[1]) == number
+                    for item in existing_ids
+                )
+
+            for number in attempted_ids:
+                if _id_exists(number):
+                    continue
+
+                gap_id = str(number)
+                row = db.get(ScrapeGapRetry, (raw_model_name, gap_id))
+                if row is None:
+                    row = ScrapeGapRetry(
+                        raw_model_name=raw_model_name,
+                        gap_id=gap_id,
+                        attempts=0,
+                        last_attempt_at=datetime.now(),
+                        skipped=False,
+                    )
+                    db.add(row)
+                row.attempts += 1
+                row.last_attempt_at = datetime.now()
+                if row.attempts >= self.MAX_GAP_RETRY_ATTEMPTS:
+                    row.skipped = True
+                    logger.warning(
+                        f"{raw_model_name} id {gap_id} failed {row.attempts} "
+                        "gap-retry attempts -- marking permanently skipped"
+                    )
+            db.commit()
+
     def _load_scraper_results(self, scraper_name: str) -> None:
         """Persist a ScraperStats row for ``scraper_name`` and log a one-line summary."""
         stats = self.scraper_results[scraper_name]
@@ -266,7 +452,7 @@ class OpenPeruOrchestrator:
         leg_period: when None (default) or settings.LEG_PERIOD (the current
         term, "2026-2031"), scrape_others runs ONLY the current-period
         chamber-specific congresistas/bancadas/committees/organizations
-        scrape (Phase B1); the legacy (through 2021-2026) reference scrape
+        scrape; the legacy (through 2021-2026) reference scrape
         is skipped by default -- that data is now historical/stable and
         doesn't need continuous re-scraping. Passing any OTHER explicit
         value (e.g. "2021-2026") flips this: it opts back into the legacy
@@ -275,7 +461,7 @@ class OpenPeruOrchestrator:
         Bills/motions are NOT subject to this asymmetry: their legacy scrape
         always runs regardless of leg_period (old bills/motions can still
         gain new documents/votes/status), and their 2026-2031 chamber-
-        specific range scrapers (Phase B2) run when leg_period is None or
+        specific range scrapers run when leg_period is None or
         settings.LEG_PERIOD, same gating shape as scrape_others' current
         block.
 
@@ -572,10 +758,9 @@ class OpenPeruOrchestrator:
 
                 # =============================================================
                 # 2026-2031 BICAMERAL TERM -- independent per-chamber id
-                # sequences, confirmed live 2026-09-01 (Phase B2 plan). Each
-                # chamber gets its OWN ScraperStats entry (not combined) so
-                # "chamber X silently stopped scraping" is visible per the
-                # design doc's own stats.errors monitoring guidance.
+                # sequences (confirmed live 2026-09-01). Each chamber gets its
+                # OWN ScraperStats entry (not combined) so "chamber X silently
+                # stopped scraping" is visible in stats.errors monitoring.
                 # =============================================================
                 if leg_period in (None, settings.LEG_PERIOD):
                     for chamber in ("Senadores", "Diputados"):
@@ -842,22 +1027,66 @@ class OpenPeruOrchestrator:
         flush_every: int = 100,
         entity_name: str = "items",
     ) -> ScraperStats:
-        """Scrape ids from (last_scraped+1) up to the remote max, flushing every ``flush_every`` rows."""
+        """Scrape ids from (last_scraped+1) up to the remote max, flushing
+        every ``flush_every`` rows. Also retries any gap ids found below
+        the watermark (see _find_id_gaps) before the forward scan -- a
+        gap-retry sub-loop, throttled the same as _scrape_chamber_range's
+        forward pass so a first-ever gap backfill can't hammer the live
+        site unattended, and capped per-id via ScrapeGapRetry so a
+        legitimately-nonexistent id isn't retried forever.
+        """
         start = self._get_last_id_scraped(raw_model) + 1
         end = get_last_id(entity_name)
         # TODO: update this for next congreso
         year = 2021
 
-        logger.info(f"Scraping {entity_name} in range {year}_{start}..{year}_{end}")
-
-        start_time = datetime.now()
-        count = 0
-
-        for number in tqdm(range(start, end + 1), desc=entity_name):
+        def _call_scrape_fn(number: int) -> None:
             if entity_name == "Leyes":
                 scrape_fn(number)
             else:
                 scrape_fn(str(year), str(number))
+
+        start_time = datetime.now()
+        count = 0
+
+        gaps = self._find_id_gaps(raw_model)
+        if gaps:
+            logger.info(f"Retrying {len(gaps)} gap id(s) for {entity_name}: {gaps}")
+            for idx, number in enumerate(gaps, start=1):
+                try:
+                    _call_scrape_fn(number)
+                except Exception as exc:
+                    logger.warning(
+                        f"Gap retry failed for {entity_name} id {number}: {exc}"
+                    )
+
+                current_length = len(getattr(scraper, buffer_attr))
+                if current_length >= flush_every:
+                    count += current_length
+                    load_fn()
+
+                if idx % 10 == 0:
+                    time.sleep(2)
+
+            # Flush before checking outcomes -- otherwise a successfully
+            # re-scraped gap id would still look "missing" to
+            # _record_gap_retry_outcomes (it checks the DB, not the
+            # in-memory buffer), incorrectly bumping its retry count.
+            remaining_gap_buffer = len(getattr(scraper, buffer_attr))
+            if remaining_gap_buffer:
+                count += remaining_gap_buffer
+                load_fn()
+
+            self._record_gap_retry_outcomes(raw_model, gaps)
+
+        logger.info(f"Scraping {entity_name} in range {year}_{start}..{year}_{end}")
+
+        for number in tqdm(range(start, end + 1), desc=entity_name):
+            try:
+                _call_scrape_fn(number)
+            except Exception as exc:
+                logger.warning(f"Scrape failed for {entity_name} id {number}: {exc}")
+                continue
 
             current_length = len(getattr(scraper, buffer_attr))
 
@@ -906,15 +1135,53 @@ class OpenPeruOrchestrator:
             cod_tipo_parl=CHAMBER_LABEL_TO_COD_TIPO_PARL[chamber],
         )
 
-        logger.info(f"Scraping {entity_name} ({chamber}) in range {start}..{end}")
-
         start_time = datetime.now()
         count = 0
+
+        gaps = self._find_id_gaps(raw_model, id_suffix=id_suffix)
+        if gaps:
+            logger.info(
+                f"Retrying {len(gaps)} gap id(s) for {entity_name} ({chamber}): {gaps}"
+            )
+            for idx, number in enumerate(gaps, start=1):
+                try:
+                    scrape_fn(chamber, number)
+                except Exception as exc:
+                    logger.warning(
+                        f"Gap retry failed for {entity_name} ({chamber}) id {number}: {exc}"
+                    )
+
+                current_length = len(getattr(scraper, buffer_attr))
+                if current_length >= flush_every:
+                    count += current_length
+                    load_fn()
+
+                if idx % 10 == 0:
+                    time.sleep(2)
+
+            # Flush before checking outcomes -- otherwise a successfully
+            # re-scraped gap id would still look "missing" to
+            # _record_gap_retry_outcomes (it checks the DB, not the
+            # in-memory buffer), incorrectly bumping its retry count.
+            remaining_gap_buffer = len(getattr(scraper, buffer_attr))
+            if remaining_gap_buffer:
+                count += remaining_gap_buffer
+                load_fn()
+
+            self._record_gap_retry_outcomes(raw_model, gaps, id_suffix=id_suffix)
+
+        logger.info(f"Scraping {entity_name} ({chamber}) in range {start}..{end}")
 
         for idx, number in enumerate(
             tqdm(range(start, end + 1), desc=f"{entity_name} ({chamber})"), start=1
         ):
-            scrape_fn(chamber, number)
+            try:
+                scrape_fn(chamber, number)
+            except Exception as exc:
+                logger.warning(
+                    f"Scrape failed for {entity_name} ({chamber}) id {number}: {exc}"
+                )
+                continue
 
             current_length = len(getattr(scraper, buffer_attr))
 
@@ -951,7 +1218,7 @@ class OpenPeruOrchestrator:
 
         chamber_scrape_fn: optional -- when a pending id is new-format
         (2026-2031, detected via chamber_label_from_id), dispatches to this
-        instead of the legacy scrape_fn(year, number) path. Reuses Phase A's
+        instead of the legacy scrape_fn(year, number) path. Reuses the
         existing chamber_label_from_id() rather than reimplementing suffix
         parsing. Legacy-format ids are entirely unaffected (identical to
         today) regardless of whether chamber_scrape_fn is provided.
@@ -1419,13 +1686,13 @@ class OpenPeruOrchestrator:
                     chamber_tally[raw_cong.chamber or "None"] = (
                         chamber_tally.get(raw_cong.chamber or "None", 0) + 1
                     )
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawCongresista id={raw_cong.id}: {exc}"
                     )
                     db.rollback()
                     stats.errors += 1
-            db.commit()
         logger.info(
             f"[congresistas] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} by_chamber={chamber_tally}"
         )
@@ -1448,11 +1715,19 @@ class OpenPeruOrchestrator:
         org_chamber_tally = {"Diputados": 0, "Senadores": 0, "Congreso": 0, "None": 0}
         with self.DBSession() as db:
             for org_schema in process_chambers():
-                _, inserted = self._upsert_organization_with_count(db, org_schema)
-                if inserted:
-                    clean_inserted += 1
-                else:
-                    clean_updated += 1
+                try:
+                    _, inserted = self._upsert_organization_with_count(db, org_schema)
+                    if inserted:
+                        clean_inserted += 1
+                    else:
+                        clean_updated += 1
+                    db.commit()
+                except Exception as exc:
+                    logger.exception(
+                        f"Error processing chamber org_name={org_schema.org_name}: {exc}"
+                    )
+                    db.rollback()
+                    stats.errors += 1
 
             # Committees
             committees = (
@@ -1484,6 +1759,7 @@ class OpenPeruOrchestrator:
                     committee_chamber_tally[key] = (
                         committee_chamber_tally.get(key, 0) + 1
                     )
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawCommittee id={raw_comm.id}: {exc}"
@@ -1516,6 +1792,7 @@ class OpenPeruOrchestrator:
                     stats.processed += 1
                     key = raw_org.chamber or "None"
                     org_chamber_tally[key] = org_chamber_tally.get(key, 0) + 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawOrganization id={raw_org.id}: {exc}"
@@ -1523,7 +1800,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[organization_definitions] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} committees_by_chamber={committee_chamber_tally} orgs_by_chamber={org_chamber_tally}"
         )
@@ -1572,6 +1848,7 @@ class OpenPeruOrchestrator:
                         )
                     raw_org.processed = not missing
                     stats.processed += 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawOrganization memberships id={raw_org.id}: {exc}"
@@ -1579,7 +1856,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[admin_memberships] raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
         )
@@ -1622,6 +1898,7 @@ class OpenPeruOrchestrator:
                     raw_bancada.processed = not missing
                     key = raw_bancada.chamber or "None"
                     chamber_tally[key] = chamber_tally.get(key, 0) + 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada definitions id={raw_bancada.id}: {exc}"
@@ -1629,7 +1906,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[bancada_definitions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} by_chamber={chamber_tally}"
         )
@@ -1705,6 +1981,7 @@ class OpenPeruOrchestrator:
                     stats.processed += 1
                     key = raw_bancada.chamber or "None"
                     chamber_tally[key] = chamber_tally.get(key, 0) + 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada memberships id={raw_bancada.id}: {exc}"
@@ -1712,68 +1989,91 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[bancada_memberships] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} by_chamber={chamber_tally}"
         )
         return stats
 
-    def _process_bills(self, *, limit: int | None) -> ProcessStats:
-        """Process unprocessed RawBill rows into Bill + steps + org/cong relations + (optionally) text and diffs."""
+    def _process_legislative_documents(
+        self,
+        *,
+        config: _LegislativeDocumentConfig,
+        limit: int | None,
+        document_hook: Callable[[Session, str, ProcessStats], None] | None = None,
+    ) -> ProcessStats:
+        """Shared implementation behind _process_bills and _process_motions
+        -- both raw document types flow through identical query -> chamber
+        resolution -> upsert -> steps -> orgs -> congresistas control flow,
+        differing only in which raw/clean models and crud functions apply
+        (see config) and, for motions, an optional document-text extraction
+        pass after the congresista loop (document_hook).
+
+        The org_type-conditional parent_org_id scoping below (chamber's own
+        entry never scoped by its own org_id) is load-bearing, not
+        incidental -- this codebase has a recorded history of exactly this
+        conditional being dropped when a shared loop mixes a parent org
+        with its children. Preserved unchanged from both original
+        implementations.
+        """
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
         with self.DBSession() as db:
-            query = db.query(RawBill).filter(
-                RawBill.last_update.is_(True), RawBill.processed.is_(False)
+            query = db.query(config.raw_model).filter(
+                config.raw_model.last_update.is_(True),
+                config.raw_model.processed.is_(False),
             )
             if limit is not None:
                 query = query.limit(limit)
             rows = query.all()
 
-            for raw_bill in tqdm(rows, desc="Process bills"):
+            for raw_row in tqdm(rows, desc=config.desc):
                 try:
-                    bill_schema, bill_congs, bill_steps = process_bill(raw_bill)
+                    schema_obj, cong_rels, steps = config.process_fn(raw_row)
 
-                    bill_orgs = process_bill_organizations(raw_bill, bill_steps)
+                    orgs = config.process_organizations_fn(raw_row, steps)
                     chamber_schema = find_organization_schema(
-                        bill_orgs,
-                        org_type="Cámara",
+                        orgs,
+                        org_type=TypeOrganization.CHAMBER.value,
                     )
 
                     if chamber_schema is None:
                         logger.warning(
-                            f"Skipping RawBill id={raw_bill.id}: chamber relation not generated"
+                            f"Skipping Raw{config.entity_label} id={raw_row.id}: chamber relation not generated"
                         )
                         stats.skipped += 1
                         continue
                     chamber = crud_core.find_organization(
                         db,
                         org_name=chamber_schema.org_name,
-                        org_type="Cámara",
+                        org_type=TypeOrganization.CHAMBER.value,
                     )
                     if chamber is None:
                         logger.warning(
-                            f"Skipping RawBill id={raw_bill.id}: {chamber_schema.org_name} organization not found"
+                            f"Skipping Raw{config.entity_label} id={raw_row.id}: {chamber_schema.org_name} organization not found"
                         )
                         stats.skipped += 1
                         continue
 
-                    pre = db.get(db_models.Bill, bill_schema.id)
-                    bill = crud_bills.upsert_bill(db, bill_schema)
+                    pre = db.get(config.clean_model, schema_obj.id)
+                    entity = getattr(config.crud_module, config.upsert_name)(
+                        db, schema_obj
+                    )
                     if pre is None:
                         clean_inserted += 1
                     else:
                         clean_updated += 1
 
-                    for step_schema in bill_steps:
-                        crud_bills.upsert_bill_step(db, step_schema)
+                    for step_schema in steps:
+                        getattr(config.crud_module, config.upsert_step_name)(
+                            db, step_schema
+                        )
 
-                    for org_schema in bill_orgs:
-                        # The chamber's own entry (org_schema.org_type == "Cámara")
-                        # must NOT be scoped by chamber.org_id as its own parent —
-                        # only committee-type entries are actually children of this
-                        # bill's chamber.
+                    for org_schema in orgs:
+                        # The chamber's own entry (org_schema.org_type ==
+                        # CHAMBER) must NOT be scoped by chamber.org_id as
+                        # its own parent — only committee-type entries are
+                        # actually children of this entity's chamber.
                         org_parent_org_id = (
                             chamber.org_id
                             if org_schema.org_type != TypeOrganization.CHAMBER
@@ -1787,15 +2087,15 @@ class OpenPeruOrchestrator:
                         )
                         if org is None:
                             logger.warning(
-                                f"Skipping BillOrganization bill_id={bill.id}, org={org_schema.org_name}, org_type={org_schema.org_type}: organization not found"
+                                f"Skipping {config.entity_label}Organization {config.id_field}={entity.id}, org={org_schema.org_name}, org_type={org_schema.org_type}: organization not found"
                             )
                             stats.skipped += 1
                             continue
-                        crud_bills.upsert_bill_organization(
-                            db, bill.id, org.org_id, org_schema
+                        getattr(config.crud_module, config.upsert_organization_name)(
+                            db, entity.id, org.org_id, org_schema
                         )
 
-                    for cong_rel in bill_congs:
+                    for cong_rel in cong_rels:
                         cong = crud_core.find_congresista(
                             db,
                             name=split_and_sort_name(cong_rel.nombre)[0],
@@ -1803,7 +2103,7 @@ class OpenPeruOrchestrator:
                         )
                         if cong is None:
                             logger.warning(
-                                f"Skipping BillCongresista bill_id={bill.id}, name={cong_rel.nombre}, website={cong_rel.web_page}: congresista not found"
+                                f"Skipping {config.entity_label}Congresista {config.id_field}={entity.id}, name={cong_rel.nombre}, website={cong_rel.web_page}: congresista not found"
                             )
                             stats.skipped += 1
                             continue
@@ -1811,9 +2111,9 @@ class OpenPeruOrchestrator:
                         bancada = crud_core.find_active_bancada_for_person(
                             db, cong.id, chamber_schema.presentation_date
                         )
-                        crud_bills.upsert_bill_congresista(
+                        getattr(config.crud_module, config.upsert_congresista_name)(
                             db,
-                            bill.id,
+                            entity.id,
                             cong.id,
                             cong_rel.role_type.value
                             if hasattr(cong_rel.role_type, "value")
@@ -1821,20 +2121,29 @@ class OpenPeruOrchestrator:
                             bancada_id=bancada.org_id if bancada else None,
                         )
 
-                    raw_bill.processed = True
+                    if document_hook is not None:
+                        document_hook(db, entity.id, stats)
+
+                    raw_row.processed = True
                     stats.processed += 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
-                        f"Error processing RawBill id={raw_bill.id}: {exc}"
+                        f"Error processing Raw{config.entity_label} id={raw_row.id}: {exc}"
                     )
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
-            f"[bills] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+            f"[{config.log_key}] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
         return stats
+
+    def _process_bills(self, *, limit: int | None) -> ProcessStats:
+        """Process unprocessed RawBill rows into Bill + steps + org/cong relations."""
+        return self._process_legislative_documents(
+            config=_BILL_DOCUMENT_CONFIG, limit=limit
+        )
 
     def _process_bills_summaries(
         self,
@@ -2071,149 +2380,45 @@ class OpenPeruOrchestrator:
 
         crud_bills.refresh_bill_diff_flag(db, bill_id)
 
+    @staticmethod
+    def _process_motion_documents(
+        db: Session, motion_id: str, stats: ProcessStats
+    ) -> None:
+        """Extract + upsert a motion's document text, if include_documents
+        is set. The only piece of _process_motions with no _process_bills
+        equivalent (bill text extraction is a fully separate stage, see
+        _process_bill_text, run later in run_processing)."""
+        for raw_doc in crud_motions.find_raw_motion_documents(db, motion_id):
+            pages = crud_motions.find_raw_motion_pages(
+                db, motion_id, raw_doc.step_id, raw_doc.file_id
+            )
+            if not pages:
+                stats.skipped += 1
+                continue
+            try:
+                text_schema = process_motion_text(pages)
+            except ValueError:
+                stats.skipped += 1
+                continue
+            crud_motions.upsert_motion_text(
+                db,
+                motion_id=text_schema.motion_id,
+                step_id=text_schema.step_id,
+                file_id=text_schema.file_id,
+                version_id=text_schema.version_id,
+                text=text_schema.text,
+            )
+            raw_doc.processed = True
+
     def _process_motions(
         self, *, include_documents: bool, limit: int | None
     ) -> ProcessStats:
         """Process unprocessed RawMotion rows into Motion + steps + org/cong relations + (optionally) text."""
-        stats = ProcessStats()
-        clean_inserted = 0
-        clean_updated = 0
-        with self.DBSession() as db:
-            query = db.query(RawMotion).filter(
-                RawMotion.last_update.is_(True), RawMotion.processed.is_(False)
-            )
-            if limit is not None:
-                query = query.limit(limit)
-            rows = query.all()
-
-            for raw_motion in tqdm(rows, desc="Process motions"):
-                try:
-                    motion_schema, motion_congs, motion_steps = process_motion(
-                        raw_motion
-                    )
-
-                    motion_orgs = process_motion_organizations(raw_motion, motion_steps)
-                    chamber_schema = find_organization_schema(
-                        motion_orgs,
-                        org_type="Cámara",
-                    )
-                    if chamber_schema is None:
-                        logger.warning(
-                            f"Skipping RawMotion id={raw_motion.id}: chamber relation not generated"
-                        )
-                        stats.skipped += 1
-                        continue
-
-                    chamber = crud_core.find_organization(
-                        db,
-                        org_name=chamber_schema.org_name,
-                        org_type="Cámara",
-                    )
-                    if chamber is None:
-                        logger.warning(
-                            f"Skipping RawMotion id={raw_motion.id}: {chamber_schema.org_name} organization not found"
-                        )
-                        stats.skipped += 1
-                        continue
-
-                    pre = db.get(db_models.Motion, motion_schema.id)
-                    motion = crud_motions.upsert_motion(db, motion_schema)
-                    if pre is None:
-                        clean_inserted += 1
-                    else:
-                        clean_updated += 1
-
-                    for step_schema in motion_steps:
-                        crud_motions.upsert_motion_step(db, step_schema)
-
-                    for org_schema in motion_orgs:
-                        # Same rule as _process_bills: don't scope the chamber's
-                        # own entry by its own org_id as parent.
-                        org_parent_org_id = (
-                            chamber.org_id
-                            if org_schema.org_type != TypeOrganization.CHAMBER
-                            else None
-                        )
-                        org = crud_core.find_organization(
-                            db=db,
-                            org_name=org_schema.org_name,
-                            org_type=org_schema.org_type,
-                            parent_org_id=org_parent_org_id,
-                        )
-                        if org is None:
-                            logger.warning(
-                                f"Skipping MotionOrganization motion_id={motion.id}, org={org_schema.org_name}: organization not found"
-                            )
-                            stats.skipped += 1
-                            continue
-                        crud_motions.upsert_motion_organization(
-                            db, motion.id, org.org_id, org_schema
-                        )
-
-                    for cong_rel in motion_congs:
-                        cong = crud_core.find_congresista(
-                            db,
-                            name=split_and_sort_name(cong_rel.nombre)[0],
-                            website=replace_www(cong_rel.web_page),
-                        )
-                        if cong is None:
-                            logger.warning(
-                                f"Skipping MotionCongresista motion_id={motion.id}, name={cong_rel.nombre}, website={cong_rel.web_page}: congresista not found"
-                            )
-                            stats.skipped += 1
-                            continue
-                        bancada = crud_core.find_active_bancada_for_person(
-                            db, cong.id, chamber_schema.presentation_date
-                        )
-                        crud_motions.upsert_motion_congresista(
-                            db,
-                            motion.id,
-                            cong.id,
-                            cong_rel.role_type.value
-                            if hasattr(cong_rel.role_type, "value")
-                            else cong_rel.role_type,
-                            bancada_id=bancada.org_id if bancada else None,
-                        )
-
-                    if include_documents:
-                        for raw_doc in crud_motions.find_raw_motion_documents(
-                            db, motion.id
-                        ):
-                            pages = crud_motions.find_raw_motion_pages(
-                                db, motion.id, raw_doc.step_id, raw_doc.file_id
-                            )
-                            if not pages:
-                                stats.skipped += 1
-                                continue
-                            try:
-                                text_schema = process_motion_text(pages)
-                            except ValueError:
-                                stats.skipped += 1
-                                continue
-                            crud_motions.upsert_motion_text(
-                                db,
-                                motion_id=text_schema.motion_id,
-                                step_id=text_schema.step_id,
-                                file_id=text_schema.file_id,
-                                version_id=text_schema.version_id,
-                                text=text_schema.text,
-                            )
-                            raw_doc.processed = True
-
-                    raw_motion.processed = True
-                    stats.processed += 1
-                except Exception as exc:
-                    logger.exception(
-                        f"Error processing RawMotion id={raw_motion.id}: {exc}"
-                    )
-                    db.rollback()
-                    stats.errors += 1
-
-            db.commit()
-        logger.info(
-            f"[motions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
+        return self._process_legislative_documents(
+            config=_MOTION_DOCUMENT_CONFIG,
+            limit=limit,
+            document_hook=self._process_motion_documents if include_documents else None,
         )
-        return stats
 
     def _process_leyes(self, *, limit: int | None) -> ProcessStats:
         """Process unprocessed RawLey rows into Ley records, skipping any whose referenced Bill is missing."""

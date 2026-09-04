@@ -247,8 +247,10 @@ def test_extract_cong_from_period_uses_links_and_creator(monkeypatch):
         lambda period, link: f"raw-{period}-{link}",
     )
 
-    # avoid DB + object-shape requirements
-    monkeypatch.setattr(cong_scraper, "update_tracking", lambda x: x)
+    # avoid DB + object-shape requirements. update_tracking now returns a
+    # list (empty when unchanged) -- the caller .extend()s it, so the mock
+    # must match that contract.
+    monkeypatch.setattr(cong_scraper, "update_tracking", lambda x: [x])
 
     res = cong_scraper.extract_cong_from_period("Periodo X", "1")
 
@@ -321,12 +323,53 @@ def test_add_congresistas_to_db_persists(monkeypatch):
         assert db_cong.website == "https://example.com"
 
 
-def test_add_congresistas_to_db_asserts_when_empty():
+def test_update_tracking_unchanged_returns_empty_list():
+    """Regression test for the store-only-if-changed fix: re-tracking an
+    identical congresista snapshot must return [] so a caller's .extend()
+    appends nothing, instead of unconditionally storing a duplicate raw
+    row on every scrape run forever."""
+    engine, SessionLocal = _setup_inmemory_db()
+    with SessionLocal() as session:
+        cong_scraper = RawCongresistasScraper(session=session)
+
+        first = RawCongresista(
+            timestamp=datetime(2025, 1, 1),
+            leg_period="Periodo Test",
+            website="https://example.com/juan",
+            profile_content="<html>v1</html>",
+            memberships_content=None,
+            last_update=True,
+            processed=True,
+            changed=False,
+        )
+        session.add(first)
+        session.commit()
+
+        second = RawCongresista(
+            timestamp=datetime(2025, 2, 1),
+            leg_period="Periodo Test",
+            website="https://example.com/juan",
+            profile_content="<html>v1</html>",
+            memberships_content=None,
+        )
+        tracked = cong_scraper.update_tracking(second)
+
+        assert tracked == []
+        assert (
+            session.query(RawCongresista)
+            .filter(RawCongresista.last_update.is_(True))
+            .count()
+            == 1
+        )
+
+
+def test_add_congresistas_to_db_returns_false_when_empty():
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
     cong_scraper = RawCongresistasScraper()
     cong_scraper.raw_congresistas = []
 
-    with pytest.raises(AssertionError):
-        cong_scraper.add_congresistas_to_db()
+    assert cong_scraper.add_congresistas_to_db() is False
 
 
 def test_add_congresistas_to_db_handles_sqlalchemy_error(monkeypatch):
@@ -371,7 +414,7 @@ def test_add_congresistas_to_db_handles_sqlalchemy_error(monkeypatch):
     assert dummy_session.rolled_back is True
 
 
-# ---------- 2026-2031 chamber scraping (Phase B1) ----------
+# ---------- 2026-2031 chamber scraping ----------
 
 _ROSTER_ENTRY = {
     "name": "Aguinaga Recuenco, Alejandro Aurelio",
@@ -424,9 +467,110 @@ def test_get_chamber_roster_fetch_failure_returns_empty(monkeypatch):
     assert cong_scraper.get_chamber_roster("Senadores") == []
 
 
+def test_get_chamber_profile_data_extracts_votes_and_og_image(monkeypatch):
+    """Regression test for the higher-res photo fix: the roster listing's
+    own `photo` field is a WordPress `-150x150` thumbnail, while the
+    individual profile page's <meta property="og:image"> holds a
+    meaningfully larger version -- extracted from the SAME fetch already
+    used for the votes count, not a second request."""
+    cong_scraper = RawCongresistasScraper()
+    html = """
+    <html><head>
+      <meta property="og:image" content="https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg">
+    </head><body>
+      <div class="summary__label">Votación obtenida</div>
+      <div class="summary__value">25,642</div>
+    </body></html>
+    """
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda *a, **k: fromstring(html),
+    )
+
+    votes, photo_url = cong_scraper._get_chamber_profile_data(
+        "https://senado.congreso.gob.pe/senador/example/"
+    )
+
+    assert votes == "25,642"
+    assert (
+        photo_url
+        == "https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg"
+    )
+
+
+def test_get_chamber_profile_data_missing_og_image_returns_none(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    html = "<html><head></head><body>no summary here</body></html>"
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda *a, **k: fromstring(html),
+    )
+
+    votes, photo_url = cong_scraper._get_chamber_profile_data(
+        "https://senado.congreso.gob.pe/senador/example/"
+    )
+
+    assert votes == "0"
+    assert photo_url is None
+
+
+def test_get_chamber_profile_data_fetch_failure_returns_defaults(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr("backend.scrapers.congresistas.parse_url", lambda *a, **k: None)
+
+    votes, photo_url = cong_scraper._get_chamber_profile_data(
+        "https://senado.congreso.gob.pe/senador/example/"
+    )
+
+    assert votes == "0"
+    assert photo_url is None
+
+
+def test_create_chamber_congresista_uses_higher_res_profile_photo(monkeypatch):
+    """The profile page's photo must win over the roster's own (lower-res)
+    `photo` field when both are available."""
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        cong_scraper,
+        "_get_chamber_profile_data",
+        lambda url: (
+            "25,642",
+            "https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg",
+        ),
+    )
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    assert (
+        'src="https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg"'
+        in raw.profile_content
+    )
+    assert _ROSTER_ENTRY["photo"] not in raw.profile_content
+
+
+def test_create_chamber_congresista_falls_back_to_roster_photo_when_profile_fetch_fails(
+    monkeypatch,
+):
+    """If the profile-page fetch fails or has no og:image, fall back to the
+    roster listing's own (lower-res) `photo` field rather than losing the
+    photo entirely."""
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("0", None)
+    )
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    assert f'src="{_ROSTER_ENTRY["photo"]}"' in raw.profile_content
+
+
 def test_create_chamber_congresista_sets_chamber_and_leg_period(monkeypatch):
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("25,642", None)
+    )
     monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: '{"data": []}')
 
     raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
@@ -441,7 +585,9 @@ def test_create_chamber_congresista_without_url_skips_cargos_fetch(monkeypatch):
     """No profile url -> _get_chamber_cargos must never be called (would
     build a malformed urljoin target)."""
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("0", None)
+    )
 
     def _boom(url):
         raise AssertionError("_get_chamber_cargos should not be called without a url")
@@ -615,7 +761,7 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
 ):
     """CRITICAL: proves the scraper's synthetic HTML is byte-compatible with
     process_profile_content()'s existing xpath contract -- the adapter
-    pattern this Phase B1 design relies on for zero process-layer changes.
+    pattern this design relies on for zero process-layer changes.
 
     full_name is asserted in "Nombres Apellidos" order: process_profile_content
     now runs the .nombres text through split_and_sort_name, correctly
@@ -625,7 +771,9 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
     from backend.process.congresistas import process_profile_content
 
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("25,642", None)
+    )
     monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
 
     raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
@@ -645,8 +793,10 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
 
 def test_extract_chamber_congresistas_tracks_all_entries(monkeypatch):
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
-    monkeypatch.setattr(cong_scraper, "update_tracking", lambda c: c)
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("0", None)
+    )
+    monkeypatch.setattr(cong_scraper, "update_tracking", lambda c: [c])
 
     second_entry = dict(_ROSTER_ENTRY, name="Otro, Congresista")
     result = cong_scraper.extract_chamber_congresistas(

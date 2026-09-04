@@ -14,10 +14,10 @@ from backend.process.billtext import extract_bill_body
 from backend.process.utils import (
     create_vote_ids,
     as_date,
+    build_chamber_organization,
     get_sentence_case,
-    chamber_label_from_id,
+    parse_signers,
 )
-from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
 
 def process_bill_text(bill_pages: list[RawBillPage], version_id: int) -> BillText:
@@ -77,25 +77,9 @@ def process_bill(
     pley_id = general.get("proyectoLey")
 
     # Extracting information from firmantes dictionary
-    cong_list = []
-
-    if firmantes:
-        author_info = firmantes[0]
-        author_name = author_info.get("nombre")
-        author_web = author_info.get("pagWeb")
-
-        for cong in firmantes:
-            cong_list.append(
-                BillCongresistas(
-                    bill_id=bill_id,
-                    nombre=cong.get("nombre"),
-                    role_type=cong.get("tipoFirmanteId"),
-                    web_page=cong.get("pagWeb"),
-                )
-            )
-    else:
-        author_name = None
-        author_web = None
+    cong_list, author_name, author_web = parse_signers(
+        firmantes, BillCongresistas, "bill_id", bill_id
+    )
 
     bill_steps = process_bill_steps(raw_bill)
     bill_approved = is_bill_approved(bill_steps, status)
@@ -354,14 +338,13 @@ def process_bill_organizations(
             )
         )
 
-    chamber_label = chamber_label_from_id(raw_bill.id)
     list_orgs.append(
-        BillOrganization(
-            bill_id=raw_bill.id,
-            org_name=CHAMBER_LABEL_TO_ORG_NAME[chamber_label],
-            org_type="Cámara",
-            presentation_date=as_date(dates.get("presentation_date")),
-            decision_date=as_date(dates.get("final_plenary_decision_date")),
+        build_chamber_organization(
+            BillOrganization,
+            "bill_id",
+            raw_bill.id,
+            dates.get("presentation_date"),
+            dates.get("final_plenary_decision_date"),
         )
     )
 

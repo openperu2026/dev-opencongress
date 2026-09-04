@@ -4,10 +4,22 @@ This module extracts raw data from Congress endpoints/web pages and stores it in
 
 ## Files
 
+- `base.py`: `SharedRawScraperBase` — shared session/engine ownership, `update_tracking`, and bulk-save plumbing used by all 7 raw scrapers below. See [Shared base class](#shared-base-class).
 - `bills.py`, `motions.py`, `leyes.py`: scrape bill/motion/leyes JSON/XML payloads into `RawBill`/`RawMotion`/`RawLeyes`.
 - `bills_documents.py`, `motions_documents.py`: extract and OCR documents into raw document tables.
 - `congresistas.py`, `bancadas.py`, `committees.py`, `organizations.py`: scrape reference entities.
 - `utils.py`: HTTP helpers, parsing helpers, OCR/PDF support.
+
+## Shared base class
+
+All 7 raw scrapers (`bills.py`, `motions.py`, `leyes.py`, `congresistas.py`, `bancadas.py`, `committees.py`, `organizations.py`) subclass `SharedRawScraperBase` (`base.py`), which owns:
+
+- **Session/engine ownership**: `__init__(session=None, engine=None)` — reuses a caller-supplied session, or opens its own.
+- **Change-tracking**: `_update_tracking(obj, lookup_query)` compares a freshly-scraped object against the current `last_update=True` row via `RawBase.__eq__` and returns `[]` (nothing changed — don't write a duplicate row), `[obj]` (first-ever row), or `[obj, last]` (changed — flips `last.last_update = False`). Every scraper's `.extend()` calls the returned list, so an unchanged scrape correctly writes nothing.
+- **Bulk save**: `_add_to_db(buffer, entity_name)` bulk-saves a buffer and returns `False` gracefully on an empty buffer (routine whenever nothing changed) instead of asserting.
+- **Failure compensation**: if a bulk-save fails after a `last_update` flip, `_restore_tracking_updates()` restores the flipped row so a failed load never leaves zero "current" rows for an entity.
+
+Each subclass keeps only its entity-specific scrape/create methods and its own buffer attribute (`self.raw_bills`, `self.raw_leyes`, etc.).
 
 ## Browser automation
 

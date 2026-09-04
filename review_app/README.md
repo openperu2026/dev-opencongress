@@ -2,8 +2,7 @@
 
 A local-only Flask app for reviewing vote/attendance records extracted by
 `backend/process/votes/` against their source PDF, and correcting them in
-place. See `~/.claude/plans/project-vote-buzzing-pillow.md` for the full
-design.
+place.
 
 **This app is never deployed publicly.** It has direct DB write access and
 no authentication — that's intentional (it's for one person, run locally),

@@ -5,6 +5,7 @@ from backend.process.utils import (
     find_organization_schema,
     chamber_label_from_id,
     gen_congresistas_df,
+    get_sentence_case,
 )
 from backend.process.schema import BillOrganization
 from backend.database.raw_models import RawBill, RawMotion
@@ -18,6 +19,18 @@ def _bill_org(org_name: str, org_type: str) -> BillOrganization:
         presentation_date=date(2026, 1, 1),
         decision_date=None,
     )
+
+
+def test_get_sentence_case_uppercases_source():
+    assert get_sentence_case("hola mundo") == "HOLA MUNDO"
+
+
+def test_get_sentence_case_returns_none_for_none():
+    """Regression test: a null `observaciones` field in a raw bill's general
+    JSON -- real and current for every 2026-2031 Senado bill -- crashed
+    process_bill() with an unhandled AttributeError ('NoneType' object has
+    no attribute 'upper')."""
+    assert get_sentence_case(None) is None
 
 
 def test_find_organization_schema_matches_by_type_only():

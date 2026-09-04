@@ -324,7 +324,7 @@ def test_render_pdf_uses_extract_text_from_page(monkeypatch):
     assert text_dict[1].strip() == "PAGE_TEXT"
 
 
-# ---------- get_last_id (Phase B2) ----------
+# ---------- get_last_id (bicameral scraping) ----------
 
 
 class _FakePostResponse:

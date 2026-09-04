@@ -116,6 +116,13 @@ class TypeRoleBill(str, Enum):
 
 class Proponents(str, Enum):
     CONGRESO = "Congreso"
+    # 2026-2031 bicameral term: a bill proposed by a member of one's own
+    # chamber is now labeled per-chamber (confirmed live 2026-09-04) rather
+    # than the old unicameral "Congreso" bucket -- kept as distinct values,
+    # not aliased to CONGRESO, so which chamber self-proposed a bill stays
+    # visible in bicameral-era data.
+    SENADO = "Senado de la República"
+    DIPUTADOS = "Cámara de Diputados"
     PODER_EJECUTIVO = "Poder Ejecutivo"
     MINISTERIO_PUBLICO = "Ministerio Público"
     DEFENSORIA = "Defensoría del Pueblo"
