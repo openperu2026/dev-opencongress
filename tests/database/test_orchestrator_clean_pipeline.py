@@ -2,18 +2,21 @@ import json
 from datetime import date, datetime
 import pytest
 
-from backend.core.enums import Proponents
+from backend.core.enums import Proponents, TypeOrganization
 from backend.database import models as db_models
 from backend.database.crud import pipeline_bills as crud_bills
 from backend.database.crud import pipeline_motions as crud_motions
 from backend.database.orchestrator import OpenPeruOrchestrator
 from backend.database.raw_models import (
+    RawBancada,
     RawBill,
     RawBillDocument,
     RawBillPage,
+    RawCommittee,
     RawCongresista,
     RawLey,
     RawMotion,
+    RawOrganization,
 )
 from backend import OcrModel
 from backend.database.crud.pipeline_core import ProcessStats
@@ -128,6 +131,80 @@ def test_process_congresistas_creates_party_and_chamber_memberships(
         )
         assert chamber_org.org_name == "Cámara de Diputados"
         assert chamber_org.parent_org_id is None
+
+
+def test_process_congresistas_persists_earlier_rows_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04): before the fix, a single db.commit() after the
+    whole loop meant one row's db.rollback() discarded every earlier row's
+    uncommitted work from the same run, even though stats.processed already
+    counted those earlier rows as successes. Confirms each row now commits
+    independently."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+
+    import backend.database.orchestrator as orch_module
+
+    real_process_profile_content = orch_module.process_profile_content
+
+    def flaky_process_profile_content(raw_cong, *args, **kwargs):
+        if raw_cong.id == 2:
+            raise RuntimeError("simulated failure for row 2")
+        return real_process_profile_content(raw_cong, *args, **kwargs)
+
+    monkeypatch.setattr(
+        orch_module, "process_profile_content", flaky_process_profile_content
+    )
+
+    # Distinct profile HTML per row (different names) -- reusing identical
+    # name HTML across rows would make find_congresista's fuzzy-match tier
+    # treat them as the SAME person (matching by name when no website
+    # matches), silently upserting row 3 into row 1's just-created record
+    # instead of creating a second one.
+    profiles = [
+        (1, "https://www.congreso.gob.pe/congresista/uno", _PROFILE_HTML),
+        (2, "https://www.congreso.gob.pe/congresista/dos", _PROFILE_HTML),
+        (3, "https://www.congreso.gob.pe/congresista/tres", _SENADOR_PROFILE_HTML),
+    ]
+
+    with orchestrator.DBSession() as db:
+        for cid, website, profile_html in profiles:
+            db.add(
+                RawCongresista(
+                    id=cid,
+                    leg_period="Parlamentario 2021 - 2026",
+                    chamber=None,
+                    website=website,
+                    profile_content=profile_html,
+                    memberships_content=None,
+                    timestamp=datetime(2025, 8, 1),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        websites = {c.website for c in db.query(db_models.Congresista).all()}
+        assert websites == {
+            "https://www.congreso.gob.pe/congresista/uno",
+            "https://www.congreso.gob.pe/congresista/tres",
+        }
+        raw_1 = db.get(RawCongresista, 1)
+        raw_2 = db.get(RawCongresista, 2)
+        raw_3 = db.get(RawCongresista, 3)
+        assert raw_1.processed is True
+        assert raw_2.processed is False
+        assert raw_3.processed is True
 
 
 _SENADOR_PROFILE_HTML = """
@@ -420,6 +497,229 @@ def test_first_load_does_not_override_start_date_when_membership_already_exists(
         assert result2.start_date == date(2027, 7, 28)
 
 
+def test_process_organization_definitions_persists_earlier_committees_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04) applied to _process_organization_definitions's
+    committees sub-loop."""
+    import backend.database.orchestrator as orch_module
+
+    def flaky_process_committee(raw_comm):
+        if raw_comm.id == 2:
+            raise RuntimeError("simulated failure for row 2")
+        return [
+            schema.Organization(
+                org_name=f"Comisión de Prueba {raw_comm.id}",
+                org_type=TypeOrganization.COMMITTEE,
+                org_subtype="Comisión Ordinaria",
+                parent_org_name="Cámara de Diputados",
+                parent_org_type=TypeOrganization.CHAMBER,
+            )
+        ]
+
+    monkeypatch.setattr(orch_module, "process_committee", flaky_process_committee)
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        for cid in (1, 2, 3):
+            db.add(
+                RawCommittee(
+                    id=cid,
+                    legislative_year="2026",
+                    chamber=None,
+                    committee_type="Ordinaria",
+                    raw_html="<html></html>",
+                    timestamp=datetime(2026, 1, 1),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_organization_definitions()
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        org_names = {
+            o.org_name
+            for o in db.query(db_models.Organization)
+            .filter(db_models.Organization.org_type == "Comisión")
+            .all()
+        }
+        assert org_names == {"Comisión de Prueba 1", "Comisión de Prueba 3"}
+        assert db.get(RawCommittee, 1).processed is True
+        assert db.get(RawCommittee, 2).processed is False
+        assert db.get(RawCommittee, 3).processed is True
+
+
+def test_process_admin_memberships_persists_earlier_rows_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04) applied to _process_admin_memberships."""
+    import backend.database.orchestrator as orch_module
+
+    def flaky_process_admin_org(raw_org):
+        if raw_org.id == 2:
+            raise RuntimeError("simulated failure for row 2")
+        org_schema = schema.Organization(
+            org_name=f"Mesa Directiva {raw_org.id}",
+            org_type=TypeOrganization.ADMINISTRATIVE,
+            org_subtype="Mesa Directiva",
+            org_link="",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type=TypeOrganization.CHAMBER,
+        )
+        return org_schema, []
+
+    monkeypatch.setattr(orch_module, "process_admin_org", flaky_process_admin_org)
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        for cid in (1, 2, 3):
+            db.add(
+                RawOrganization(
+                    id=cid,
+                    legislative_year="2026",
+                    chamber=None,
+                    type_org="Mesa Directiva",
+                    org_link="",
+                    raw_html="<html></html>",
+                    timestamp=datetime(2026, 1, 1),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_admin_memberships()
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        org_names = {
+            o.org_name
+            for o in db.query(db_models.Organization)
+            .filter(db_models.Organization.org_type == "Administrativo")
+            .all()
+        }
+        assert org_names == {"Mesa Directiva 1", "Mesa Directiva 3"}
+        assert db.get(RawOrganization, 1).processed is True
+        assert db.get(RawOrganization, 2).processed is False
+        assert db.get(RawOrganization, 3).processed is True
+
+
+def test_process_bancada_definitions_persists_earlier_rows_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04) applied to _process_bancada_definitions."""
+    import backend.database.orchestrator as orch_module
+
+    def flaky_process_bancada(raw_bancada):
+        if raw_bancada.id == 2:
+            raise RuntimeError("simulated failure for row 2")
+        org_schema = schema.Organization(
+            org_name=f"Bancada Prueba {raw_bancada.id}",
+            org_type=TypeOrganization.BANCADA,
+        )
+        return [org_schema], []
+
+    monkeypatch.setattr(orch_module, "process_bancada", flaky_process_bancada)
+
+    with orchestrator.DBSession() as db:
+        for cid in (1, 2, 3):
+            db.add(
+                RawBancada(
+                    id=cid,
+                    legislative_period="Parlamentario 2021 - 2026",
+                    chamber=None,
+                    raw_html="<html></html>",
+                    timestamp=datetime(2026, 1, 1),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_bancada_definitions()
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        org_names = {
+            o.org_name
+            for o in db.query(db_models.Organization)
+            .filter(db_models.Organization.org_type == "Bancada")
+            .all()
+        }
+        assert org_names == {"Bancada Prueba 1", "Bancada Prueba 3"}
+        assert db.get(RawBancada, 1).processed is True
+        assert db.get(RawBancada, 2).processed is False
+        assert db.get(RawBancada, 3).processed is True
+
+
+def test_process_bancada_memberships_persists_earlier_rows_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04) applied to _process_bancada_memberships. Feeds raw
+    rows directly (bypassing _process_bancada_definitions) since this method
+    has its own independent query on RawBancada.processed."""
+    import backend.database.orchestrator as orch_module
+
+    def flaky_process_bancada(raw_bancada):
+        if raw_bancada.id == 2:
+            raise RuntimeError("simulated failure for row 2")
+        return [], []
+
+    monkeypatch.setattr(orch_module, "process_bancada", flaky_process_bancada)
+
+    with orchestrator.DBSession() as db:
+        for cid in (1, 2, 3):
+            db.add(
+                RawBancada(
+                    id=cid,
+                    legislative_period="Parlamentario 2021 - 2026",
+                    chamber=None,
+                    raw_html="<html></html>",
+                    timestamp=datetime(2026, 1, 1),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_bancada_memberships()
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        assert db.get(RawBancada, 1).processed is True
+        assert db.get(RawBancada, 2).processed is False
+        assert db.get(RawBancada, 3).processed is True
+
+
 def test_process_bills_senado_bill_links_committee_and_chamber(orchestrator):
     """CRITICAL regression (found in 3rd review round): the org_type-conditional
     fix at orchestrator.py's bill_orgs loop must not scope the chamber's own
@@ -564,6 +864,75 @@ def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrat
         assert bill.author_id is None
         assert raw.processed is True
         assert db.query(db_models.BillCongresistas).count() == 0
+
+
+def test_process_bills_persists_earlier_rows_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04) applied to _process_bills."""
+    real_upsert_bill = crud_bills.upsert_bill
+
+    def flaky_upsert_bill(db, bill_schema):
+        if bill_schema.id == "2026_2":
+            raise RuntimeError("simulated failure for bill 2026_2")
+        return real_upsert_bill(db, bill_schema)
+
+    monkeypatch.setattr(crud_bills, "upsert_bill", flaky_upsert_bill)
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        for bill_id in ("2026_1", "2026_2", "2026_3"):
+            db.add(
+                RawBill(
+                    id=bill_id,
+                    timestamp=datetime(2026, 1, 10),
+                    general=json.dumps(
+                        {
+                            "fecPresentacion": "2026-01-10",
+                            "titulo": "Proyecto de Ley X",
+                            "sumilla": "Resumen",
+                            "observaciones": "",
+                            "desEstado": "Presentado",
+                            "desProponente": "Ministerio Público",
+                            "desGpar": "Bancada Ausente",
+                            "proyectoLey": bill_id,
+                        }
+                    ),
+                    congresistas=json.dumps(
+                        [
+                            {
+                                "nombre": "Autora Ausente",
+                                "pagWeb": "https://example.com/autora",
+                                "tipoFirmanteId": 1,
+                            }
+                        ]
+                    ),
+                    steps=json.dumps([]),
+                    committees=json.dumps([]),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_bills(limit=None)
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        bill_ids = {b.id for b in db.query(db_models.Bill).all()}
+        assert bill_ids == {"2026_1", "2026_3"}
+        assert db.get(RawBill, ("2026_1", datetime(2026, 1, 10))).processed is True
+        assert db.get(RawBill, ("2026_2", datetime(2026, 1, 10))).processed is False
+        assert db.get(RawBill, ("2026_3", datetime(2026, 1, 10))).processed is True
 
 
 def test_process_bills_marks_raw_pages_processed_when_bill_text_extracted(
@@ -725,6 +1094,71 @@ def test_process_motions_loads_motion_when_author_is_missing(orchestrator):
         assert motion.author_id is None
         assert raw.processed is True
         assert db.query(db_models.MotionCongresistas).count() == 0
+
+
+def test_process_motions_persists_earlier_rows_when_a_later_row_fails(
+    orchestrator, monkeypatch
+):
+    """Regression test for the transaction-boundary fix (/plan-eng-review
+    Phase 1, 2026-09-04) applied to _process_motions."""
+    real_upsert_motion = crud_motions.upsert_motion
+
+    def flaky_upsert_motion(db, motion_schema):
+        if motion_schema.id == "2026_11":
+            raise RuntimeError("simulated failure for motion 2026_11")
+        return real_upsert_motion(db, motion_schema)
+
+    monkeypatch.setattr(crud_motions, "upsert_motion", flaky_upsert_motion)
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            db_models.Organization(
+                org_name="Cámara de Diputados",
+                org_type="Cámara",
+            )
+        )
+        for motion_id in ("2026_10", "2026_11", "2026_12"):
+            db.add(
+                RawMotion(
+                    id=motion_id,
+                    timestamp=datetime(2026, 1, 10),
+                    general=json.dumps(
+                        {
+                            "fecPresentacion": "2026-01-10",
+                            "desTipoMocion": "Otras",
+                            "sumilla": "Resumen",
+                            "observacion": None,
+                            "desEstadoMocion": "Presentado",
+                        }
+                    ),
+                    congresistas=json.dumps(
+                        [
+                            {
+                                "nombre": "Autor Ausente",
+                                "pagWeb": "https://example.com/autor",
+                                "tipoFirmanteId": 1,
+                            }
+                        ]
+                    ),
+                    steps=json.dumps([]),
+                    last_update=True,
+                    processed=False,
+                    changed=True,
+                )
+            )
+        db.commit()
+
+    stats = orchestrator._process_motions(include_documents=False, limit=None)
+
+    assert stats.errors == 1
+    assert stats.processed == 2
+
+    with orchestrator.DBSession() as db:
+        motion_ids = {m.id for m in db.query(db_models.Motion).all()}
+        assert motion_ids == {"2026_10", "2026_12"}
+        assert db.get(RawMotion, ("2026_10", datetime(2026, 1, 10))).processed is True
+        assert db.get(RawMotion, ("2026_11", datetime(2026, 1, 10))).processed is False
+        assert db.get(RawMotion, ("2026_12", datetime(2026, 1, 10))).processed is True
 
 
 def test_process_bills_sets_bancada_from_membership_as_of_presentation_date(

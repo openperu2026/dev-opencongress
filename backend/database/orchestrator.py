@@ -1419,13 +1419,13 @@ class OpenPeruOrchestrator:
                     chamber_tally[raw_cong.chamber or "None"] = (
                         chamber_tally.get(raw_cong.chamber or "None", 0) + 1
                     )
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawCongresista id={raw_cong.id}: {exc}"
                     )
                     db.rollback()
                     stats.errors += 1
-            db.commit()
         logger.info(
             f"[congresistas] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} by_chamber={chamber_tally}"
         )
@@ -1448,11 +1448,19 @@ class OpenPeruOrchestrator:
         org_chamber_tally = {"Diputados": 0, "Senadores": 0, "Congreso": 0, "None": 0}
         with self.DBSession() as db:
             for org_schema in process_chambers():
-                _, inserted = self._upsert_organization_with_count(db, org_schema)
-                if inserted:
-                    clean_inserted += 1
-                else:
-                    clean_updated += 1
+                try:
+                    _, inserted = self._upsert_organization_with_count(db, org_schema)
+                    if inserted:
+                        clean_inserted += 1
+                    else:
+                        clean_updated += 1
+                    db.commit()
+                except Exception as exc:
+                    logger.exception(
+                        f"Error processing chamber org_name={org_schema.org_name}: {exc}"
+                    )
+                    db.rollback()
+                    stats.errors += 1
 
             # Committees
             committees = (
@@ -1484,6 +1492,7 @@ class OpenPeruOrchestrator:
                     committee_chamber_tally[key] = (
                         committee_chamber_tally.get(key, 0) + 1
                     )
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawCommittee id={raw_comm.id}: {exc}"
@@ -1516,6 +1525,7 @@ class OpenPeruOrchestrator:
                     stats.processed += 1
                     key = raw_org.chamber or "None"
                     org_chamber_tally[key] = org_chamber_tally.get(key, 0) + 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawOrganization id={raw_org.id}: {exc}"
@@ -1523,7 +1533,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[organization_definitions] raw_committees={len(committees)} raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} committees_by_chamber={committee_chamber_tally} orgs_by_chamber={org_chamber_tally}"
         )
@@ -1572,6 +1581,7 @@ class OpenPeruOrchestrator:
                         )
                     raw_org.processed = not missing
                     stats.processed += 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawOrganization memberships id={raw_org.id}: {exc}"
@@ -1579,7 +1589,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[admin_memberships] raw_orgs={len(organizations)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors}"
         )
@@ -1622,6 +1631,7 @@ class OpenPeruOrchestrator:
                     raw_bancada.processed = not missing
                     key = raw_bancada.chamber or "None"
                     chamber_tally[key] = chamber_tally.get(key, 0) + 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada definitions id={raw_bancada.id}: {exc}"
@@ -1629,7 +1639,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[bancada_definitions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated} by_chamber={chamber_tally}"
         )
@@ -1705,6 +1714,7 @@ class OpenPeruOrchestrator:
                     stats.processed += 1
                     key = raw_bancada.chamber or "None"
                     chamber_tally[key] = chamber_tally.get(key, 0) + 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBancada memberships id={raw_bancada.id}: {exc}"
@@ -1712,7 +1722,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[bancada_memberships] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} by_chamber={chamber_tally}"
         )
@@ -1823,6 +1832,7 @@ class OpenPeruOrchestrator:
 
                     raw_bill.processed = True
                     stats.processed += 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawBill id={raw_bill.id}: {exc}"
@@ -1830,7 +1840,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[bills] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
@@ -2202,6 +2211,7 @@ class OpenPeruOrchestrator:
 
                     raw_motion.processed = True
                     stats.processed += 1
+                    db.commit()
                 except Exception as exc:
                     logger.exception(
                         f"Error processing RawMotion id={raw_motion.id}: {exc}"
@@ -2209,7 +2219,6 @@ class OpenPeruOrchestrator:
                     db.rollback()
                     stats.errors += 1
 
-            db.commit()
         logger.info(
             f"[motions] raw_total={len(rows)} processed={stats.processed} skipped={stats.skipped} errors={stats.errors} clean_inserted={clean_inserted} clean_updated={clean_updated}"
         )
