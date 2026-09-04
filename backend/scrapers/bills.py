@@ -4,21 +4,18 @@ from datetime import datetime
 from loguru import logger
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine, select
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy import select
 
-from backend.config import settings
 from backend.core.constants import (
     CHAMBER_LABEL_TO_ID_SUFFIX,
     CHAMBER_LABEL_TO_ROUTE_SLUG,
     LEG_PERIOD_TO_PER_PAR_ID,
 )
 from backend.database.raw_models import RawBill
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import get_url_text
 
 BASE_URL = "https://wb2server.congreso.gob.pe/spley-portal/#"
-DB_PATH = settings.DB_URL
 
 # 2026-2031 term: RawBill.id uses the full period string ("00006-2026-2031-S",
 # confirmed live and matching chamber_label_from_id()'s expectations), but
@@ -33,7 +30,7 @@ DB_PATH = settings.DB_URL
 CHAMBER_LEG_PERIOD = "2026-2031"
 
 
-class RawBillScraper:
+class RawBillScraper(SharedRawScraperBase):
     """
     Class to scrape and store raw bill information.
 
@@ -49,15 +46,7 @@ class RawBillScraper:
     """
 
     def __init__(self, session=None, engine=None):
-        # Engine and session maker for DB
-        if session is not None:
-            self.session = session
-            self.engine = session.get_bind()
-            self.Session = sessionmaker(bind=self.engine)  # safe default
-        else:
-            self.engine = engine or create_engine(DB_PATH)
-            self.Session = sessionmaker(bind=self.engine)
-            self.session = None
+        super().__init__(session=session, engine=engine)
 
         # Mapping raw section name to RawBill attribute name
         self.section_mapping = {
@@ -267,73 +256,22 @@ class RawBillScraper:
     def update_tracking(self, bill: RawBill) -> list[RawBill]:
         """Update the tracking columns of a RawBill object"""
 
-        # Create a new session
-        session = self.session or self.Session()
-        try:
-            last_bill = (
+        def lookup(session):
+            return (
                 session.query(RawBill)
                 .filter(RawBill.id == bill.id)
                 .order_by(RawBill.timestamp.desc())
                 .first()
             )
 
-            # First ever version of this: add tracking columns and return bill
-            if last_bill is None:
-                bill.changed = True
-                bill.last_update = True
-                bill.processed = False
-
-                return [bill]
-
-            # If has changed: add tracking columns properly and return bill and last bill
-            if bill != last_bill:
-                bill.changed = True
-                bill.last_update = True
-                bill.processed = False
-                last_bill.last_update = False
-
-                return [bill, last_bill]
-
-            # No changes
-            return []
-
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add update tracking to Raw Bills table: {e}")
-            session.rollback()
-            return []
-
-        finally:
-            # Close Session
-            if self.session is None:
-                session.close()
+        return self._update_tracking(bill, lookup)
 
     def add_bills_to_db(self) -> bool:
         """
-        Add a single bill to the database.
+        Add the raw bills to the database.
         Returns True on success, False on failure.
         """
-        assert len(self.raw_bills) != 0, (
-            "There are no Raw Bills scraped. Nothing to load to DB."
-        )
-
-        # Create a new session
-        session = self.session or self.Session()
-        try:
-            # Add and commit raw bill
-            session.bulk_save_objects(self.raw_bills)
-            session.commit()
-            logger.success(f"Added {len(self.raw_bills)} Raw Bills to table.")
-            return True
-
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add bills to Raw Bills table: {e}")
-            session.rollback()
-            return False
-
-        finally:
-            # Close Session
-            if self.session is None:
-                session.close()
+        return self._add_to_db(self.raw_bills, "Bills")
 
     def load_raw_bills(self):
         self.add_bills_to_db()

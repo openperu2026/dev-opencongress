@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import pytest
 from lxml import html as lxml_html
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -21,6 +20,8 @@ def make_scraper():
     """
     scraper = RawBancadaScraper.__new__(RawBancadaScraper)
     scraper.url = "https://fake-url.test"
+    scraper.session = None
+    scraper._tracking_updates = []
     return scraper
 
 
@@ -224,7 +225,7 @@ def test_get_raw_bancadas_only_current(monkeypatch):
         "get_html_with_selections",
         lambda url, period, cond: f"<html>{period}-{cond}</html>",
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: bancada)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: [bancada])
 
     scraper.get_raw_bancadas(only_current=True)
 
@@ -260,7 +261,7 @@ def test_get_raw_bancadas_all_periods_single_condition(monkeypatch):
         "get_html_with_selections",
         lambda url, period, cond: f"<html>{period}-{cond}</html>",
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: bancada)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: [bancada])
 
     scraper.get_raw_bancadas(only_current=False)
 
@@ -290,7 +291,7 @@ def test_get_raw_bancadas_skips_none_html(monkeypatch):
         "get_html_with_selections",
         lambda url, period, cond: None,
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: bancada)
+    monkeypatch.setattr(scraper, "update_tracking", lambda bancada: [bancada])
 
     scraper.get_raw_bancadas(only_current=True)
 
@@ -317,12 +318,20 @@ def test_update_tracking_marks_first_snapshot_changed():
 
     tracked = scraper.update_tracking(bancada)
 
-    assert tracked.changed is True
-    assert tracked.last_update is True
-    assert tracked.processed is False
+    assert tracked == [bancada]
+    assert bancada.changed is True
+    assert bancada.last_update is True
+    assert bancada.processed is False
 
 
-def test_update_tracking_marks_identical_snapshot_processed():
+def test_update_tracking_identical_snapshot_returns_empty_list():
+    """Regression test for the store-only-if-changed fix (/plan-eng-review
+    Phase 2, 2026-09-04): an unchanged snapshot must return [] (so a
+    caller's .extend() appends nothing) and must NOT flip the existing
+    row's last_update -- the original bug flipped it unconditionally in
+    the "else" branch regardless of whether anything actually changed,
+    which (combined with never persisting a replacement) would have left
+    NO row marked as the current one for this entity."""
     engine, SessionLocal = setup_inmemory_db()
 
     scraper = make_scraper()
@@ -352,13 +361,11 @@ def test_update_tracking_marks_identical_snapshot_processed():
 
     tracked = scraper.update_tracking(new)
 
-    assert tracked.changed is False
-    assert tracked.last_update is True
-    assert tracked.processed is True
+    assert tracked == []
 
     with SessionLocal() as session:
         previous = session.query(RawBancada).first()
-        assert previous.last_update is False
+        assert previous.last_update is True
 
 
 def test_update_tracking_marks_changed_snapshot_and_flips_previous():
@@ -391,9 +398,11 @@ def test_update_tracking_marks_changed_snapshot_and_flips_previous():
 
     tracked = scraper.update_tracking(new)
 
-    assert tracked.changed is True
-    assert tracked.last_update is True
-    assert tracked.processed is False
+    assert len(tracked) == 2
+    assert tracked[0] is new
+    assert new.changed is True
+    assert new.last_update is True
+    assert new.processed is False
 
     with SessionLocal() as session:
         previous = session.query(RawBancada).first()
@@ -442,12 +451,13 @@ def test_add_bancadas_to_db_success():
     }
 
 
-def test_add_bancadas_to_db_raises_when_empty_list():
+def test_add_bancadas_to_db_returns_false_when_empty():
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
     scraper = make_scraper()
     scraper.bancadas_list = []
 
-    with pytest.raises(AssertionError):
-        scraper.add_bancadas_to_db()
+    assert scraper.add_bancadas_to_db() is False
 
 
 def test_add_bancadas_to_db_handles_sqlalchemy_error():
@@ -549,7 +559,7 @@ def test_chamber_bancada_html_roundtrips_through_process_bancada():
 
 def test_get_chamber_bancadas_tracks_one_row_per_chamber():
     scraper = make_scraper()
-    scraper.update_tracking = lambda b: b
+    scraper.update_tracking = lambda b: [b]
 
     roster = [{"name": "A, B", "group": "Fuerza Popular"}]
     result = scraper.get_chamber_bancadas("Diputados", roster)
@@ -574,9 +584,10 @@ def test_update_tracking_scopes_by_chamber_not_just_period():
         raw_html='<table class="table-cng"><tbody></tbody></table>',
     )
     tracked_senado = scraper.update_tracking(senado)
-    assert tracked_senado.last_update is True
+    assert tracked_senado == [senado]
+    assert senado.last_update is True
     with SessionLocal() as session:
-        session.add(tracked_senado)
+        session.add_all(tracked_senado)
         session.commit()
 
     diputados = RawBancada(
@@ -589,10 +600,11 @@ def test_update_tracking_scopes_by_chamber_not_just_period():
 
     # Diputados row must be treated as brand-new (no prior Diputados row
     # exists), not as an update to the Senado row from the same period.
-    assert tracked_diputados.changed is True
-    assert tracked_diputados.last_update is True
+    assert tracked_diputados == [diputados]
+    assert diputados.changed is True
+    assert diputados.last_update is True
     with SessionLocal() as session:
-        session.add(tracked_diputados)
+        session.add_all(tracked_diputados)
         session.commit()
 
     with SessionLocal() as session:

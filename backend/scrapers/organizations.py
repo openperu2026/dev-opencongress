@@ -6,13 +6,9 @@ from datetime import datetime
 
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-
-from backend.config import settings
 from backend.core.constants import CHAMBER_BASE_URLS
 from backend.database.raw_models import RawOrganization
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import parse_url
 
 
@@ -22,8 +18,6 @@ BASE_URLS = {
     "Mesa Directiva": "https://www3.congreso.gob.pe/pagina/mesa-directiva",
     "Comisión Permanente": "https://www3.congreso.gob.pe/pagina/comision-permanente",
 }
-
-DB_PATH = settings.DB_URL
 
 # 2026-2031 term. "Consejo Directivo" is deliberately absent -- confirmed
 # live 2026-08-31 that diputados.congreso.gob.pe/consejo-directivo/ 404s;
@@ -38,7 +32,7 @@ COMISION_PERMANENTE_URL = "https://www.congreso.gob.pe/comision-permanente/"
 CHAMBER_ORG_YEAR = "2026"
 
 
-class RawOrganizationScraper:
+class RawOrganizationScraper(SharedRawScraperBase):
     """
     Class to scrape admin-org raw data from the congress web page (Junta de
     Portavoces, Consejo Directivo, Mesa Directiva, Comisión Permanente).
@@ -55,11 +49,10 @@ class RawOrganizationScraper:
     process_admin_org() (backend/process/organizations.py).
     """
 
-    def __init__(self):
-        # Engine and session maker for DB
-        self.engine = create_engine(DB_PATH)
+    def __init__(self, session=None, engine=None):
+        super().__init__(session=session, engine=engine)
         self.urls = BASE_URLS
-        self.Session = sessionmaker(bind=self.engine)
+        self.organizations_list: list[RawOrganization] = []
 
     # =====================================================================
     # LEGACY (through 2021-2026) -- www3.congreso.gob.pe, year dropdown
@@ -185,20 +178,11 @@ class RawOrganizationScraper:
                         last_update=True,
                     )
 
-                    final_lst.append(self.update_tracking(new_org))
+                    final_lst.extend(self.update_tracking(new_org))
 
         self.organizations_list = final_lst
         logger.success(
             f"Successfully extracted {len(self.organizations_list)} raw html organization"
-        )
-
-    # SHARED (used by update_tracking() below, for both paths)
-    @staticmethod
-    def _snapshot_changed(current: RawOrganization, previous: RawOrganization) -> bool:
-        return (
-            current.legislative_year != previous.legislative_year
-            or current.type_org != previous.type_org
-            or current.raw_html != previous.raw_html
         )
 
     # =====================================================================
@@ -428,7 +412,9 @@ class RawOrganizationScraper:
             )
             is not None
         ]
-        self.organizations_list = [self.update_tracking(org) for org in results]
+        self.organizations_list = []
+        for org in results:
+            self.organizations_list.extend(self.update_tracking(org))
         return self.organizations_list
 
     def get_joint_comision_permanente(self) -> list[RawOrganization]:
@@ -442,14 +428,14 @@ class RawOrganizationScraper:
             "Congreso",
             CHAMBER_ORG_YEAR,
         )
-        self.organizations_list = [self.update_tracking(org)] if org else []
+        self.organizations_list = self.update_tracking(org) if org else []
         return self.organizations_list
 
     # =====================================================================
     # SHARED -- used by both the legacy and 2026-2031 code paths above
     # =====================================================================
 
-    def update_tracking(self, org: RawOrganization) -> RawOrganization:
+    def update_tracking(self, org: RawOrganization) -> list[RawOrganization]:
         """Update the tracking columns of a RawOrganization object.
 
         Scoped by (type_org, legislative_year, chamber) -- the chamber
@@ -458,8 +444,8 @@ class RawOrganizationScraper:
         share the same (type_org, year) pair and collide.
         """
 
-        with self.Session() as session:
-            last_org = (
+        def lookup(session):
+            return (
                 session.query(RawOrganization)
                 .filter(
                     RawOrganization.type_org == org.type_org,
@@ -471,46 +457,11 @@ class RawOrganizationScraper:
                 .first()
             )
 
-            # First ever version of this org
-            if last_org is None:
-                org.changed = True
-                org.last_update = True
-                org.processed = False
-            else:
-                # Compare last vs new
-                org.changed = self._snapshot_changed(org, last_org)
-                org.last_update = True
-                org.processed = not org.changed
-
-                # Update the old version AFTER comparison
-                last_org.last_update = False
-                session.add(last_org)
-                session.commit()
-
-            return org
+        return self._update_tracking(org, lookup)
 
     def add_organizations_to_db(self) -> bool:
         """
         Add the organizations to the database.
         Returns True on success, False on failure.
         """
-        assert self.organizations_list, (
-            "Organizations must be scraped before it can be saved"
-        )
-
-        session = self.Session()
-
-        try:
-            session.bulk_save_objects(self.organizations_list)
-            session.commit()
-            logger.success(
-                f"Added {len(self.organizations_list)} organizations to Raw Organizations table"
-            )
-            return True
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add organizations: {e}")
-            session.rollback()
-            return False
-        finally:
-            # Close Session
-            session.close()
+        return self._add_to_db(self.organizations_list, "Organizations")

@@ -1,6 +1,5 @@
 from datetime import datetime
 
-import pytest
 from lxml.html import fromstring
 from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
@@ -29,6 +28,8 @@ def make_scraper():
     """
     scraper = RawCommitteeScraper.__new__(RawCommitteeScraper)
     scraper.url = BASE_URL
+    scraper.session = None
+    scraper._tracking_updates = []
     return scraper
 
 
@@ -288,7 +289,7 @@ def test_get_raw_committees_builds_committee_list(monkeypatch):
         "get_html_with_selections",
         fake_get_html_with_selections,
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda committee: committee)
+    monkeypatch.setattr(scraper, "update_tracking", lambda committee: [committee])
 
     class FakeBrowser:
         def __init__(self):
@@ -359,7 +360,7 @@ def test_get_raw_committees_all_years(monkeypatch):
             f"<html>year={year_value}, committee={committee_value}</html>"
         ),
     )
-    monkeypatch.setattr(scraper, "update_tracking", lambda committee: committee)
+    monkeypatch.setattr(scraper, "update_tracking", lambda committee: [committee])
 
     class FakeBrowser:
         def new_page(self):
@@ -423,12 +424,18 @@ def test_update_tracking_first_version_marks_changed():
 
     result = scraper.update_tracking(committee)
 
-    assert result.changed is True
-    assert result.processed is False
-    assert result.last_update is True
+    assert result == [committee]
+    assert committee.changed is True
+    assert committee.processed is False
+    assert committee.last_update is True
 
 
-def test_update_tracking_existing_same_version_marks_not_changed():
+def test_update_tracking_existing_same_version_returns_empty_list():
+    """Regression test for the store-only-if-changed fix (/plan-eng-review
+    Phase 2, 2026-09-04): an unchanged snapshot must return [] and must
+    NOT flip the existing row's last_update -- the original bug flipped it
+    unconditionally in the "else" branch regardless of whether anything
+    actually changed."""
     engine, SessionLocal = setup_inmemory_db()
     scraper = make_scraper()
     scraper.Session = SessionLocal
@@ -459,13 +466,11 @@ def test_update_tracking_existing_same_version_marks_not_changed():
 
     result = scraper.update_tracking(new)
 
-    assert result.changed is False
-    assert result.processed is True
-    assert result.last_update is True
+    assert result == []
 
     with SessionLocal() as session:
         old_from_db = session.query(RawCommittee).first()
-        assert old_from_db.last_update is False
+        assert old_from_db.last_update is True
 
 
 def test_update_tracking_existing_different_version_marks_changed():
@@ -499,9 +504,11 @@ def test_update_tracking_existing_different_version_marks_changed():
 
     result = scraper.update_tracking(new)
 
-    assert result.changed is True
-    assert result.processed is False
-    assert result.last_update is True
+    assert len(result) == 2
+    assert result[0] is new
+    assert new.changed is True
+    assert new.processed is False
+    assert new.last_update is True
 
 
 # ---------- add_committees_to_db ----------
@@ -536,12 +543,13 @@ def test_add_committees_to_db_persists():
     assert rows[0].raw_html == "<html>data</html>"
 
 
-def test_add_committees_to_db_asserts_when_empty():
+def test_add_committees_to_db_returns_false_when_empty():
+    """An empty buffer is now the ROUTINE outcome of an all-unchanged
+    scrape run -- must return False gracefully, not raise/assert."""
     scraper = make_scraper()
     scraper.committee_list = []
 
-    with pytest.raises(AssertionError):
-        scraper.add_committees_to_db()
+    assert scraper.add_committees_to_db() is False
 
 
 def test_add_committees_to_db_handles_sqlalchemy_error():
@@ -592,7 +600,7 @@ def test_get_chamber_committees_synthesizes_index_and_roundtrips_process_committ
     from backend.process.organizations import process_committee
 
     scraper = make_scraper()
-    scraper.update_tracking = lambda c: c
+    scraper.update_tracking = lambda c: [c]
 
     index_html = """
     <html><body>
@@ -655,7 +663,7 @@ def test_get_chamber_committees_tags_rows_by_section_title(monkeypatch):
     from backend.process.organizations import process_committee
 
     scraper = make_scraper()
-    scraper.update_tracking = lambda c: c
+    scraper.update_tracking = lambda c: [c]
 
     monkeypatch.setattr(
         "backend.scrapers.committees.parse_url",
@@ -730,7 +738,7 @@ def test_get_joint_committees_builds_congreso_tagged_committee(monkeypatch):
     from backend.process.organizations import process_committee
 
     scraper = make_scraper()
-    scraper.update_tracking = lambda c: c
+    scraper.update_tracking = lambda c: [c]
 
     monkeypatch.setattr(
         "backend.scrapers.committees.parse_url",
@@ -757,7 +765,7 @@ def test_get_joint_committees_builds_congreso_tagged_committee(monkeypatch):
 
 def test_get_joint_committees_skips_page_missing_h1(monkeypatch):
     scraper = make_scraper()
-    scraper.update_tracking = lambda c: c
+    scraper.update_tracking = lambda c: [c]
 
     monkeypatch.setattr(
         "backend.scrapers.committees.parse_url",
@@ -770,7 +778,7 @@ def test_get_joint_committees_skips_page_missing_h1(monkeypatch):
 
 def test_get_joint_committees_skips_failed_fetch(monkeypatch):
     scraper = make_scraper()
-    scraper.update_tracking = lambda c: c
+    scraper.update_tracking = lambda c: [c]
 
     monkeypatch.setattr(
         "backend.scrapers.committees.parse_url", lambda url, *a, **k: None
@@ -785,7 +793,7 @@ def test_get_chamber_committees_excludes_index_self_link(monkeypatch):
     also starts with "{base_url}/comision" -- must not be scraped as a
     fake committee named "Comisiones"."""
     scraper = make_scraper()
-    scraper.update_tracking = lambda c: c
+    scraper.update_tracking = lambda c: [c]
 
     index_html = """
     <html><body>

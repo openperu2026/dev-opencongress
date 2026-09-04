@@ -3,21 +3,16 @@ from collections.abc import Callable
 from datetime import datetime
 from loguru import logger
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-
-from backend.config import settings
 from backend.core.constants import (
     CHAMBER_LABEL_TO_COD_TIPO_PARL,
     CHAMBER_LABEL_TO_ID_SUFFIX,
     LEG_PERIOD_TO_PER_PAR_ID,
 )
 from backend.database.raw_models import RawMotion
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import get_url_text
 
 BASE_URL = "https://api.congreso.gob.pe/smociones-portal-service"
-DB_PATH = settings.DB_URL
 
 # 2026-2031 term: motions' per-chamber detail endpoint uses a BARE YEAR
 # (2026), confirmed live 2026-09-01 -- do NOT reuse bills.py's full
@@ -25,7 +20,7 @@ DB_PATH = settings.DB_URL
 CHAMBER_LEG_PERIOD = "2026-2031"
 
 
-class RawMotionScraper:
+class RawMotionScraper(SharedRawScraperBase):
     """
     Class to scrape and store raw bill information.
 
@@ -40,15 +35,7 @@ class RawMotionScraper:
     """
 
     def __init__(self, session=None, engine=None):
-        # Engine and session maker for DB
-        if session is not None:
-            self.session = session
-            self.engine = session.get_bind()
-            self.Session = sessionmaker(bind=self.engine)
-        else:
-            self.engine = engine or create_engine(DB_PATH)
-            self.session = None
-            self.Session = sessionmaker(bind=self.engine)
+        super().__init__(session=session, engine=engine)
 
         # Mapping raw section name to RawMotion attribute name
         self.section_mapping = {
@@ -157,73 +144,25 @@ class RawMotionScraper:
     # SHARED -- used by both the legacy and 2026-2031 code paths above
     # =====================================================================
 
-    def update_tracking(self, motion: RawMotion) -> RawMotion:
+    def update_tracking(self, motion: RawMotion) -> list[RawMotion]:
         """Update the tracking columns of a RawMotion object"""
-        session = self.session or self.Session()
-        try:
-            last_motion = (
+
+        def lookup(session):
+            return (
                 session.query(RawMotion)
                 .filter(RawMotion.id == motion.id)
                 .order_by(RawMotion.timestamp.desc())
                 .first()
             )
 
-            # First ever version of this motion
-            if last_motion is None:
-                motion.changed = True
-                motion.last_update = True
-                motion.processed = False
-
-                return [motion]
-
-            if motion != last_motion:
-                # Compare last vs new
-                motion.changed = True
-                motion.last_update = True
-                motion.processed = False
-                last_motion.last_update = False
-
-                return [motion, last_motion]
-
-            # No changes
-            return []
-
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add update tracking to Raw Motions table: {e}")
-            session.rollback()
-            return []
-
-        finally:
-            if self.session is None:
-                session.close()
+        return self._update_tracking(motion, lookup)
 
     def add_motions_to_db(self) -> bool:
         """
-        Add a single motion to the database.
+        Add the raw motions to the database.
         Returns True on success, False on failure.
         """
-        assert len(self.raw_motions) != 0, (
-            "There are no Raw Motions scraped. Nothing to load to DB."
-        )
-
-        # Create a new session
-        session = self.session or self.Session()
-        try:
-            # Add and commit raw motion
-            session.bulk_save_objects(self.raw_motions)
-            session.commit()
-            logger.success(f"Added {len(self.raw_motions)} Raw Motions to table.")
-            return True
-
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add motions to Raw Motions table: {e}")
-            session.rollback()
-            return False
-
-        finally:
-            # Close Session
-            if self.session is None:
-                session.close()
+        return self._add_to_db(self.raw_motions, "Motions")
 
     def load_raw_motions(self):
         self.add_motions_to_db()

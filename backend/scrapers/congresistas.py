@@ -7,13 +7,9 @@ from datetime import datetime
 from lxml.html import HtmlElement
 from urllib.parse import urljoin
 
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy import create_engine
-from sqlalchemy.exc import SQLAlchemyError
-
-from backend.config import settings
 from backend.core.constants import CHAMBER_BASE_URLS, CHAMBER_LEG_PERIOD_LABEL
 from backend.database.raw_models import RawCongresista
+from backend.scrapers.base import SharedRawScraperBase
 from backend.scrapers.utils import (
     parse_url,
     get_url_text,
@@ -23,14 +19,13 @@ from backend.scrapers.utils import (
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/congresistas"
 API_MEMBERSHIP = "https://wb2server.congreso.gob.pe/vll/cargos/api/"
-DB_PATH = settings.DB_URL
 
 # 2026-2031 term: separate listing slug per chamber, confirmed live 2026-08-31
 # (senado.../senador/, diputados.../diputado/).
 CHAMBER_LISTING_SLUG = {"Senadores": "senador", "Diputados": "diputado"}
 
 
-class RawCongresistasScraper:
+class RawCongresistasScraper(SharedRawScraperBase):
     """
     Class to scrape congresistas raw data from the congress web page.
 
@@ -45,11 +40,9 @@ class RawCongresistasScraper:
     SHARED section at the bottom for the methods common to both paths.
     """
 
-    def __init__(self):
-        # Engine and session maker for DB
-        self.engine = create_engine(DB_PATH)
+    def __init__(self, session=None, engine=None):
+        super().__init__(session=session, engine=engine)
         self.url = BASE_URL
-        self.Session = sessionmaker(bind=self.engine)
 
         self.periods = {}
         self.raw_congresistas: list[RawCongresista] = []
@@ -409,7 +402,7 @@ class RawCongresistasScraper:
 
         congresistas = []
         for entry in roster:
-            congresistas.append(
+            congresistas.extend(
                 self.update_tracking(self.create_chamber_congresista(chamber, entry))
             )
             logger.success(
@@ -431,7 +424,7 @@ class RawCongresistasScraper:
         links = self.get_urls_from_table(period_value)
         for cong_link in links:
             new_cong = self.create_raw_congresista(period_key, cong_link)
-            congresistas.append(self.update_tracking(new_cong))
+            congresistas.extend(self.update_tracking(new_cong))
 
         return congresistas
 
@@ -439,7 +432,7 @@ class RawCongresistasScraper:
     # SHARED -- used by both the legacy and 2026-2031 code paths above
     # =====================================================================
 
-    def update_tracking(self, congresista: RawCongresista) -> RawCongresista:
+    def update_tracking(self, congresista: RawCongresista) -> list[RawCongresista]:
         """Update the tracking columns of a RawCongresista object.
 
         Period-agnostic: dedupes on `website` alone, which is already
@@ -448,31 +441,15 @@ class RawCongresistasScraper:
         RawOrganization's trackers, which do need one -- see those files).
         """
 
-        with self.Session() as session:
-            last_congresista = (
+        def lookup(session):
+            return (
                 session.query(RawCongresista)
                 .filter(RawCongresista.website == congresista.website)
                 .order_by(RawCongresista.timestamp.desc())
                 .first()
             )
 
-            # First ever version of this congresista
-            if last_congresista is None:
-                congresista.changed = True
-                congresista.last_update = True
-                congresista.processed = False
-            else:
-                # Compare last vs new
-                congresista.changed = congresista != last_congresista
-                congresista.last_update = True
-                congresista.processed = not congresista.changed
-
-                # Update the old version AFTER comparison
-                last_congresista.last_update = False
-                session.add(last_congresista)
-                session.commit()
-
-            return congresista
+        return self._update_tracking(congresista, lookup)
 
     # =====================================================================
     # LEGACY (through 2021-2026), continued
@@ -507,27 +484,7 @@ class RawCongresistasScraper:
         self.raw_congresistas, set by either extract_cong_from_period()
         (legacy) or extract_chamber_congresistas() (2026-2031).
         """
-
-        assert self.raw_congresistas, (
-            "Congresistas must be scraped before it can be saved"
-        )
-
-        session = self.Session()
-
-        try:
-            session.bulk_save_objects(self.raw_congresistas)
-            session.commit()
-            logger.success(
-                f"Added {len(self.raw_congresistas)} congresistas to Raw Congresistas table"
-            )
-            return True
-        except SQLAlchemyError as e:
-            logger.error(f"Failed to add committees: {str(e)}")
-            session.rollback()
-            return False
-        finally:
-            # Close Session
-            session.close()
+        return self._add_to_db(self.raw_congresistas, "Congresistas")
 
 
 if __name__ == "__main__":
