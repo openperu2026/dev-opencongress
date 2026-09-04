@@ -486,3 +486,119 @@ def test_add_bancadas_to_db_handles_sqlalchemy_error():
     assert result is False
     assert dummy_session.rollback_called is True
     assert dummy_session.close_called is True
+
+
+# ---------- 2026-2031 chamber bancadas (Phase B1) ----------
+
+
+def test_build_chamber_bancada_html_groups_by_bancada():
+    roster = [
+        {"name": "Juarez Gallegos, Carmen", "group": "Fuerza Popular"},
+        {"name": "Andres Lujan, Serafin", "group": "Juntos por el Perú"},
+        {"name": "Chipana Chipana, Jose", "group": "Fuerza Popular"},
+        {"name": "Sin Grupo, Nadie", "group": ""},
+    ]
+    raw_html = RawBancadaScraper.build_chamber_bancada_html(roster)
+    parsed = lxml_html.fromstring(raw_html)
+
+    headers = [h2.text_content() for h2 in parsed.xpath("//h2")]
+    assert set(headers) == {"Fuerza Popular", "Juntos por el Perú"}
+    names = [n.text_content() for n in parsed.xpath('//*[@class="conginfo"]')]
+    assert set(names) == {
+        "Juarez Gallegos, Carmen",
+        "Andres Lujan, Serafin",
+        "Chipana Chipana, Jose",
+    }
+
+
+def test_chamber_bancada_html_roundtrips_through_process_bancada():
+    """CRITICAL: proves the synthesized table.table-cng blob is
+    byte-compatible with process_bancada()'s existing xpath contract."""
+    from backend.process.bancadas import process_bancada
+
+    roster = [
+        {"name": "Juarez Gallegos, Carmen", "group": "Fuerza Popular"},
+        {"name": "Chipana Chipana, Jose", "group": "Fuerza Popular"},
+        {"name": "Andres Lujan, Serafin", "group": "Juntos por el Perú"},
+    ]
+    raw_html = RawBancadaScraper.build_chamber_bancada_html(roster)
+    raw_bancada = RawBancada(
+        timestamp=datetime(2026, 8, 19),
+        legislative_period="Parlamentario 2026 - 2031",
+        chamber="Senadores",
+        raw_html=raw_html,
+    )
+
+    bancadas_out, memberships = process_bancada(raw_bancada)
+
+    assert {b.org_name for b in bancadas_out} == {
+        "Fuerza Popular",
+        "Juntos Por El Perú",
+    }
+    assert all(b.parent_org_name == "Senado de la República" for b in bancadas_out)
+    assert len(memberships) == 3
+    # process_bancada() reorders "Surname, Given" -> "Given Surname" via
+    # split_and_sort_name() -- membership.cong_name reflects that, not the
+    # raw roster text.
+    assert {m.cong_name for m in memberships} == {
+        "Carmen Juarez Gallegos",
+        "Jose Chipana Chipana",
+        "Serafin Andres Lujan",
+    }
+
+
+def test_get_chamber_bancadas_tracks_one_row_per_chamber():
+    scraper = make_scraper()
+    scraper.update_tracking = lambda b: b
+
+    roster = [{"name": "A, B", "group": "Fuerza Popular"}]
+    result = scraper.get_chamber_bancadas("Diputados", roster)
+
+    assert len(result) == 1
+    assert result[0].chamber == "Diputados"
+    assert result[0].legislative_period == "Parlamentario 2026 - 2031"
+    assert scraper.bancadas_list == result
+
+
+def test_update_tracking_scopes_by_chamber_not_just_period():
+    """Regression: two chambers scraped for the same 2026-2031 period label
+    must not clobber each other's last_update tracking."""
+    engine, SessionLocal = setup_inmemory_db()
+    scraper = make_scraper()
+    scraper.Session = SessionLocal
+
+    senado = RawBancada(
+        timestamp=datetime(2026, 1, 1),
+        legislative_period="Parlamentario 2026 - 2031",
+        chamber="Senadores",
+        raw_html='<table class="table-cng"><tbody></tbody></table>',
+    )
+    tracked_senado = scraper.update_tracking(senado)
+    assert tracked_senado.last_update is True
+    with SessionLocal() as session:
+        session.add(tracked_senado)
+        session.commit()
+
+    diputados = RawBancada(
+        timestamp=datetime(2026, 1, 1, 0, 0, 1),
+        legislative_period="Parlamentario 2026 - 2031",
+        chamber="Diputados",
+        raw_html='<table class="table-cng"><tbody></tbody></table>',
+    )
+    tracked_diputados = scraper.update_tracking(diputados)
+
+    # Diputados row must be treated as brand-new (no prior Diputados row
+    # exists), not as an update to the Senado row from the same period.
+    assert tracked_diputados.changed is True
+    assert tracked_diputados.last_update is True
+    with SessionLocal() as session:
+        session.add(tracked_diputados)
+        session.commit()
+
+    with SessionLocal() as session:
+        rows = session.query(RawBancada).all()
+        # Both rows remain last_update=True -- independent per chamber.
+        assert {(r.chamber, r.last_update) for r in rows} == {
+            ("Senadores", True),
+            ("Diputados", True),
+        }

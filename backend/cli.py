@@ -1,6 +1,7 @@
 import argparse
 
 from backend.database.orchestrator import OpenPeruOrchestrator
+from backend.core.enums import LegPeriod
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -59,7 +60,45 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--first-summary",
         action="store_true",
-        help="Computes the first processing of summaries for bills",
+        help=(
+            "Backfill mode: computes the first processing of bill summaries "
+            "and semantic embeddings for every eligible row, and seeds the "
+            "first-ever 2026-2031 chamber/party/bancada/admin-org "
+            "membership per person with the confirmed real term-start date "
+            "(2026-07-28) instead of the scrape timestamp. Legacy "
+            "memberships and already-recorded 2026-2031 memberships are "
+            "unaffected either way."
+        ),
+    )
+    parser.add_argument(
+        "--leg-period",
+        choices=[p.value for p in LegPeriod],
+        default=None,
+        help=(
+            "PROCESSING: restricts congresistas/bancadas/organizations "
+            "processing to a single legislative period (e.g. 2026-2031). "
+            "Default (None) processes all processable periods, unchanged; any "
+            "explicit value narrows to just that period. SCRAPING (bills/"
+            "motions): does NOT restrict the legacy scrape (it always runs "
+            "with --scrape, regardless of this flag, since old bills/motions "
+            "can still gain new documents/votes/status) -- it only controls "
+            "whether the ADDITIONAL current-period (settings.LEG_PERIOD, "
+            "'2026-2031') chamber-specific range scrapers also run (Phase "
+            "B2): they run when this is None (default) or explicitly the "
+            "current period, and are skipped for any other value. SCRAPING "
+            "(congresistas/bancadas/committees/organizations, Phase B1): the "
+            "OPPOSITE of bills/motions -- this legacy reference data is now "
+            "historical/stable, so it is skipped by default and only runs "
+            "when this flag is explicitly set to a period OTHER than the "
+            "current one (e.g. '2021-2026'); the current-period chamber "
+            "scrape runs when this is None (default) or explicitly the "
+            "current period, same gating shape as bills/motions' chamber "
+            "block, but the two never run in the same call -- exactly one of "
+            "the two runs, unlike bills/motions where both may run together. "
+            "Leyes processing/scraping is unaffected either way -- there is no "
+            "bicameral concept for leyes. Chamber for bills/motions is always "
+            "resolved per-row from the bill/motion's own id, not from this flag."
+        ),
     )
     parser.add_argument(
         "--only-votes",
@@ -198,6 +237,7 @@ def main(argv: list[str] | None = None) -> None:
             only_current=args.only_current,
             scrape_documents=run_documents,
             upload_s3=args.upload_s3,
+            leg_period=args.leg_period,
         )
 
     if not args.skip_processing:
@@ -213,5 +253,6 @@ def main(argv: list[str] | None = None) -> None:
             votes_model=args.votes_model,
             votes_max_cost_usd=args.votes_max_cost_usd,
             first_load=args.first_summary,
+            leg_period=args.leg_period,
             skip_extraction=args.skip_vote_extraction,
         )

@@ -72,6 +72,9 @@ class RawBancada(RawBase):
     Attributes:
         id (str): Unique identifier for the bancada.
         leg_period (str): Legislative period
+        chamber (str | None): Raw chamber label as scraped (e.g. "Diputados"/"Senadores");
+            NULL for all pre-2026 rows and for the bicameral term's own bancada pages
+            (which don't expose the chamber via this dropdown at all).
         raw_html (str): Html text
         timestamp (datetime): timestamp of the scraping task
         last_update (bool): Column that indicates if this tuple is the last update for the bill_id
@@ -83,6 +86,7 @@ class RawBancada(RawBase):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     legislative_period: Mapped[str] = mapped_column(nullable=False)
+    chamber: Mapped[str | None] = mapped_column(nullable=True)
     raw_html: Mapped[str] = mapped_column(nullable=False)
 
 
@@ -218,6 +222,8 @@ class RawCommittee(RawBase):
     Attributes:
         id (str): Unique identifier for raw committee.
         legislative_year (str): Legislative year
+        chamber (str | None): Raw chamber label as scraped (e.g. "Diputados"/"Senadores");
+            NULL for all pre-2026 rows.
         committee_type (str): Type of committee in the parliament
         raw_html (str): Html text
         timestamp (datetime): timestamp of the scraping task
@@ -230,6 +236,7 @@ class RawCommittee(RawBase):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     legislative_year: Mapped[str] = mapped_column(nullable=False)
+    chamber: Mapped[str | None] = mapped_column(nullable=True)
     committee_type: Mapped[str] = mapped_column(nullable=False)
     raw_html: Mapped[str] = mapped_column(nullable=False)
 
@@ -241,6 +248,8 @@ class RawCongresista(RawBase):
     Attributes:
         id (str): Unique identifier for raw congresista.
         leg_period (str): Legislative period related to the congresista
+        chamber (str | None): Raw chamber label as scraped (e.g. "Diputados"/"Senadores");
+            NULL for all pre-2026 rows.
         website (str): Congresista's website url
         profile_content (str): Html text from the website's profile tab
         memberships_content (str): API response to memberships of the congresista in json format
@@ -254,6 +263,7 @@ class RawCongresista(RawBase):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     leg_period: Mapped[str] = mapped_column(nullable=False)
+    chamber: Mapped[str | None] = mapped_column(nullable=True)
     website: Mapped[str] = mapped_column(nullable=False)
     profile_content: Mapped[str] = mapped_column(nullable=False)
     memberships_content: Mapped[str] = mapped_column(nullable=True)
@@ -420,6 +430,11 @@ class RawOrganization(RawBase):
     Attributes:
         id (str): Unique identifier for the organization.
         legislative_year (str): Legislative year
+        chamber (str | None): Raw chamber label as scraped (e.g. "Diputados"/"Senadores");
+            NULL for pre-2026 rows and for confirmed joint/bicameral entities (e.g.
+            "Comisión Permanente", the bicameral budget committee) — use the literal
+            string "Congreso" (not NULL) to mark those explicitly, since NULL is
+            reserved for "not specified / legacy" and defaults to Diputados downstream.
         org_link (str): Organization's website
         raw_html (str): Html text
         timestamp (datetime): timestamp of the scraping task
@@ -432,6 +447,7 @@ class RawOrganization(RawBase):
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     legislative_year: Mapped[str] = mapped_column(nullable=False)
+    chamber: Mapped[str | None] = mapped_column(nullable=True)
     type_org: Mapped[str] = mapped_column(nullable=False)
     org_link: Mapped[str] = mapped_column(nullable=True)
     raw_html: Mapped[str] = mapped_column(nullable=False)

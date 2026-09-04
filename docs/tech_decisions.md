@@ -86,8 +86,9 @@ Each decision includes the context that motivated it, the alternatives considere
 - **Alternatives considered**: Raw SQL (harder to maintain), Django ORM (would pull in the full Django framework), Tortoise ORM (async-only, less mature).
 - **Rationale**: SQLAlchemy 2.0+ provides modern Python typing support, both sync and async execution, and is the most mature Python ORM. Its backend-agnostic design supports the planned migration from SQLite to PostgreSQL.
 
-#### SQLite (for now)
+#### SQLite (for now) → PostgreSQL
 
+- **Update**: The project has since migrated to PostgreSQL for both raw and processed layers (both locally and in the deployed environment), as anticipated below — driven by the semantic search feature's need for `pgvector`. The SQLAlchemy models remained portable as expected, so the migration was a schema/engine change, not a rewrite. The original SQLite-first rationale is kept below for historical context.
 - **Decision**: Use SQLite as the database engine for both raw and processed layers.
 - **Context**: The project is in active development with a small team. Infrastructure overhead should be minimal.
 - **Alternatives considered**: PostgreSQL (production-grade, required for some advanced features), DuckDB (analytical, not suited for concurrent writes).
@@ -182,5 +183,4 @@ The following decisions are expected to arise during the class development phase
 - **LLM provider and model**: OpenAI vs. Anthropic vs. open-source for bill summaries
 - **API framework**: FastAPI vs. Django REST Framework for the public API
 - **Deployment**: Cloud provider and containerization strategy
-- **Database migration**: When and how to move from SQLite to PostgreSQL if needed.
 - **LLM-assisted OCR**: For complex or handwritten documents, a vision-capable LLM (e.g., DeepSeekOCR HuggingFace API, GOT-OCR, Surya) may outperform Tesseract. Requires GPU or external API. Evaluate when Tesseract accuracy on real scanned bills is measured.

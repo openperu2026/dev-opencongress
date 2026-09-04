@@ -10,6 +10,8 @@ from zoneinfo import ZoneInfo
 from pydantic import ConfigDict
 from pydantic_settings import BaseSettings
 
+from backend.core.enums import LegPeriod
+
 
 # Directories
 class Directories:
@@ -101,6 +103,12 @@ class Settings(BaseSettings):
     AWS_S3_PREFIX: str | None = os.getenv("AWS_S3_PREFIX")
     OPENAI_API_KEY: str | None = os.getenv("OPENAI_API_KEY")
     HF_TOKEN: str | None = os.getenv("HF_TOKEN")
+
+    # The legislative period the scraper/processing dispatch treats as
+    # "current" (drives run_scrapers()'s default composition -- see
+    # orchestrator.py). Defaults to the enum's own current-term value so
+    # this stays a single source of truth rather than a second literal.
+    LEG_PERIOD: str = os.getenv("LEG_PERIOD", LegPeriod.PERIODO_2026_2031.value)
 
     # This is only in case we need some API_KEYS. Allow us to handle safely.
     model_config = ConfigDict(env_file=directories.ROOT_DIR / ".env", extra="allow")

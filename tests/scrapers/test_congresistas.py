@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 
 import pytest
@@ -368,3 +369,290 @@ def test_add_congresistas_to_db_handles_sqlalchemy_error(monkeypatch):
     ok = cong_scraper.add_congresistas_to_db()
     assert ok is False
     assert dummy_session.rolled_back is True
+
+
+# ---------- 2026-2031 chamber scraping (Phase B1) ----------
+
+_ROSTER_ENTRY = {
+    "name": "Aguinaga Recuenco, Alejandro Aurelio",
+    "partido": "Fuerza Popular",
+    "group": "Fuerza Popular",
+    "district": "Lambayeque",
+    "gender": "Masculino",
+    "condition": "En Ejercicio",
+    "period": "2026 - 2031",
+    "email": "aaguinaga@congreso.gob.pe",
+    "photo": "https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto.png",
+    "url": "https://senado.congreso.gob.pe/senador/aguinaga-recuenco-alejandro-aurelio/",
+}
+
+
+def test_get_chamber_roster_parses_embedded_json(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    import json as _json
+
+    html = f"""
+    <html><body>
+      <div data-congresista-app="">
+        <script type="application/json">{_json.dumps([_ROSTER_ENTRY])}</script>
+      </div>
+    </body></html>
+    """
+
+    def fake_parse_url(url, *args, **kwargs):
+        assert url == "https://senado.congreso.gob.pe/senador/"
+        return fromstring(html)
+
+    monkeypatch.setattr("backend.scrapers.congresistas.parse_url", fake_parse_url)
+
+    roster = cong_scraper.get_chamber_roster("Senadores")
+    assert roster == [_ROSTER_ENTRY]
+
+
+def test_get_chamber_roster_missing_script_returns_empty(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda *a, **k: fromstring("<html><body>no data here</body></html>"),
+    )
+    assert cong_scraper.get_chamber_roster("Diputados") == []
+
+
+def test_get_chamber_roster_fetch_failure_returns_empty(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr("backend.scrapers.congresistas.parse_url", lambda *a, **k: None)
+    assert cong_scraper.get_chamber_roster("Senadores") == []
+
+
+def test_create_chamber_congresista_sets_chamber_and_leg_period(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: '{"data": []}')
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    assert raw.chamber == "Senadores"
+    assert raw.leg_period == "Parlamentario 2026 - 2031"
+    assert raw.website == _ROSTER_ENTRY["url"]
+    assert raw.memberships_content == '{"data": []}'
+
+
+def test_create_chamber_congresista_without_url_skips_cargos_fetch(monkeypatch):
+    """No profile url -> _get_chamber_cargos must never be called (would
+    build a malformed urljoin target)."""
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
+
+    def _boom(url):
+        raise AssertionError("_get_chamber_cargos should not be called without a url")
+
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", _boom)
+
+    entry = {**_ROSTER_ENTRY, "url": ""}
+    raw = cong_scraper.create_chamber_congresista("Senadores", entry)
+
+    assert raw.memberships_content is None
+
+
+_CARGOS_TABLE_HTML = """
+<html><body>
+<section data-cargos-panel="">
+<table class="cargos-table"><tbody>
+  <tr data-cargos-row="" data-cargos-type="">
+    <td data-label="Órgano o comisión"><strong></strong><small title="COMISIÓN PERMANENTE">COMISIÓN PERMANENTE</small></td>
+    <td data-label="Cargo"><span class="cargos-badge cargos-badge--role">Titular</span></td>
+    <td data-label="Desde">18/08/2026</td>
+    <td data-label="Hasta">26/07/2027</td>
+    <td data-label="Estado"><span>Activo</span></td>
+  </tr>
+  <tr data-cargos-row="" data-cargos-type="comision-ordinaria-legislativa">
+    <td data-label="Órgano o comisión"><strong>Comisión Ordinaria Legislativa</strong><small title="COMISIÓN DE JUSTICIA Y DERECHOS HUMANOS">COMISIÓN DE JUSTICIA Y DERECHOS HUMANOS</small></td>
+    <td data-label="Cargo"><span class="cargos-badge cargos-badge--role">Secretario</span></td>
+    <td data-label="Desde">14/08/2026</td>
+    <td data-label="Hasta">26/07/2027</td>
+    <td data-label="Estado"><span>Activo</span></td>
+  </tr>
+  <tr data-cargos-row="" data-cargos-type="grupo-parlamentario">
+    <td data-label="Órgano o comisión"><strong>Grupo Parlamentario</strong><small title="Fuerza Popular">Fuerza Popular</small></td>
+    <td data-label="Cargo"><span class="cargos-badge cargos-badge--role">Titular</span></td>
+    <td data-label="Desde">27/07/2026</td>
+    <td data-label="Hasta">26/07/2031</td>
+    <td data-label="Estado"><span>Activo</span></td>
+  </tr>
+</tbody></table>
+</section>
+</body></html>
+"""
+
+
+def test_get_chamber_cargos_builds_legacy_shaped_json_excluding_bancada(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda url, *a, **k: fromstring(_CARGOS_TABLE_HTML),
+    )
+
+    result = cong_scraper._get_chamber_cargos(
+        "https://senado.congreso.gob.pe/senador/aguinaga-recuenco-alejandro-aurelio/"
+    )
+
+    assert result is not None
+    payload = json.loads(result)["data"]
+    # Grupo Parlamentario (bancada) row excluded -- only 2 of 3 rows survive.
+    assert len(payload) == 2
+
+    permanente = next(
+        m for m in payload if m["desOrganoCongresista"] == "COMISIÓN PERMANENTE"
+    )
+    assert permanente["desCargo"] == "Titular"
+    assert permanente["fechaInicio"] == "2026-08-18"
+    assert permanente["fechaFin"] == "2027-07-26"
+
+    comision = next(
+        m
+        for m in payload
+        if m["desOrganoCongresista"] == "COMISIÓN DE JUSTICIA Y DERECHOS HUMANOS"
+    )
+    assert comision["desCargo"] == "Secretario"
+    assert comision["fechaInicio"] == "2026-08-14"
+
+    assert not any(m["desOrganoCongresista"] == "Fuerza Popular" for m in payload)
+
+
+def test_get_chamber_cargos_roundtrips_through_process_cong_memberships(monkeypatch):
+    """Confirms the synthesized JSON is byte-compatible with the existing
+    (unchanged) legacy membership-processing pipeline."""
+    from backend.database.raw_models import RawCongresista
+    from backend.database.models import Congresista
+    from backend.process.congresistas import process_cong_memberships
+
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda url, *a, **k: fromstring(_CARGOS_TABLE_HTML),
+    )
+    memberships_content = cong_scraper._get_chamber_cargos(
+        "https://senado.congreso.gob.pe/senador/aguinaga-recuenco-alejandro-aurelio/"
+    )
+
+    raw_cong = RawCongresista(
+        timestamp=datetime.now(),
+        leg_period="Parlamentario 2026 - 2031",
+        memberships_content=memberships_content,
+    )
+    cong = Congresista(full_name="Aguinaga Recuenco, Alejandro Aurelio")
+
+    memberships = process_cong_memberships(raw_cong, cong)
+
+    assert len(memberships) == 2
+    permanente = next(m for m in memberships if m.org_name == "COMISIÓN PERMANENTE")
+    assert permanente.org_type == "Administrativo"
+    assert permanente.start_date.isoformat() == "2026-08-18"
+    comision = next(
+        m
+        for m in memberships
+        if m.org_name == "COMISIÓN DE JUSTICIA Y DERECHOS HUMANOS"
+    )
+    assert comision.org_type == "Comisión"
+
+
+def test_get_chamber_cargos_skips_row_missing_org_name(monkeypatch):
+    html = """
+    <html><body><table class="cargos-table"><tbody>
+      <tr data-cargos-row="" data-cargos-type="">
+        <td data-label="Órgano o comisión"><strong></strong><small title=""></small></td>
+        <td data-label="Cargo"><span class="cargos-badge cargos-badge--role">Titular</span></td>
+        <td data-label="Desde">18/08/2026</td>
+        <td data-label="Hasta">26/07/2027</td>
+      </tr>
+    </tbody></table></body></html>
+    """
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda url, *a, **k: fromstring(html),
+    )
+
+    result = cong_scraper._get_chamber_cargos(
+        "https://senado.congreso.gob.pe/senador/x/"
+    )
+    assert result is None
+
+
+def test_get_chamber_cargos_skips_row_with_malformed_date(monkeypatch):
+    html = """
+    <html><body><table class="cargos-table"><tbody>
+      <tr data-cargos-row="" data-cargos-type="">
+        <td data-label="Órgano o comisión"><strong></strong><small title="COMISIÓN PERMANENTE">COMISIÓN PERMANENTE</small></td>
+        <td data-label="Cargo"><span class="cargos-badge cargos-badge--role">Titular</span></td>
+        <td data-label="Desde">not-a-date</td>
+        <td data-label="Hasta">26/07/2027</td>
+      </tr>
+    </tbody></table></body></html>
+    """
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda url, *a, **k: fromstring(html),
+    )
+
+    result = cong_scraper._get_chamber_cargos(
+        "https://senado.congreso.gob.pe/senador/x/"
+    )
+    assert result is None
+
+
+def test_parse_cargos_date_converts_ddmmyyyy_to_iso():
+    cong_scraper = RawCongresistasScraper()
+    assert cong_scraper._parse_cargos_date("18/08/2026") == "2026-08-18"
+    assert cong_scraper._parse_cargos_date(None) is None
+    assert cong_scraper._parse_cargos_date("") is None
+    assert cong_scraper._parse_cargos_date("garbage") is None
+
+
+def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
+    monkeypatch,
+):
+    """CRITICAL: proves the scraper's synthetic HTML is byte-compatible with
+    process_profile_content()'s existing xpath contract -- the adapter
+    pattern this Phase B1 design relies on for zero process-layer changes.
+
+    full_name is asserted in "Nombres Apellidos" order: process_profile_content
+    now runs the .nombres text through split_and_sort_name, correctly
+    reordering the roster's raw "Apellidos, Nombres" format (found 2026-09
+    -- the previous version of this test asserted the unconverted comma
+    string as if it were correct, which is exactly the bug that shipped)."""
+    from backend.process.congresistas import process_profile_content
+
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    cong, orgs, memberships = process_profile_content(raw, {})
+
+    assert cong.full_name == "Alejandro Aurelio Aguinaga Recuenco"
+    assert cong.first_name == "Alejandro Aurelio"
+    assert cong.last_name == "Aguinaga Recuenco"
+    assert cong.photo_url == _ROSTER_ENTRY["photo"]
+    assert [o.org_name for o in orgs] == ["Fuerza Popular", "Senado de la República"]
+    assert memberships[0].org_name == "Fuerza Popular"
+    assert memberships[1].org_name == "Senado de la República"
+    assert memberships[1].votes_in_election == 25642
+    assert memberships[1].role.value == "Senador"
+
+
+def test_extract_chamber_congresistas_tracks_all_entries(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
+    monkeypatch.setattr(cong_scraper, "update_tracking", lambda c: c)
+
+    second_entry = dict(_ROSTER_ENTRY, name="Otro, Congresista")
+    result = cong_scraper.extract_chamber_congresistas(
+        "Diputados", [_ROSTER_ENTRY, second_entry]
+    )
+
+    assert len(result) == 2
+    assert all(r.chamber == "Diputados" for r in result)
+    assert cong_scraper.raw_congresistas == result

@@ -579,3 +579,248 @@ def test_add_committees_to_db_handles_sqlalchemy_error():
     assert scraper.add_committees_to_db() is False
     assert dummy_session.rolled_back is True
     assert dummy_session.closed is True
+
+
+# ---------- 2026-2031 chamber committees index (Phase B1) ----------
+
+
+def test_get_chamber_committees_synthesizes_index_and_roundtrips_process_committee(
+    monkeypatch,
+):
+    """CRITICAL: proves the scraper's synthetic index HTML is
+    byte-compatible with process_committee()'s existing xpath contract."""
+    from backend.process.organizations import process_committee
+
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    index_html = """
+    <html><body>
+      <a href="https://senado.congreso.gob.pe/comision-de-justicia-y-derechos-humanos/">
+        Comisión de Justicia y Derechos Humanos
+      </a>
+      <a href="https://senado.congreso.gob.pe/comision-de-defensa-nacional-y-orden-interno/">
+        Comisión de Defensa Nacional y Orden Interno
+      </a>
+      <a href="https://senado.congreso.gob.pe/otra-pagina/">Not a committee</a>
+    </body></html>
+    """
+
+    def fake_parse_url(url, *args, **kwargs):
+        assert url == "https://senado.congreso.gob.pe/comisiones/"
+        return fromstring(index_html)
+
+    monkeypatch.setattr("backend.scrapers.committees.parse_url", fake_parse_url)
+
+    result = scraper.get_chamber_committees("Senadores")
+
+    assert len(result) == 1
+    raw_comm = result[0]
+    assert raw_comm.chamber == "Senadores"
+    assert raw_comm.legislative_year == "2026"
+
+    orgs = process_committee(raw_comm)
+    assert {o.org_name for o in orgs} == {
+        "Comisión de Justicia y Derechos Humanos",
+        "Comisión de Defensa Nacional y Orden Interno",
+    }
+    assert all(o.parent_org_name == "Senado de la República" for o in orgs)
+    assert all(o.org_subtype == "Comisión Ordinaria" for o in orgs)
+
+
+_WP_COMISIONES_HTML = """
+<html><body>
+<div class="wp-comisiones">
+<div class="titulo-seccion">Comisiones Ordinarias Legislativas</div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/constitucion-reglamento-y-relaciones-exteriores/">Comisión de Constitución, Reglamento y Relaciones Exteriores</a></div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/justicia-y-derechos-humanos/">Comisión de Justicia y Derechos Humanos.</a></div>
+<div class="titulo-seccion">Comisiones Ordinarias No Legislativas (art.45)</div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/etica/">Comisión de Ética Parlamentaria.</a></div>
+<div class="titulo-seccion">Comisiones Extraordinarias</div>
+<div class="nombre-comision"><a href="https://diputados.congreso.gob.pe/futura-comision/">Comisión Futura</a></div>
+</div>
+</body></html>
+"""
+
+
+def test_get_chamber_committees_tags_rows_by_section_title(monkeypatch):
+    """CRITICAL: confirms the real wp-comisiones/titulo-seccion structure
+    (confirmed live 2026-09-02) tags each committee with its own section's
+    title, not a single hardcoded "Comisión Ordinaria" for every row --
+    and that an unrecognized future section title ("Comisiones
+    Extraordinarias") is written through verbatim by the scraper, then
+    logged and skipped (not raised) by process_committee(), so it doesn't
+    block the OTHER committees sharing the same chamber's RawCommittee
+    row/raw_html blob."""
+    from backend.process.organizations import process_committee
+
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring(_WP_COMISIONES_HTML),
+    )
+
+    result = scraper.get_chamber_committees("Diputados")
+    assert len(result) == 1
+    raw_comm = result[0]
+
+    # The unrecognized section's committee is NOT silently dropped by the
+    # scraper -- its raw section title is still present verbatim in
+    # raw_html, confirming the scraper layer doesn't do any filtering.
+    assert "Comisión Futura" in raw_comm.raw_html
+    assert "Comisiones Extraordinarias" in raw_comm.raw_html
+
+    orgs = process_committee(raw_comm)
+    by_name = {o.org_name: o for o in orgs}
+    assert (
+        by_name[
+            "Comisión de Constitución, Reglamento y Relaciones Exteriores"
+        ].org_subtype
+        == "Comisión Ordinaria Legislativa"
+    )
+    assert (
+        by_name["Comisión de Justicia y Derechos Humanos."].org_subtype
+        == "Comisión Ordinaria Legislativa"
+    )
+    # Classified by SECTION membership (it's under "No Legislativas" on
+    # the index page), not by parse_comm_type's name-based rule for this
+    # committee -- that rule matches when the type text is literally
+    # "Comisión de Ética Parlamentaria" (e.g. a legacy dropdown value),
+    # which isn't the case here.
+    assert (
+        by_name["Comisión de Ética Parlamentaria."].org_subtype
+        == "Comisión Ordinaria No Legislativa"
+    )
+    # Unrecognized type: logged and skipped, not raised -- the other 3
+    # committees in the same batch still process correctly.
+    assert "Comisión Futura" not in by_name
+    assert len(orgs) == 3
+
+
+_JOINT_COMMITTEE_PAGE_HTML = """
+<html><body>
+  <h1>Comisión Bicameral de Presupuesto y Cuenta General de la República</h1>
+  <table>
+    <thead><tr>
+      <th>Foto</th><th>Apellidos y Nombres</th>
+      <th>Grupo Parlamentario</th><th>Cargo</th><th>e-Mail</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><img/></td>
+        <td><a href="https://senado.congreso.gob.pe/senador/arista-arbildo-jose-berley">
+          Arista Arbildo, Jose Berley</a></td>
+        <td>FUERZA POPULAR</td>
+        <td>Presidente</td>
+        <td>jarista@congreso.gob.pe</td>
+      </tr>
+    </tbody>
+  </table>
+</body></html>
+"""
+
+
+def test_get_joint_committees_builds_congreso_tagged_committee(monkeypatch):
+    """CRITICAL: proves the joint committee scrape resolves through
+    process_committee() as a parentless (chamber="Congreso") entity --
+    the member table itself is irrelevant (existence-only scrape, see
+    get_joint_committees' docstring), only the <h1> name is used."""
+    from backend.process.organizations import process_committee
+
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring(_JOINT_COMMITTEE_PAGE_HTML),
+    )
+
+    result = scraper.get_joint_committees()
+    assert len(result) == 1
+    raw_comm = result[0]
+    assert raw_comm.chamber == "Congreso"
+    assert raw_comm.committee_type == "Comisión Bicameral"
+
+    orgs = process_committee(raw_comm)
+    assert len(orgs) == 1
+    org = orgs[0]
+    assert (
+        org.org_name
+        == "Comisión Bicameral de Presupuesto y Cuenta General de la República"
+    )
+    assert org.org_subtype == "Comisión Bicameral"
+    assert org.parent_org_name is None
+    assert org.parent_org_type is None
+
+
+def test_get_joint_committees_skips_page_missing_h1(monkeypatch):
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring("<html><body>no h1 here</body></html>"),
+    )
+
+    result = scraper.get_joint_committees()
+    assert result == []
+
+
+def test_get_joint_committees_skips_failed_fetch(monkeypatch):
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url", lambda url, *a, **k: None
+    )
+
+    result = scraper.get_joint_committees()
+    assert result == []
+
+
+def test_get_chamber_committees_excludes_index_self_link(monkeypatch):
+    """Regression: the page's own nav link back to /comisiones/ (plural)
+    also starts with "{base_url}/comision" -- must not be scraped as a
+    fake committee named "Comisiones"."""
+    scraper = make_scraper()
+    scraper.update_tracking = lambda c: c
+
+    index_html = """
+    <html><body>
+      <a href="https://senado.congreso.gob.pe/comisiones/">Comisiones</a>
+      <a href="https://senado.congreso.gob.pe/comision-de-justicia-y-derechos-humanos/">
+        Comisión de Justicia y Derechos Humanos
+      </a>
+    </body></html>
+    """
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda url, *a, **k: fromstring(index_html),
+    )
+
+    result = scraper.get_chamber_committees("Senadores")
+
+    assert len(result) == 1
+    parsed = fromstring(result[0].raw_html)
+    names = [
+        content.text_content().strip()
+        for _, content in (row.getchildren() for row in parsed.xpath("//tr"))
+    ]
+    assert names == ["Comisión de Justicia y Derechos Humanos"]
+
+
+def test_get_chamber_committees_no_links_found_returns_empty(monkeypatch):
+    scraper = make_scraper()
+    monkeypatch.setattr(
+        "backend.scrapers.committees.parse_url",
+        lambda *a, **k: fromstring("<html><body>nothing here</body></html>"),
+    )
+    assert scraper.get_chamber_committees("Diputados") == []
+
+
+def test_get_chamber_committees_fetch_failure_returns_empty(monkeypatch):
+    scraper = make_scraper()
+    monkeypatch.setattr("backend.scrapers.committees.parse_url", lambda *a, **k: None)
+    assert scraper.get_chamber_committees("Senadores") == []

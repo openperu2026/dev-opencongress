@@ -497,3 +497,340 @@ def test_get_raw_organizations_aborts_when_no_years(monkeypatch):
 
     assert scraper.organizations_list == []
     assert any("No years found for type=Mesa Directiva" in msg for msg in warnings)
+
+
+# ---------- 2026-2031 chamber admin orgs (Phase B1) ----------
+
+_PARLIAMENT_TABLE_HTML = """
+<html><body>
+  <table id="parliamentTable">
+    <thead><tr>
+      <th>APELLIDOS Y NOMBRES</th><th>CARGO</th>
+      <th>GRUPO PARLAMENTARIO</th><th>EMAIL</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><a href="https://senado.congreso.gob.pe/senador/juarez-gallegos-carmen-patricia/">
+          Juarez Gallegos, Carmen Patricia</a></td>
+        <td>Titular</td>
+        <td>FUERZA POPULAR</td>
+        <td>pjuarez@congreso.gob.pe</td>
+      </tr>
+      <tr>
+        <td><a href="https://senado.congreso.gob.pe/senador/andres-lujan-serafin/">
+          Andres Lujan, Serafin</a></td>
+        <td></td>
+        <td>JUNTOS POR EL PERU</td>
+        <td>sandres@congreso.gob.pe</td>
+      </tr>
+    </tbody>
+  </table>
+</body></html>
+"""
+
+
+def test_parse_parliament_table_matches_by_header_text():
+    scraper = make_scraper()
+    rows = scraper._parse_parliament_table(fromstring(_PARLIAMENT_TABLE_HTML))
+
+    assert len(rows) == 2
+    assert rows[0]["cargo"] == "Titular"
+    assert "Juarez Gallegos" in rows[0]["name"]
+    assert rows[0]["website"] == (
+        "https://senado.congreso.gob.pe/senador/juarez-gallegos-carmen-patricia/"
+    )
+    # Empty CARGO cell (Andres Lujan) still yields a row, cargo="" not dropped.
+    assert rows[1]["cargo"] == ""
+
+
+_COMISION_PERMANENTE_TABLE_HTML = """
+<html><body>
+  <table>
+    <thead><tr>
+      <th>Foto</th><th>Apellidos y Nombres</th>
+      <th>Grupo Parlamentario</th><th>e-Mail</th>
+    </tr></thead>
+    <tbody>
+      <tr>
+        <td><img/></td>
+        <td><a href="https://senado.congreso.gob.pe/senador/aguinaga-recuenco-alejandro-aurelio/">
+          Aguinaga Recuenco, Alejandro Aurelio</a></td>
+        <td>FUERZA POPULAR</td>
+        <td>aaguinaga@congreso.gob.pe</td>
+      </tr>
+    </tbody>
+  </table>
+</body></html>
+"""
+
+
+def test_parse_parliament_table_falls_back_when_no_id_present():
+    """Comisión Permanente's real page has a <table> with no id at all and
+    no Cargo column -- confirmed live 2026-09-02."""
+    scraper = make_scraper()
+    rows = scraper._parse_parliament_table(fromstring(_COMISION_PERMANENTE_TABLE_HTML))
+
+    assert len(rows) == 1
+    assert "Aguinaga Recuenco" in rows[0]["name"]
+    assert rows[0]["cargo"] is None
+
+
+_MESA_DIRECTIVA_SENADO_HTML = """
+<html><body>
+  <div id="mesa-directiva-section">
+    <div class="md-top-row">
+      <div class="md-profile">
+        <a class="md-name" href="https://senado.congreso.gob.pe/senador/torres-morales-miguel-angel/">Torres Morales, Miguel Ángel</a>
+        <span class="md-role">Presidente</span>
+      </div>
+    </div>
+    <div class="md-bottom-row">
+      <div class="md-profile">
+        <a class="md-name" href="https://senado.congreso.gob.pe/senador/munante-barrios-alejandro/">Muñante Barrios, Alejandro</a>
+        <span class="md-role">Primer Vicepresidente</span>
+      </div>
+    </div>
+  </div>
+</body></html>
+"""
+
+_MESA_DIRECTIVA_DIPUTADOS_HTML = """
+<html><body>
+  <div class="congresista-results__body" data-results-body=""></div>
+  <script type="application/json" data-congresista-dataset>[
+    {"name": "Reto Otero, Oscar de Jesús", "campo_adicional": "Presidencia",
+     "url": "https://diputados.congreso.gob.pe/diputado/reto-otero-oscar-de-jesus/"},
+    {"name": "Marquez Huanca, Analí", "campo_adicional": "Vicepresidencia",
+     "url": "https://diputados.congreso.gob.pe/diputado/marquez-huanca-anali/"}
+  ]</script>
+</body></html>
+"""
+
+
+def test_parse_mesa_directiva_senado_extracts_profiles():
+    scraper = make_scraper()
+    rows = scraper._parse_mesa_directiva_senado(fromstring(_MESA_DIRECTIVA_SENADO_HTML))
+
+    assert len(rows) == 2
+    assert rows[0]["name"] == "Torres Morales, Miguel Ángel"
+    assert rows[0]["cargo"] == "Presidente"
+    assert rows[0]["website"] == (
+        "https://senado.congreso.gob.pe/senador/torres-morales-miguel-angel/"
+    )
+
+
+def test_parse_mesa_directiva_diputados_extracts_rows():
+    scraper = make_scraper()
+    rows = scraper._parse_mesa_directiva_diputados(
+        fromstring(_MESA_DIRECTIVA_DIPUTADOS_HTML)
+    )
+
+    assert len(rows) == 2
+    assert rows[0]["name"] == "Reto Otero, Oscar de Jesús"
+    assert rows[0]["cargo"] == "Presidencia"
+    assert rows[0]["website"] == (
+        "https://diputados.congreso.gob.pe/diputado/reto-otero-oscar-de-jesus/"
+    )
+
+
+def test_parse_parliament_table_missing_returns_empty():
+    scraper = make_scraper()
+    assert (
+        scraper._parse_parliament_table(fromstring("<html><body></body></html>")) == []
+    )
+
+
+def test_scrape_admin_org_page_roundtrips_through_process_admin_org(monkeypatch):
+    """CRITICAL: proves the synthesized `.congresistas` blob (5 cells, one
+    throwaway header row) is byte-compatible with process_admin_org()'s
+    existing xpath contract, and confirms the confirmed 2026-2031 design:
+    org-page scrapes build ONLY the Organization record, never Membership
+    rows -- all membership data for this term comes from each congresista's
+    own cargos page instead (congresistas.py::_get_chamber_cargos)."""
+    from backend.process.organizations import process_admin_org
+
+    scraper = make_scraper()
+    monkeypatch.setattr(
+        "backend.scrapers.organizations.parse_url",
+        lambda url, *a, **k: fromstring(_PARLIAMENT_TABLE_HTML),
+    )
+
+    raw_org = scraper._scrape_admin_org_page(
+        "https://senado.congreso.gob.pe/junta-de-portavoces/",
+        "Junta de Portavoces",
+        "Senadores",
+        "2026",
+    )
+
+    assert raw_org is not None
+    assert raw_org.chamber == "Senadores"
+    assert raw_org.legislative_year == "2026"
+
+    org_schema, memberships = process_admin_org(raw_org)
+
+    assert org_schema.org_name == "Junta de Portavoces"
+    assert org_schema.parent_org_name == "Senado de la República"
+    # Cargo is always blanked out by _build_admin_org_html for 2026-2031
+    # rows now, so process_admin_org's existing blank-cargo skip drops
+    # every row -- zero memberships, even though real names/cargos were
+    # parsed and are present in raw_html.
+    assert memberships == []
+
+
+def test_scrape_admin_org_page_missing_table_returns_none(monkeypatch):
+    """Genuine failure case (site structure changed again): prose with no
+    #mesa-directiva-section at all -- the real Senado Mesa Directiva
+    parser must still return None, not crash."""
+    scraper = make_scraper()
+    monkeypatch.setattr(
+        "backend.scrapers.organizations.parse_url",
+        lambda url, *a, **k: fromstring("<html><body>prose, no section</body></html>"),
+    )
+    result = scraper._scrape_admin_org_page(
+        "https://senado.congreso.gob.pe/mesa-directiva/",
+        "Mesa Directiva",
+        "Senadores",
+        "2026",
+    )
+    assert result is None
+
+
+def test_scrape_admin_org_page_mesa_directiva_senado_builds_org_no_membership(
+    monkeypatch,
+):
+    from backend.process.organizations import process_admin_org
+
+    scraper = make_scraper()
+    monkeypatch.setattr(
+        "backend.scrapers.organizations.parse_url",
+        lambda url, *a, **k: fromstring(_MESA_DIRECTIVA_SENADO_HTML),
+    )
+
+    raw_org = scraper._scrape_admin_org_page(
+        "https://senado.congreso.gob.pe/mesa-directiva/",
+        "Mesa Directiva",
+        "Senadores",
+        "2026",
+    )
+
+    assert raw_org is not None
+    org_schema, memberships = process_admin_org(raw_org)
+    assert org_schema.org_name == "Mesa Directiva"
+    assert memberships == []
+
+
+def test_scrape_admin_org_page_mesa_directiva_diputados_builds_org_no_membership(
+    monkeypatch,
+):
+    from backend.process.organizations import process_admin_org
+
+    scraper = make_scraper()
+    monkeypatch.setattr(
+        "backend.scrapers.organizations.parse_url",
+        lambda url, *a, **k: fromstring(_MESA_DIRECTIVA_DIPUTADOS_HTML),
+    )
+
+    raw_org = scraper._scrape_admin_org_page(
+        "https://diputados.congreso.gob.pe/mesa-directiva/",
+        "Mesa Directiva",
+        "Diputados",
+        "2026",
+    )
+
+    assert raw_org is not None
+    org_schema, memberships = process_admin_org(raw_org)
+    assert org_schema.org_name == "Mesa Directiva"
+    assert memberships == []
+
+
+def test_scrape_admin_org_page_comision_permanente_builds_org_no_membership(
+    monkeypatch,
+):
+    """Comisión Permanente's real page has a <table> with no id and no
+    Cargo column at all -- must still build the Organization record."""
+    from backend.process.organizations import process_admin_org
+
+    scraper = make_scraper()
+    monkeypatch.setattr(
+        "backend.scrapers.organizations.parse_url",
+        lambda url, *a, **k: fromstring(_COMISION_PERMANENTE_TABLE_HTML),
+    )
+
+    raw_org = scraper._scrape_admin_org_page(
+        "https://www.congreso.gob.pe/comision-permanente/",
+        "Comisión Permanente",
+        "Congreso",
+        "2026",
+    )
+
+    assert raw_org is not None
+    org_schema, memberships = process_admin_org(raw_org)
+    assert org_schema.org_name == "Comisión Permanente"
+    assert memberships == []
+
+
+def test_get_chamber_organizations_skips_pages_without_table(monkeypatch):
+    """Genuine failure case: neither org page has real structure -- must
+    not crash, just skip both."""
+    scraper = make_scraper()
+    scraper.update_tracking = lambda o: o
+
+    def fake_parse_url(url, *a, **k):
+        if "junta-de-portavoces" in url:
+            return fromstring(_PARLIAMENT_TABLE_HTML)
+        return fromstring("<html><body>no table</body></html>")
+
+    monkeypatch.setattr("backend.scrapers.organizations.parse_url", fake_parse_url)
+
+    result = scraper.get_chamber_organizations("Senadores")
+
+    assert len(result) == 1
+    assert result[0].type_org == "Junta de Portavoces"
+    assert result[0].chamber == "Senadores"
+
+
+def test_get_joint_comision_permanente_tags_congreso_chamber(monkeypatch):
+    scraper = make_scraper()
+    scraper.update_tracking = lambda o: o
+    monkeypatch.setattr(
+        "backend.scrapers.organizations.parse_url",
+        lambda url, *a, **k: fromstring(_PARLIAMENT_TABLE_HTML),
+    )
+
+    result = scraper.get_joint_comision_permanente()
+
+    assert len(result) == 1
+    assert result[0].chamber == "Congreso"
+    assert result[0].type_org == "Comisión Permanente"
+
+
+def test_update_tracking_scopes_by_chamber():
+    """Regression: Junta de Portavoces for Senadores vs Diputados (same
+    type_org, same legislative_year) must not collide in tracking."""
+    engine, SessionLocal = setup_inmemory_db()
+    scraper = make_scraper()
+    scraper.Session = SessionLocal
+
+    senado_org = RawOrganization(
+        timestamp=datetime(2026, 1, 1),
+        legislative_year="2026",
+        chamber="Senadores",
+        type_org="Junta de Portavoces",
+        raw_html='<table class="congresistas"><tbody></tbody></table>',
+    )
+    tracked = scraper.update_tracking(senado_org)
+    with SessionLocal() as session:
+        session.add(tracked)
+        session.commit()
+
+    diputados_org = RawOrganization(
+        timestamp=datetime(2026, 1, 1, 0, 0, 1),
+        legislative_year="2026",
+        chamber="Diputados",
+        type_org="Junta de Portavoces",
+        raw_html='<table class="congresistas"><tbody></tbody></table>',
+    )
+    tracked_diputados = scraper.update_tracking(diputados_org)
+
+    assert tracked_diputados.changed is True
+    assert tracked_diputados.last_update is True

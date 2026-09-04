@@ -43,6 +43,7 @@ def _raw_cong(
     memberships_content=None,
     leg_period="2021-2026",
     website="https://www.congreso.gob.pe/congresista/juan",
+    chamber=None,
 ):
     if memberships_content is None:
         memberships_content = {"data": []}
@@ -52,6 +53,7 @@ def _raw_cong(
         leg_period=leg_period,
         website=website,
         timestamp=datetime(2025, 8, 1),
+        chamber=chamber,
     )
 
 
@@ -85,6 +87,151 @@ def test_process_profile_content_parses_fields_and_votes_int(
     assert memberships[0].org_name == "Accion Popular"
     assert memberships[1].votes_in_election == 12345
     assert memberships[1].org_name == "Cámara de Diputados"
+
+
+def test_process_profile_content_chamber_none_is_byte_identical_to_diputados(
+    profile_html, dict_data_cong
+):
+    """CRITICAL regression (Regression Rule #3): chamber=None is what every
+    historical 2021-2026 row has -- must produce identical output to an
+    explicit chamber="Diputados" row, and to pre-change behavior."""
+    raw_none = _raw_cong(
+        profile_content=profile_html, leg_period="2021-2026", chamber=None
+    )
+    raw_diputados = _raw_cong(
+        profile_content=profile_html, leg_period="2021-2026", chamber="Diputados"
+    )
+
+    cong_none, orgs_none, memberships_none = mod.process_profile_content(
+        raw_none, dict_data_cong
+    )
+    cong_diputados, orgs_diputados, memberships_diputados = mod.process_profile_content(
+        raw_diputados, dict_data_cong
+    )
+
+    assert [o.org_name for o in orgs_none] == [o.org_name for o in orgs_diputados]
+    assert memberships_none[1].org_name == "Cámara de Diputados"
+    assert memberships_diputados[1].org_name == "Cámara de Diputados"
+    assert memberships_none[1].role == memberships_diputados[1].role
+
+
+def test_process_profile_content_reorders_comma_formatted_chamber_name():
+    """Found 2026-09: the 2026-2031 chamber roster's raw name is
+    "Apellidos, Nombres" (comma), synthesized verbatim into the same
+    .nombres div the legacy scraper's already-correctly-ordered
+    "Nombres Apellidos" text fills -- process_profile_content's else
+    branch must reorder it via split_and_sort_name, not pass it through,
+    and should also populate first_name/last_name from it."""
+    html = """
+    <html>
+      <div class="nombres"><span>Label</span><span>Aguinaga Recuenco, Alejandro Aurelio</span></div>
+      <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+      <div class="votacion"><span>Label</span><span>0</span></div>
+      <div class="representa"><span>Label</span><span>Lima</span></div>
+      <div class="condicion"><span>Label</span><span>Titular</span></div>
+      <div class="foto"><img src="https://example.org/photo.png"/></div>
+    </html>
+    """
+    raw = _raw_cong(profile_content=html, leg_period="2026-2031", chamber="Senadores")
+
+    cong, orgs, memberships = mod.process_profile_content(raw, {})
+
+    assert cong.full_name == "Alejandro Aurelio Aguinaga Recuenco"
+    assert cong.first_name == "Alejandro Aurelio"
+    assert cong.last_name == "Aguinaga Recuenco"
+
+
+def test_process_profile_content_enriches_from_2026_2031_dict_by_normalized_name():
+    """The 2026-2031 mined dict is keyed by normalized name (no website
+    available for this term, confirmed live 2026-09-03) -- dni/gender/
+    congresista_id must be pulled in via that lookup, not left None just
+    because they're genuinely absent from the profile HTML itself."""
+    html = """
+    <html>
+      <div class="nombres"><span>Label</span><span>Aguinaga Recuenco, Alejandro Aurelio</span></div>
+      <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+      <div class="votacion"><span>Label</span><span>0</span></div>
+      <div class="representa"><span>Label</span><span>Lima</span></div>
+      <div class="condicion"><span>Label</span><span>Titular</span></div>
+      <div class="foto"><img src="https://example.org/photo.png"/></div>
+    </html>
+    """
+    raw = _raw_cong(profile_content=html, leg_period="2026-2031", chamber="Senadores")
+    dict_cong_data_current = {
+        mod.normalize_name("Alejandro Aurelio Aguinaga Recuenco", sort_tokens=True): {
+            "dni": "08236035",
+            "gender": "Masculino",
+            "congresista_id": 4,
+        }
+    }
+
+    cong, orgs, memberships = mod.process_profile_content(
+        raw, {}, dict_cong_data_current=dict_cong_data_current
+    )
+
+    assert cong.dni == "08236035"
+    assert cong.gender == "Masculino"
+    assert cong.congresista_id == 4
+
+
+def test_process_profile_content_no_2026_2031_match_stays_none():
+    """Coverage grows over time as more 2026-2031 bills/motions get
+    scraped -- must degrade gracefully (no error) when nothing matches
+    yet, same as when dict_cong_data_current is omitted entirely."""
+    html = """
+    <html>
+      <div class="nombres"><span>Label</span><span>Someone New, Not Yet Mined</span></div>
+      <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+      <div class="votacion"><span>Label</span><span>0</span></div>
+      <div class="representa"><span>Label</span><span>Lima</span></div>
+      <div class="condicion"><span>Label</span><span>Titular</span></div>
+      <div class="foto"><img src="https://example.org/photo.png"/></div>
+    </html>
+    """
+    raw = _raw_cong(profile_content=html, leg_period="2026-2031", chamber="Senadores")
+
+    cong, orgs, memberships = mod.process_profile_content(
+        raw, {}, dict_cong_data_current={"someone else": {"dni": "1"}}
+    )
+
+    assert cong.dni is None
+    assert cong.gender is None
+    assert cong.congresista_id is None
+
+
+def test_process_profile_content_legacy_no_comma_name_unchanged(profile_html):
+    """Regression: the legacy scraper's .nombres text has no comma and is
+    already "Nombres Apellidos" -- split_and_sort_name must pass it
+    through unchanged (its documented no-comma fallback), not corrupt it."""
+    raw = _raw_cong(profile_content=profile_html, leg_period="2021-2026", chamber=None)
+
+    cong, orgs, memberships = mod.process_profile_content(raw, {})
+
+    assert cong.full_name == "Juan Alberto Perez Quispe"
+    # split_and_sort_name's no-comma fallback returns (name, None, None) --
+    # first_name/last_name stay unavailable, same as before this fix, since
+    # there's no reliable way to split a no-comma string into parts.
+    assert cong.first_name is None
+    assert cong.last_name is None
+
+
+def test_process_profile_content_senadores_chamber_maps_to_senado(
+    profile_html, dict_data_cong
+):
+    raw = _raw_cong(
+        profile_content=profile_html, leg_period="2026-2031", chamber="Senadores"
+    )
+
+    cong, orgs, memberships = mod.process_profile_content(raw, dict_data_cong)
+
+    assert [org.org_name for org in orgs] == [
+        "Accion Popular",
+        "Senado de la República",
+    ]
+    assert memberships[1].org_name == "Senado de la República"
+    from backend import RoleOrganization
+
+    assert memberships[1].role == RoleOrganization.SENADOR
 
 
 def test_process_memberships_all_branches(monkeypatch):

@@ -1,7 +1,10 @@
+from loguru import logger
+
 from backend.database.raw_models import RawCommittee, RawOrganization
 from backend.process.schema import Organization, Membership
 from backend.process.utils import split_and_sort_name
 from backend.core.parsers import parse_comm_type
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
 from backend import find_leg_period, normalize_membership_role, COMISION_SHORT_NAMES
 
@@ -9,7 +12,7 @@ from lxml.html import fromstring
 
 
 def process_chambers() -> list[Organization]:
-    # TODO: replace with real links
+    # Senado URL is a placeholder pending Step 0 confirmation of the real link.
     return [
         Organization(
             org_name="Cámara de Diputados",
@@ -18,10 +21,10 @@ def process_chambers() -> list[Organization]:
             org_link="www.congreso.gob.pe/diputados",
         ),
         Organization(
-            org_name="Cámara de Senadores",
+            org_name="Senado de la República",
             org_type="Cámara",
             org_subtype=None,
-            org_link="www.congreso.gob.pe/senadores",
+            org_link="www.congreso.gob.pe/senado",
         ),
     ]
 
@@ -32,6 +35,8 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
 
     raw_lst = html.xpath('//*[@class="congresistas"]/tbody/tr')
 
+    parent_org_name = CHAMBER_LABEL_TO_ORG_NAME[raw_comm.chamber]
+
     for comm in raw_lst:
         name_elem, content = comm.getchildren()
 
@@ -39,6 +44,21 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
         name_comm = content.text_content().strip()
 
         if type_comm and name_comm and type_comm != "Comisión":
+            try:
+                org_subtype = parse_comm_type(type_comm)
+            except ValueError:
+                # A genuinely new/unrecognized committee type (e.g. a
+                # future "Comisiones Extraordinarias" section) -- skip just
+                # this one committee, not the whole chamber's batch (all
+                # committees for a chamber share one RawCommittee row/
+                # raw_html -- see committees.py::get_chamber_committees).
+                # Logged so it's visible; add a parse_comm_type rule once
+                # the real category is known.
+                logger.warning(
+                    f"Skipping committee {name_comm!r}: unrecognized type {type_comm!r}"
+                )
+                continue
+
             link = content.xpath(".//a/@href")
             link = link[0] if link else ""
 
@@ -46,13 +66,11 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
                 Organization(
                     org_name=name_comm,
                     org_type="Comisión",
-                    org_subtype=parse_comm_type(type_comm),
+                    org_subtype=org_subtype,
                     org_short_name=COMISION_SHORT_NAMES.get(name_comm),
                     org_link=link,
-                    # TODO: Update this when the new congress website address
-                    # for different routes for committees in camara
-                    parent_org_name="Cámara de Diputados",
-                    parent_org_type="Cámara",
+                    parent_org_name=parent_org_name,
+                    parent_org_type="Cámara" if parent_org_name is not None else None,
                 )
             )
 
@@ -62,15 +80,14 @@ def process_committee(raw_comm: RawCommittee) -> list[Organization]:
 def process_admin_org(
     raw_org: RawOrganization,
 ) -> tuple[Organization, list[Membership]]:
+    parent_org_name = CHAMBER_LABEL_TO_ORG_NAME[raw_org.chamber]
     org = Organization(
         org_name=raw_org.type_org,
         org_type="Administrativo",
         org_subtype=raw_org.type_org,
         org_link=raw_org.org_link or "",
-        # TODO: Update this when the new congress website address
-        # for different routes for committees in camara
-        parent_org_name="Cámara de Diputados",
-        parent_org_type="Cámara",
+        parent_org_name=parent_org_name,
+        parent_org_type="Cámara" if parent_org_name is not None else None,
     )
 
     final_lst = []

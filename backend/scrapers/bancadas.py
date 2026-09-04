@@ -1,3 +1,4 @@
+import html as html_lib
 from loguru import logger
 from typing import Literal
 from datetime import datetime
@@ -9,6 +10,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings
+from backend.core.constants import CHAMBER_LEG_PERIOD_LABEL
 from backend.database.raw_models import RawBancada
 from backend.scrapers.utils import parse_url
 
@@ -19,7 +21,18 @@ DB_PATH = settings.DB_URL
 
 class RawBancadaScraper:
     """
-    Class to scrape Grupos Parlamentarios' raw data from the congress web page
+    Class to scrape Grupos Parlamentarios' raw data from the congress web page.
+
+    Two independent scraping paths (see section headers below): LEGACY
+    (through 2021-2026) scrapes a real per-bancada membership table from
+    www3.congreso.gob.pe. 2026-2031 BICAMERAL TERM does NOT scrape a
+    membership table at all -- the real grupos-parlamentarios/ page on the
+    new sites carries no member data (confirmed live 2026-08-31, Phase B
+    plan Step B0 item 2) -- membership is instead derived from the
+    congresistas roster's own `group` field and synthesized into the same
+    HTML shape process_bancada() already parses. Both paths write RawBancada
+    rows to the same table (chamber column: NULL for legacy, "Senadores"/
+    "Diputados" for the new term).
     """
 
     def __init__(self):
@@ -27,6 +40,11 @@ class RawBancadaScraper:
         self.engine = create_engine(DB_PATH)
         self.url = BASE_URL
         self.Session = sessionmaker(bind=self.engine)
+
+    # =====================================================================
+    # LEGACY (through 2021-2026) -- www3.congreso.gob.pe, dropdown-driven,
+    # real per-bancada membership table (.table-cng)
+    # =====================================================================
 
     def get_options(
         self,
@@ -177,14 +195,85 @@ class RawBancadaScraper:
             f"Successfully extracted {len(self.bancadas_list)} raw html bancadas"
         )
 
+    # =====================================================================
+    # 2026-2031 BICAMERAL TERM -- derived from the congresistas roster, not
+    # scraped from grupos-parlamentarios/ directly (see class docstring)
+    # =====================================================================
+
+    @staticmethod
+    def build_chamber_bancada_html(roster: list[dict]) -> str:
+        """Synthesize a `table.table-cng`-shaped HTML blob -- the same shape
+        process_bancada() (backend/process/bancadas.py) already parses --
+        from the congresistas roster's `group` field, grouped by bancada.
+
+        Confirmed live 2026-08-31 (Phase B plan, Step B0 item 2): the real
+        grupos-parlamentarios/ page carries no per-bancada membership table
+        for 2026-2031 (just a static name + regulations-doc-link list) --
+        the congresistas roster is the only source of "who belongs to which
+        bancada" for the new term, so this reconstructs process_bancada()'s
+        expected internal shape instead of adding a second parser. Each
+        membership row uses 2 <td> cells (not 1) because process_bancada()
+        treats a single-<td> row with no <h2> as a row to skip, not a
+        membership row -- see its `len(childs) == 1` branch.
+        """
+        groups: dict[str, list[str]] = {}
+        for entry in roster:
+            group = (entry.get("group") or "").strip()
+            name = (entry.get("name") or "").strip()
+            if not group or not name:
+                continue
+            groups.setdefault(group, []).append(name)
+
+        rows: list[str] = []
+        for bancada_name, members in groups.items():
+            rows.append(f"<tr><td><h2>{html_lib.escape(bancada_name)}</h2></td></tr>")
+            for member_name in members:
+                rows.append(
+                    "<tr><td></td>"
+                    f'<td><span class="conginfo">{html_lib.escape(member_name)}</span></td></tr>'
+                )
+
+        return f'<table class="table-cng"><tbody>{"".join(rows)}</tbody></table>'
+
+    def get_chamber_bancadas(
+        self, chamber: str, roster: list[dict]
+    ) -> list[RawBancada]:
+        """Build+track the one RawBancada row for one chamber's 2026-2031
+        bancadas, derived from an already-fetched congresista roster (see
+        RawCongresistasScraper.get_chamber_roster)."""
+        raw_html = self.build_chamber_bancada_html(roster)
+        new_bancada = RawBancada(
+            timestamp=datetime.now(),
+            legislative_period=CHAMBER_LEG_PERIOD_LABEL,
+            chamber=chamber,
+            raw_html=raw_html,
+            changed=False,
+            processed=False,
+            last_update=True,
+        )
+        self.bancadas_list = [self.update_tracking(new_bancada)]
+        return self.bancadas_list
+
+    # =====================================================================
+    # SHARED -- used by both the legacy and 2026-2031 code paths above
+    # =====================================================================
+
     def update_tracking(self, bancada: RawBancada) -> RawBancada:
-        """Update the tracking columns of a RawBancada object"""
+        """Update the tracking columns of a RawBancada object.
+
+        Scoped by (legislative_period, chamber): the chamber filter matters
+        for the 2026-2031 path specifically -- both chambers share the same
+        legislative_period label ("Parlamentario 2026 - 2031"), so without
+        it a Senado scrape and a Diputados scrape would collide and clobber
+        each other's last_update tracking.
+        """
 
         with self.Session() as session:
             last_bancada = (
                 session.query(RawBancada)
                 .filter(
                     RawBancada.legislative_period == bancada.legislative_period,
+                    RawBancada.chamber == bancada.chamber,
                     RawBancada.last_update.is_(True),
                 )
                 .order_by(RawBancada.timestamp.desc())

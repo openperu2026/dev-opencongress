@@ -79,8 +79,93 @@ LEG_PERIOD_ALIASES = {
 }
 
 
+# Single source of truth for "which legislative periods are we willing to
+# process" — previously expressed independently as separate hardcoded
+# allowlists in _process_congresistas/_process_bancada_definitions/
+# _process_bancada_memberships plus a separate year-range in
+# _process_organization_definitions, which risked drifting out of sync.
+PROCESSABLE_LEG_PERIODS = [
+    "Parlamentario 2021 - 2026",
+    "Parlamentario 2016 - 2021",
+    "Parlamentario 2026 - 2031",
+]
+
+# Maps a raw scraped chamber label (RawCongresista.chamber / RawBancada.chamber /
+# RawCommittee.chamber / RawOrganization.chamber) to the canonical parent
+# Organization name. Two distinct "no specific chamber" cases:
+#   - None: not specified / legacy pre-2026 data — defaults to Diputados to
+#     preserve existing 2021-2026 behavior byte-for-byte.
+#   - "Congreso": a CONFIRMED joint/bicameral entity (e.g. "Comisión Permanente",
+#     "Comisión Bicameral de Presupuesto y Cuenta General de la República") that
+#     genuinely has no chamber parent — maps to None (no parent), not Diputados.
+# Any other value raises (KeyError), by design — see backend/database/orchestrator.py
+# per-row exception handling, which catches and counts this in stats.errors rather
+# than silently misattributing an unrecognized label to the wrong chamber.
+CHAMBER_LABEL_TO_ORG_NAME = {
+    "Diputados": "Cámara de Diputados",
+    "Senadores": "Senado de la República",
+    "Congreso": None,
+    None: "Cámara de Diputados",
+}
+
+# Per-chamber site roots for the 2026-2031 term (confirmed live 2026-08-31 --
+# see Phase B plan, Step B0). These are separate WordPress microsites, not a
+# chamber query param on the legacy www3.congreso.gob.pe site.
+CHAMBER_BASE_URLS = {
+    "Senadores": "https://senado.congreso.gob.pe",
+    "Diputados": "https://diputados.congreso.gob.pe",
+}
+
+# The one raw leg_period label used for every 2026-2031 chamber-scraped row
+# (RawCongresista.leg_period, RawBancada.legislative_period) -- matches
+# LEG_PERIOD_ALIASES/PROCESSABLE_LEG_PERIODS, which already expect this exact
+# string, so no changes needed there.
+CHAMBER_LEG_PERIOD_LABEL = "Parlamentario 2026 - 2031"
+
+# Phase B2 (bills/motions bicameral scraping) chamber-derived maps. Distinct
+# from CHAMBER_LABEL_TO_ORG_NAME above (that maps to canonical Organization
+# names for the process layer) and from chamber_label_from_id's suffix map
+# in backend/process/utils.py (that maps id-suffix -> label, the inverse
+# direction) -- these three map a resolved chamber label to the specific
+# wire formats congreso.gob.pe's bills/motions APIs and the bills SPA expect.
+CHAMBER_LABEL_TO_COD_TIPO_PARL = {"Senadores": "S", "Diputados": "D"}  # API wire code
+
+CHAMBER_LABEL_TO_ID_SUFFIX = {
+    "Senadores": "S",
+    "Diputados": "CD",
+}  # RawBill/RawMotion id suffix
+
+# perParId for the 2026-2031 period -- also doubles as motions' detail-URL
+# "year" path segment (confirmed live: GET .../mocion/{S|D}/2026/{number}
+# uses the bare period-start year, not the full period string). Legacy
+# get_last_id()/_scrape_range() keep their own separate hardcoded 2021
+# literals unchanged (by design, to guarantee zero legacy behavior change),
+# so this deliberately has no "2021-2026" entry -- a dict entry nothing
+# reads would be an unenforced claim that this is a single source of truth
+# when it demonstrably isn't wired up as one.
+LEG_PERIOD_TO_PER_PAR_ID = {"2026-2031": 2026}
+
+# The bills SPA's hash-route chamber prefix (e.g.
+# {BASE_URL}/senado/expediente/2026-2031/{number}), confirmed live.
+CHAMBER_LABEL_TO_ROUTE_SLUG = {"Senadores": "senado", "Diputados": "diputados"}
+
 LEGISLATURE_ALIASES = {
     # Congress wording → canonical legislature code
+    # 2030
+    "Primera Legislatura Ordinaria 2030": "2030-II",
+    "Segunda Legislatura Ordinaria 2030": "2031-I",
+    # 2029
+    "Primera Legislatura Ordinaria 2029": "2029-II",
+    "Segunda Legislatura Ordinaria 2029": "2030-I",
+    # 2028
+    "Primera Legislatura Ordinaria 2028": "2028-II",
+    "Segunda Legislatura Ordinaria 2028": "2029-I",
+    # 2027
+    "Primera Legislatura Ordinaria 2027": "2027-II",
+    "Segunda Legislatura Ordinaria 2027": "2028-I",
+    # 2026
+    "Primera Legislatura Ordinaria 2026": "2026-II",
+    "Segunda Legislatura Ordinaria 2026": "2027-I",
     # 2025
     "Primera Legislatura Ordinaria 2025": "2025-II",
     "Segunda Legislatura Ordinaria 2025": "2026-I",

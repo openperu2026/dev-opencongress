@@ -1,3 +1,4 @@
+import html as html_lib
 from loguru import logger
 from datetime import datetime
 from typing import Literal
@@ -13,11 +14,30 @@ from sqlalchemy import create_engine
 from sqlalchemy.exc import SQLAlchemyError
 
 from backend.config import settings
+from backend.core.constants import CHAMBER_BASE_URLS
 from backend.database.raw_models import RawCommittee
 from backend.scrapers.utils import parse_url
 
 BASE_URL = "https://www3.congreso.gob.pe/pagina/comisiones-ordinarias"
 DB_PATH = settings.DB_URL
+
+# 2026-2031 term: legislative-year the current term's committee pages are
+# scoped to (confirmed live 2026-08-31: "PERIODO ANUAL DE SESIONES
+# 2026-2027" -- stored as the plain start year "2026" to match
+# _process_organization_definitions()'s `int(raw_comm.legislative_year)`).
+CHAMBER_COMMITTEE_YEAR = "2026"
+
+# 2026-2031 term: joint/bicameral committees (members from BOTH chambers,
+# no single chamber parent -- see CHAMBER_LABEL_TO_ORG_NAME["Congreso"] in
+# backend/core/constants.py). Confirmed live 2026-09-02: no index of "all
+# bicameral committees" exists anywhere on congreso.gob.pe, so these have
+# to be hardcoded by URL, same as organizations.py's COMISION_PERMANENTE_URL.
+JOINT_COMMITTEE_URLS = {
+    "Comisión Bicameral de Presupuesto y Cuenta General de la República": (
+        "https://www.congreso.gob.pe/"
+        "comision-bicameral-de-presupuesto-y-cuenta-general-de-la-republica/"
+    ),
+}
 
 YEAR_SELECT = 'select[name="idRegistroPadre"]'
 COMMITTEE_SELECT = 'select[name="fld_78_Comision"]'
@@ -28,7 +48,18 @@ LINKS_SELECTOR = "table.congresistas a[href]"
 
 class RawCommitteeScraper:
     """
-    Class to scrape committee raw data from the congress web page
+    Class to scrape committee raw data from the congress web page.
+
+    Two independent scraping paths (see section headers below): LEGACY
+    (through 2021-2026) scrapes www3.congreso.gob.pe's year+type dropdown
+    chain, one RawCommittee row per (year, type) covering many committees.
+    2026-2031 BICAMERAL TERM scrapes the new per-chamber comisiones/ index
+    (name+link pairs only, no year/type dropdown on that site at all --
+    confirmed live 2026-08-31, Phase B plan Step B0 item 3) and covers
+    committee EXISTENCE only, not membership -- see get_chamber_committees's
+    docstring for why per-committee membership is deliberately not wired up
+    here. Both paths write RawCommittee rows to the same table (chamber
+    column: NULL for legacy, "Senadores"/"Diputados" for the new term).
     """
 
     def __init__(self):
@@ -36,6 +67,11 @@ class RawCommitteeScraper:
         self.engine = create_engine(DB_PATH)
         self.url = BASE_URL
         self.Session = sessionmaker(bind=self.engine)
+
+    # =====================================================================
+    # LEGACY (through 2021-2026) -- www3.congreso.gob.pe, year+type
+    # dropdown chain, one row covers many committees' definitions
+    # =====================================================================
 
     def get_options(
         self,
@@ -253,8 +289,186 @@ class RawCommitteeScraper:
             f"Successfully extracted {len(self.committee_list)} raw html committees"
         )
 
+    # =====================================================================
+    # 2026-2031 BICAMERAL TERM -- {senado|diputados}.../comisiones/, index
+    # only (existence, not membership)
+    # =====================================================================
+
+    def get_chamber_committees(self, chamber: str) -> list[RawCommittee]:
+        """Scrape the 2026-2031 committee INDEX for one chamber (existence
+        only, not membership -- see module docstring note below).
+
+        Confirmed live 2026-09-02: {senado|diputados}.../comisiones/ groups
+        committees under section headers -- "Comisiones Ordinarias
+        Legislativas" and "Comisiones Ordinarias No Legislativas" (with or
+        without a trailing "(art.45)" on Diputados) -- via a `.wp-comisiones`
+        container of alternating `.titulo-seccion`/`.nombre-comision` divs
+        in document order. Each committee's raw_html row is now tagged with
+        its own section's title text (see _extract_section_tagged_committees)
+        instead of a single hardcoded "Comisión Ordinaria" for every row --
+        parse_comm_type() (backend/core/parsers.py) does the actual
+        Legislativa/No-Legislativa classification downstream from that cell
+        text, unchanged calling contract. Synthesizes the same
+        `.congresistas`-index-shaped HTML process_committee()
+        (backend/process/organizations.py) already parses, so that function
+        needs zero changes.
+
+        NOT built here: visiting each committee's own subpage for its real
+        membership table. There is no existing process-layer consumer for a
+        per-committee membership table (process_committee() only builds
+        Organization definitions, unlike process_admin_org() which handles
+        org+membership together) -- wiring that up is real new
+        process/orchestrator scope, deliberately left as a follow-up rather
+        than folded in here.
+        """
+        base_url = CHAMBER_BASE_URLS[chamber]
+        index_url = f"{base_url}/comisiones/"
+        index_html = parse_url(index_url)
+        if index_html is None:
+            logger.warning(f"Failed to fetch committee index: {index_url}")
+            return []
+
+        entries = self._extract_section_tagged_committees(index_html, base_url)
+        if not entries:
+            logger.warning(f"No committees found at {index_url}")
+            return []
+
+        # No header row here -- unlike process_admin_org(), process_committee()
+        # does not skip raw_lst[0]; it filters rows where type_comm=="Comisión"
+        # instead, so simply never emitting such a row is correct.
+        rows = []
+        for section_title, name, href in entries:
+            rows.append(
+                f"<tr><td>{html_lib.escape(section_title)}</td>"
+                f'<td><a href="{html_lib.escape(href)}">{html_lib.escape(name)}</a></td></tr>'
+            )
+        raw_html = f'<table class="congresistas"><tbody>{"".join(rows)}</tbody></table>'
+
+        new_committee = RawCommittee(
+            timestamp=datetime.now(),
+            legislative_year=CHAMBER_COMMITTEE_YEAR,
+            chamber=chamber,
+            committee_type="Comisión Ordinaria",
+            raw_html=raw_html,
+            changed=False,
+            processed=False,
+            last_update=True,
+        )
+        self.committee_list = [self.update_tracking(new_committee)]
+        return self.committee_list
+
+    @staticmethod
+    def _extract_section_tagged_committees(
+        index_html, base_url: str
+    ) -> list[tuple[str, str, str]]:
+        """Walk the committee index in document order, tagging each
+        committee link with its most recently preceding `.titulo-seccion`
+        title. Falls back to the flat "every comision-* link, untagged as
+        'Comisión Ordinaria'" behavior (this method's pre-2026-09-02 shape)
+        if the `.wp-comisiones` section structure isn't present at all --
+        defensive against another site change, not just this one.
+        """
+        container = index_html.xpath('//*[@class="wp-comisiones"]')
+        seen: dict[str, tuple[str, str]] = {}
+
+        if container:
+            current_section = "Comisión Ordinaria"
+            for node in container[0].xpath("./*"):
+                classes = (node.get("class") or "").split()
+                if "titulo-seccion" in classes:
+                    current_section = node.text_content().strip() or current_section
+                    continue
+                if "nombre-comision" in classes:
+                    links = node.xpath(".//a[@href]")
+                    if not links:
+                        continue
+                    name = links[0].text_content().strip()
+                    href = links[0].get("href")
+                    if name and href and name not in seen:
+                        seen[name] = (current_section, href)
+        else:
+            # "comision-" (hyphen) matches individual committee pages
+            # (comision-de-justicia-.../) but deliberately excludes the
+            # index's own self-link to "comisiones/" (plural, no hyphen at
+            # that position) and different-domain links (already excluded
+            # by the base_url prefix).
+            links = index_html.xpath(f'//a[starts-with(@href, "{base_url}/comision-")]')
+            for link in links:
+                name = link.text_content().strip()
+                href = link.get("href")
+                if name and href and name not in seen:
+                    seen[name] = ("Comisión Ordinaria", href)
+
+        return [(section, name, href) for name, (section, href) in seen.items()]
+
+    def get_joint_committees(self) -> list[RawCommittee]:
+        """Scrape hardcoded joint/bicameral committee pages (existence
+        only, not membership -- see get_chamber_committees' docstring for
+        why: process_committee() never builds Membership rows from
+        RawCommittee at all, so there's no membership path to worry about
+        here either -- any congresista serving on one of these already
+        gets a correctly-resolved Membership via their own cargos page,
+        see congresistas.py::_get_chamber_cargos).
+
+        Confirmed live 2026-09-02 (JOINT_COMMITTEE_URLS): a plain
+        www.congreso.gob.pe page, not JS-rendered, whose <h1> holds the
+        committee's exact canonical name -- used as the authoritative
+        org_name rather than trusting the dict key to stay in sync with
+        the live page.
+
+        Batches every entry into ONE RawCommittee row (chamber="Congreso"),
+        same as get_chamber_committees batches one chamber's committees
+        into one row -- keeps them all under a single
+        (legislative_year, committee_type, chamber) update_tracking scope
+        instead of colliding if a second joint committee is ever added to
+        JOINT_COMMITTEE_URLS (update_tracking has no per-committee key,
+        only that triple).
+        """
+        rows = []
+        for url in JOINT_COMMITTEE_URLS.values():
+            page_html = parse_url(url)
+            if page_html is None:
+                logger.warning(f"Failed to fetch joint committee page: {url}")
+                continue
+            h1_nodes = page_html.xpath("//h1")
+            name = h1_nodes[0].text_content().strip() if h1_nodes else ""
+            if not name:
+                logger.warning(f"No <h1> found for joint committee at {url}")
+                continue
+            rows.append(
+                "<tr><td>Comisión Bicameral</td>"
+                f'<td><a href="{html_lib.escape(url)}">{html_lib.escape(name)}</a></td></tr>'
+            )
+
+        if not rows:
+            logger.warning("No joint committees found")
+            return []
+
+        raw_html = f'<table class="congresistas"><tbody>{"".join(rows)}</tbody></table>'
+        new_committee = RawCommittee(
+            timestamp=datetime.now(),
+            legislative_year=CHAMBER_COMMITTEE_YEAR,
+            chamber="Congreso",
+            committee_type="Comisión Bicameral",
+            raw_html=raw_html,
+            changed=False,
+            processed=False,
+            last_update=True,
+        )
+        self.committee_list = [self.update_tracking(new_committee)]
+        return self.committee_list
+
+    # =====================================================================
+    # SHARED -- used by both the legacy and 2026-2031 code paths above
+    # =====================================================================
+
     def update_tracking(self, committee: RawCommittee) -> RawCommittee:
-        """Update the tracking columns of a RawCommittee object"""
+        """Update the tracking columns of a RawCommittee object.
+
+        Scoped by (legislative_year, committee_type, chamber) -- the
+        chamber filter matters for the 2026-2031 path specifically, since
+        both chambers could otherwise share the same (year, type) pair.
+        """
 
         with self.Session() as session:
             last_committee = (
@@ -262,6 +476,7 @@ class RawCommitteeScraper:
                 .filter(
                     RawCommittee.legislative_year == committee.legislative_year,
                     RawCommittee.committee_type == committee.committee_type,
+                    RawCommittee.chamber == committee.chamber,
                     RawCommittee.last_update,
                 )
                 .order_by(RawCommittee.timestamp.desc())

@@ -11,6 +11,7 @@ from backend.database.raw_models import (
     RawBill,
     RawBillDocument,
     RawBillPage,
+    RawCongresista,
     RawLey,
     RawMotion,
 )
@@ -59,6 +60,454 @@ def test_run_processing_loads_reference_definitions_before_memberships(monkeypat
         "bancada_ms",
         "semantic",
     ]
+
+
+_PROFILE_HTML = """
+<html>
+  <div class="nombres"><span>Label</span><span>Juan Alberto Perez Quispe</span></div>
+  <div class="grupo"><span>Label</span><span>Accion Popular</span></div>
+  <div class="votacion"><span>Label</span><span>12,345</span></div>
+  <div class="representa"><span>Label</span><span>Lima</span></div>
+  <div class="condicion"><span>Label</span><span>Titular</span></div>
+  <div class="foto"><img src="/FotosCongresista/juan.jpg"/></div>
+</html>
+"""
+
+
+def test_process_congresistas_creates_party_and_chamber_memberships(
+    orchestrator, monkeypatch
+):
+    """CRITICAL regression (found in the bicameral migration's 3rd review round):
+    Step 4b's parent_org_id fix, if applied unconditionally to every entry in
+    this method's shared membership loop, would silently stop creating
+    party_mem/chamber_mem for every congresista -- since both are top-level
+    (parent_org_id=NULL) and would be searched for under a non-existent
+    "parent of themselves". Confirms the org_type-conditional branch fix
+    (orchestrator.py:884) actually works end-to-end."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2021 - 2026",
+                chamber=None,
+                website="https://www.congreso.gob.pe/congresista/juan",
+                profile_content=_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2025, 8, 1),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+
+    assert stats.errors == 0
+    assert stats.skipped == 0
+    assert stats.processed == 1
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        memberships = (
+            db.query(db_models.Membership)
+            .filter(db_models.Membership.person_id == cong.id)
+            .all()
+        )
+        org_types = sorted(m.org_type for m in memberships)
+        assert org_types == sorted(["Partido", "Cámara"])
+
+        chamber_org = (
+            db.query(db_models.Organization)
+            .filter(db_models.Organization.org_type == "Cámara")
+            .one()
+        )
+        assert chamber_org.org_name == "Cámara de Diputados"
+        assert chamber_org.parent_org_id is None
+
+
+_SENADOR_PROFILE_HTML = """
+<html>
+  <div class="nombres"><span>Label</span><span>Ana Maria Torres Vega</span></div>
+  <div class="grupo"><span>Label</span><span>Fuerza Popular</span></div>
+  <div class="votacion"><span>Label</span><span>25,642</span></div>
+  <div class="representa"><span>Label</span><span>Lambayeque</span></div>
+  <div class="condicion"><span>Label</span><span>En Ejercicio</span></div>
+  <div class="foto"><img src="/FotosCongresista/ana.jpg"/></div>
+</html>
+"""
+
+
+def test_first_load_seeds_2026_2031_first_membership_with_term_start_date(
+    orchestrator, monkeypatch
+):
+    """New: on first_load=True, the FIRST-ever chamber_mem/party_mem
+    recorded for a 2026-2031 congresista gets start_date=2026-07-28
+    (confirmed real term-start date), not whatever date we happened to
+    scrape on.
+
+    Mutation-verified: the scrape timestamp deliberately falls in the
+    term's SECOND legislative year (Oct 2027, after the Jul 27 boundary),
+    where the existing timestamp-derived fallback (get_current_leg_year)
+    would incorrectly derive 2027-07-28 instead of the true term start
+    2026-07-28 -- a timestamp still within the first legislative year
+    (e.g. Oct 2026) would accidentally derive the same date either way and
+    not actually prove this fix does anything."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2026 - 2031",
+                chamber="Senadores",
+                website="https://senado.congreso.gob.pe/senador/ana-torres/",
+                profile_content=_SENADOR_PROFILE_HTML,
+                memberships_content=None,
+                # Scraped well into the term's second legislative year --
+                # see the mutation-verification note above.
+                timestamp=datetime(2027, 10, 15),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas(first_load=True)
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        memberships = (
+            db.query(db_models.Membership)
+            .filter(db_models.Membership.person_id == cong.id)
+            .all()
+        )
+        assert len(memberships) == 2
+        for ms in memberships:
+            assert ms.start_date == date(2026, 7, 28)
+
+
+def test_first_load_does_not_affect_legacy_2021_2026_memberships(
+    orchestrator, monkeypatch
+):
+    """Regression: first_load=True must never force-reset legacy (pre-2026)
+    memberships' start_date to 2026-07-28."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2021 - 2026",
+                chamber=None,
+                website="https://www.congreso.gob.pe/congresista/juan",
+                profile_content=_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2025, 8, 1),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas(first_load=True)
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        memberships = (
+            db.query(db_models.Membership)
+            .filter(db_models.Membership.person_id == cong.id)
+            .all()
+        )
+        assert len(memberships) == 2
+        for ms in memberships:
+            # Falls through to the existing timestamp-derived fallback
+            # (legislative year containing 2025-08-01 -> starts 2025-07-28),
+            # unaffected by first_load.
+            assert ms.start_date == date(2025, 7, 28)
+
+
+def test_process_congresistas_resyncs_photo_when_photo_url_changed(
+    orchestrator, monkeypatch
+):
+    """Found 2026-09: a matched (reelected) congresista never got their
+    photo refreshed at all -- sync was only ever called for brand-new
+    rows. Confirms a matched congresista whose photo_url actually changed
+    (e.g. legacy profile -> new 2026-2031 chamber profile) now triggers a
+    forced re-sync."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+    calls = []
+    monkeypatch.setattr(
+        "backend.database.orchestrator.sync_congresista_photo",
+        lambda db, cong, **kwargs: calls.append((cong.id, kwargs.get("force", False))),
+    )
+
+    with orchestrator.DBSession() as db:
+        existing = db_models.Congresista(
+            full_name="Ana Maria Torres Vega",
+            website="https://www.congreso.gob.pe/congresistas2021/AnaTorres/",
+            photo_url="https://www.congreso.gob.pe/old-photo.jpg",
+        )
+        db.add(existing)
+        db.commit()
+
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2026 - 2031",
+                chamber="Senadores",
+                website="https://senado.congreso.gob.pe/senador/ana-torres/",
+                profile_content=_SENADOR_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2027, 10, 15),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+    assert stats.errors == 0
+
+    with orchestrator.DBSession() as db:
+        cong = db.query(db_models.Congresista).one()
+        assert calls == [(cong.id, True)]
+
+
+def test_process_congresistas_skips_photo_resync_when_photo_url_unchanged(
+    orchestrator, monkeypatch
+):
+    """Regression: a matched congresista whose photo_url hasn't actually
+    changed must NOT trigger a re-download on every reprocess."""
+    monkeypatch.setattr(
+        "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
+    )
+    calls = []
+    monkeypatch.setattr(
+        "backend.database.orchestrator.sync_congresista_photo",
+        lambda db, cong, **kwargs: calls.append((cong.id, kwargs.get("force", False))),
+    )
+
+    with orchestrator.DBSession() as db:
+        # xpath2('//*[@class="foto"]/img/@src') resolves relative to
+        # website via urljoin -- matches _SENADOR_PROFILE_HTML's
+        # "/FotosCongresista/ana.jpg" against this website exactly.
+        existing = db_models.Congresista(
+            full_name="Ana Maria Torres Vega",
+            website="https://senado.congreso.gob.pe/senador/ana-torres/",
+            photo_url="https://senado.congreso.gob.pe/FotosCongresista/ana.jpg",
+        )
+        db.add(existing)
+        db.commit()
+
+        db.add(
+            RawCongresista(
+                id=1,
+                leg_period="Parlamentario 2026 - 2031",
+                chamber="Senadores",
+                website="https://senado.congreso.gob.pe/senador/ana-torres/",
+                profile_content=_SENADOR_PROFILE_HTML,
+                memberships_content=None,
+                timestamp=datetime(2027, 10, 15),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_congresistas()
+    assert stats.errors == 0
+    assert calls == []
+
+
+def test_first_load_does_not_override_start_date_when_membership_already_exists(
+    orchestrator,
+):
+    """Regression: first_load=True must NOT force-apply the 2026-07-28
+    term-start date when a Membership already exists for this exact
+    (person, org, leg_period, org_type) -- e.g. a bancada switch, where a
+    NEW membership genuinely starts on the date it was detected, not on
+    day one of the term. Exercises _upsert_membership_schema directly
+    (unit-level) rather than the full congresistas pipeline, since
+    reproducing an org-switch through the HTML-fixture-driven integration
+    path would obscure exactly which mechanism is under test.
+
+    Mutation-verified: the new membership's timestamp deliberately falls
+    in the term's SECOND legislative year (Sep 2027), so if the
+    already-exists guard were missing, this call would incorrectly
+    override start_date to 2026-07-28 instead of deriving 2027-07-28 from
+    the timestamp -- a timestamp still within the first legislative year
+    would accidentally produce the same result either way and not prove
+    the guard does anything.
+    """
+    with orchestrator.DBSession() as db:
+        cong = db_models.Congresista(full_name="Ana Torres", website="w", photo_url="p")
+        org_a = db_models.Organization(org_name="Bancada A", org_type="Bancada")
+        org_b = db_models.Organization(org_name="Bancada B", org_type="Bancada")
+        db.add_all([cong, org_a, org_b])
+        db.flush()
+
+        # An existing membership already recorded for org_a.
+        db.add(
+            db_models.BancadaMembership(
+                person_id=cong.id,
+                org_id=org_a.org_id,
+                leg_period="2026-2031",
+                org_type="Bancada",
+                role="Miembro",
+                start_date=date(2026, 7, 28),
+                end_date=date(2027, 7, 28),
+            )
+        )
+        db.commit()
+
+        # New membership for a DIFFERENT org (org_b) -- e.g. a bancada
+        # switch detected on a later scrape. No prior membership exists
+        # for (cong, org_b, ...), so this SHOULD get the term-start
+        # override under first_load=True per the "first-ever record" rule.
+        new_membership = schema.Membership(
+            cong_name="Ana Torres",
+            org_name="Bancada B",
+            org_type="Bancada",
+            leg_period="2026-2031",
+            role="Miembro",
+            time_stamp=datetime(2027, 9, 1),
+        )
+        result = orchestrator._upsert_membership_schema(
+            db,
+            cong=cong,
+            org=org_b,
+            membership=new_membership,
+            first_load=True,
+        )
+        assert result.start_date == date(2026, 7, 28)
+
+        # Re-upserting the SAME (cong, org_b) membership again (simulating
+        # a later re-process finding it already exists) must NOT re-derive
+        # 2026-07-28 from the override -- it must fall through to the
+        # timestamp-derived fallback, which for Sep 2027 yields 2027-07-28.
+        again = schema.Membership(
+            cong_name="Ana Torres",
+            org_name="Bancada B",
+            org_type="Bancada",
+            leg_period="2026-2031",
+            role="Presidente",  # role change -> upsert_membership treats as a new row
+            time_stamp=datetime(2027, 9, 1),
+        )
+        result2 = orchestrator._upsert_membership_schema(
+            db,
+            cong=cong,
+            org=org_b,
+            membership=again,
+            first_load=True,
+        )
+        assert result2.start_date == date(2027, 7, 28)
+
+
+def test_process_bills_senado_bill_links_committee_and_chamber(orchestrator):
+    """CRITICAL regression (found in 3rd review round): the org_type-conditional
+    fix at orchestrator.py's bill_orgs loop must not scope the chamber's own
+    entry by its own org_id as parent, while still correctly scoping the
+    committee entry by the bill's actual chamber (Senado, not Diputados)."""
+    with orchestrator.DBSession() as db:
+        senado = db_models.Organization(
+            org_name="Senado de la República", org_type="Cámara"
+        )
+        db.add(senado)
+        db.flush()
+        db.add(
+            db_models.Organization(
+                org_name="Comisión de Economía",
+                org_type="Comisión",
+                parent_org_id=senado.org_id,
+            )
+        )
+        db.add(
+            RawBill(
+                id="00006-2026-2031-S",
+                timestamp=datetime(2026, 1, 10),
+                general=json.dumps(
+                    {
+                        "fecPresentacion": "2026-01-10",
+                        "titulo": "Proyecto de Ley Senado",
+                        "sumilla": "Resumen",
+                        "observaciones": "",
+                        "desEstado": "Presentado",
+                        "desProponente": "Ministerio Público",
+                        "desGpar": "Bancada Ausente",
+                        "proyectoLey": "00006-2026-2031-S",
+                    }
+                ),
+                congresistas=json.dumps([]),
+                steps=json.dumps(
+                    [
+                        {
+                            "seguimientoPleyId": 1,
+                            "fecha": "2026-01-01",
+                            "desEstado": "Presentado",
+                            "detalle": "Presentado",
+                        },
+                        {
+                            "seguimientoPleyId": 2,
+                            "fecha": "2026-01-02",
+                            "desEstado": "En Comisión",
+                            "detalle": "Pasa a comisión",
+                            "desComisiones": json.dumps(["Comisión de Economía"]),
+                        },
+                    ]
+                ),
+                committees=json.dumps([]),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_bills(limit=None)
+
+    assert stats.errors == 0
+    assert stats.skipped == 0
+    assert stats.processed == 1
+
+    with orchestrator.DBSession() as db:
+        bill = db.get(db_models.Bill, "00006-2026-2031-S")
+        assert bill is not None
+
+        bill_orgs = (
+            db.query(db_models.BillOrganization)
+            .filter(db_models.BillOrganization.bill_id == "00006-2026-2031-S")
+            .all()
+        )
+        orgs_by_org_id = {
+            org.org_id: org for org in db.query(db_models.Organization).all()
+        }
+        orgs_by_name = {
+            orgs_by_org_id[bo.org_id].org_name: orgs_by_org_id[bo.org_id]
+            for bo in bill_orgs
+        }
+        assert set(orgs_by_name) == {"Senado de la República", "Comisión de Economía"}
+        assert orgs_by_name["Senado de la República"].parent_org_id is None
+        assert (
+            orgs_by_name["Comisión de Economía"].parent_org_id
+            == orgs_by_name["Senado de la República"].org_id
+        )
 
 
 def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrator):

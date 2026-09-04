@@ -64,13 +64,22 @@ def find_congresista(
     db: Session,
     name: str,
     website: str | None = None,
+    *,
+    congresista_id: int | None = None,
     threshold: float = 0.9,
 ) -> db_models.Congresista | None:
     """
-    Find a congressperson using website, aliases, or fuzzy name matching.
+    Find a congressperson using congresista_id, website, aliases, or fuzzy
+    name matching.
 
     Matching is attempted in the following order:
 
+    0. congresista_id exact match, when provided -- a stable, national,
+       cross-term/cross-chamber person identifier mined from bill/motion
+       firmantes data (confirmed live 2026-09-03: the same congresistaId
+       persists across a legacy Diputados term and a later Senado term for
+       the same reelected person). This is the only genuinely reliable
+       signal in this cascade -- everything below it is a heuristic.
     1. Website exact match.
     2. Known alias exact match.
     3. Canonical full-name fuzzy match (Jaro-Winkler), after reordering a
@@ -80,6 +89,10 @@ def find_congresista(
         db (Session): Active SQLAlchemy database session.
         name (str): Name of the congressperson.
         website (str | None, optional): Congressperson website URL.
+        congresista_id (int | None, optional): Cross-term person identifier,
+            when known (see backend/process/schema.py::Congresista's
+            docstring for provenance). Tried first, before every other
+            signal.
         threshold (float, optional): Minimum Jaro-Winkler similarity.
             Defaults to 0.9.
 
@@ -87,6 +100,16 @@ def find_congresista(
         db_models.Congresista | None: The matching congressperson if found;
         otherwise, None.
     """
+
+    # 0. congresista_id (most reliable -- try first)
+    if congresista_id is not None:
+        by_congresista_id = db.scalar(
+            select(db_models.Congresista).where(
+                db_models.Congresista.congresista_id == congresista_id
+            )
+        )
+        if by_congresista_id is not None:
+            return by_congresista_id
 
     # 1. Website
     if website:
@@ -177,9 +200,18 @@ def find_organization(
     org_name: str,
     org_type: TypeOrganization | str,
     threshold: float = 0.9,
+    parent_org_id: int | None = None,
 ) -> db_models.Organization | None:
     """
     Find the closest organization by fuzzy name match and organization type.
+
+    parent_org_id: optionally scope the match to organizations under a specific
+    parent. Needed because Organization.org_uniq is (org_name, org_type,
+    parent_org_id) — two orgs can share a name+type under different parents
+    (e.g. a same-named committee under each chamber). Omit (or pass None) to
+    preserve prior unscoped behavior; None is never used to mean "match rows
+    with a NULL parent" since no two same-name/same-type orgs legitimately
+    share a NULL parent (top-level chambers and parties are each unique).
     """
 
     if isinstance(org_type, str):
@@ -192,12 +224,16 @@ def find_organization(
         func.unaccent(normalized_name),
     )
 
+    filters = [
+        db_models.Organization.org_type == org_type,
+        score >= threshold,
+    ]
+    if parent_org_id is not None:
+        filters.append(db_models.Organization.parent_org_id == parent_org_id)
+
     stmt = (
         select(db_models.Organization)
-        .where(
-            db_models.Organization.org_type == org_type,
-            score >= threshold,
-        )
+        .where(*filters)
         .order_by(
             score.desc(),
             db_models.Organization.org_id.asc(),
@@ -258,8 +294,16 @@ def _upsert_model(
         db.flush()
         return obj
 
+    # Coalesce, don't blindly overwrite: a matched source can legitimately
+    # carry less data than what's already stored (e.g. the 2026-2031
+    # chamber congresista scrape has no dni/gender/first_name/last_name at
+    # all) -- a None in the payload must never clobber an existing value.
+    # Found 2026-09: this exact gap silently wiped dni/gender/first_name/
+    # last_name for every reelected congresista matched against their
+    # pre-existing legacy row.
     for key, value in payload.items():
-        setattr(existing, key, value)
+        if value is not None:
+            setattr(existing, key, value)
 
     db.flush()
     return existing
@@ -268,7 +312,12 @@ def _upsert_model(
 def upsert_congresista(
     db: Session, schema: schema.Congresista
 ) -> db_models.Congresista:
-    existing = find_congresista(db, schema.full_name, schema.website)
+    existing = find_congresista(
+        db,
+        schema.full_name,
+        schema.website,
+        congresista_id=schema.congresista_id,
+    )
     payload = schema.model_dump()
 
     return _upsert_model(
@@ -308,13 +357,48 @@ def upsert_organization(
     if payload.get("org_subtype") is not None:
         payload["org_subtype"] = _enum_value(payload["org_subtype"])
 
-    existing = find_organization(db, schema.org_name, schema.org_type)
+    # Scope the existing-row check by parent_org_id, matching the real
+    # org_uniq constraint (org_name, org_type, parent_org_id) — without this,
+    # two same-named orgs under different parents (e.g. a same-named
+    # committee under each chamber) would collide and silently overwrite
+    # each other's parent_org_id.
+    existing = find_organization(
+        db, schema.org_name, schema.org_type, parent_org_id=parent_id
+    )
 
     return _upsert_model(
         db,
         existing=existing,
         model=db_models.Organization,
         payload=payload,
+    )
+
+
+def membership_exists(
+    db: Session,
+    *,
+    person_id: int,
+    org_id: int,
+    leg_period: str | Enum,
+    org_type: str | TypeOrganization,
+) -> bool:
+    """True if ANY Membership row already exists for this (person, org,
+    leg_period, org_type), regardless of start_date/end_date/role -- unlike
+    upsert_membership's own existing-row lookup, which is keyed on the
+    exact start_date/end_date/role too (so it can't answer "has this
+    person ever had this membership before", only "does this exact
+    date/role combination already exist").
+    """
+    return (
+        db.scalars(
+            select(db_models.Membership.id).where(
+                db_models.Membership.person_id == person_id,
+                db_models.Membership.org_id == org_id,
+                db_models.Membership.leg_period == _enum_value(leg_period),
+                db_models.Membership.org_type == _enum_value(org_type),
+            )
+        ).first()
+        is not None
     )
 
 

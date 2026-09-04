@@ -22,9 +22,13 @@ def _looks_like_image(data: bytes) -> bool:
     return any(data.startswith(prefix) for prefix in _IMAGE_MAGIC)
 
 
-def sync_photo(db: Session, congresista: db_models.Congresista) -> bool:
-    """Download `photo_url` into `photo_bytes`. Skips if already populated."""
-    if congresista.photo_bytes is not None:
+def sync_photo(
+    db: Session, congresista: db_models.Congresista, *, force: bool = False
+) -> bool:
+    """Download `photo_url` into `photo_bytes`. Skips if already populated,
+    unless force=True (used when photo_url has changed since the last sync,
+    e.g. a reelected congresista whose profile moved to a new term's URL)."""
+    if congresista.photo_bytes is not None and not force:
         return False
 
     response = get_url(congresista.photo_url)

@@ -535,6 +535,12 @@ class Congresista(PrintableModel):
         gender (str): Male or Female.
         photo_url (str): Official photo url of the congressperson.
         website (str): Official website of the congressperson.
+        congresista_id (int): Stable, national, cross-term/cross-chamber
+            person identifier mined from bill/motion firmantes data
+            (confirmed live 2026-09-03 -- the same congresistaId persists
+            across a legacy Diputados term and a later Senado term for the
+            same reelected person). Used by find_congresista as a reliable
+            matching key, tried before the fuzzy name fallback.
     """
 
     full_name: str
@@ -544,6 +550,7 @@ class Congresista(PrintableModel):
     gender: str | None = None
     photo_url: str
     website: str
+    congresista_id: int | None = None
 
     @field_validator("gender", mode="before")
     @classmethod

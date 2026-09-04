@@ -322,3 +322,88 @@ def test_render_pdf_uses_extract_text_from_page(monkeypatch):
     # And the final text should contain both page texts
     assert text_dict[0].strip() == "PAGE_TEXT"
     assert text_dict[1].strip() == "PAGE_TEXT"
+
+
+# ---------- get_last_id (Phase B2) ----------
+
+
+class _FakePostResponse:
+    def __init__(self, data):
+        self._data = data
+
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return self._data
+
+
+def _make_fake_post_client(monkeypatch, captured, entity):
+    """Patches httpx.Client so client.post(url, json=payload) records
+    payload into `captured` and returns a minimal valid response for
+    `entity` ("Bills" or "Motions")."""
+    data_var = {"Bills": "proyectos", "Motions": "mociones"}[entity]
+    id_var = {"Bills": "pleyNum", "Motions": "mocionNum"}[entity]
+
+    def fake_client(*args, **kwargs):
+        class Ctx:
+            def __enter__(self_inner):
+                class Client:
+                    def post(self, url, json=None):
+                        captured.append(json)
+                        return _FakePostResponse({"data": {data_var: [{id_var: 42}]}})
+
+                return Client()
+
+            def __exit__(self_inner, exc_type, exc, tb):
+                return False
+
+        return Ctx()
+
+    monkeypatch.setattr(u.httpx, "Client", fake_client)
+
+
+def test_get_last_id_bills_legacy_default_payload_unchanged(monkeypatch):
+    """Regression: no new args -> exact same payload as before this change
+    (perParId=2021, no codTipoParl key)."""
+    captured = []
+    _make_fake_post_client(monkeypatch, captured, "Bills")
+
+    result = u.get_last_id("Bills")
+
+    assert result == 42
+    assert captured == [{"perParId": 2021, "pageSize": 10, "rowStart": 0}]
+
+
+def test_get_last_id_motions_legacy_default_payload_unchanged(monkeypatch):
+    """Regression: no new args -> exact same payload as before this change
+    (codTipoParl="C", no perParId key)."""
+    captured = []
+    _make_fake_post_client(monkeypatch, captured, "Motions")
+
+    result = u.get_last_id("Motions")
+
+    assert result == 42
+    assert captured == [{"pageSize": 10, "rowStart": 0, "codTipoParl": "C"}]
+
+
+def test_get_last_id_bills_new_args_payload(monkeypatch):
+    captured = []
+    _make_fake_post_client(monkeypatch, captured, "Bills")
+
+    u.get_last_id("Bills", per_par_id=2026, cod_tipo_parl="S")
+
+    assert captured == [
+        {"pageSize": 10, "rowStart": 0, "perParId": 2026, "codTipoParl": "S"}
+    ]
+
+
+def test_get_last_id_motions_new_args_payload(monkeypatch):
+    captured = []
+    _make_fake_post_client(monkeypatch, captured, "Motions")
+
+    u.get_last_id("Motions", per_par_id=2026, cod_tipo_parl="D")
+
+    assert captured == [
+        {"pageSize": 10, "rowStart": 0, "codTipoParl": "D", "perParId": 2026}
+    ]

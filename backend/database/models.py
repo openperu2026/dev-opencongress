@@ -616,6 +616,10 @@ class Congresista(Base):
         photo_url (str): Official photo url of the congressperson.
         photo_bytes (bytes | None): Downloaded portrait image bytes, when fetched.
         website (str): Official website of the congressperson.
+        congresista_id (int | None): Stable, national, cross-term/cross-
+            chamber person identifier mined from bill/motion firmantes data
+            -- see backend/process/schema.py::Congresista's docstring. Used
+            by find_congresista as a reliable matching key.
         aliases (list[str]): List of all found aliases for this congresperson
     """
 
@@ -630,6 +634,7 @@ class Congresista(Base):
     photo_url: Mapped[str] = mapped_column(nullable=False)
     photo_bytes: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     website: Mapped[str] = mapped_column(nullable=False)
+    congresista_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
     aliases: Mapped[list["CongresistaAlias"]] = relationship(
         back_populates="congresista",
         cascade="all, delete-orphan",

@@ -11,7 +11,8 @@ from backend.process.schema import (
     MotionStep,
     MotionText,
 )
-from backend.process.utils import create_vote_ids, as_date
+from backend.process.utils import create_vote_ids, as_date, chamber_label_from_id
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 
 
 def _parse_datetime(value: str | None) -> date | None:
@@ -177,10 +178,11 @@ def process_motion_organizations(
     presentation_date = dates.get("presentation_date", None)
     decision_date = dates.get("final_chamber_decision_date", None)
 
+    chamber_label = chamber_label_from_id(raw_motion.id)
     return [
         MotionOrganization(
             motion_id=raw_motion.id,
-            org_name="Cámara de Diputados",
+            org_name=CHAMBER_LABEL_TO_ORG_NAME[chamber_label],
             org_type="Cámara",
             presentation_date=as_date(presentation_date),
             decision_date=as_date(decision_date),

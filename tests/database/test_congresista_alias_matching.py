@@ -147,6 +147,64 @@ class TestSaveAlias:
         assert alias.name == "bustamante ernesto"
 
 
+class TestFindCongresistaByCongresistaId:
+    """Tests for the congresista_id matching path -- tried first, before
+    website/alias/fuzzy, since it's a confirmed-stable cross-term person
+    identifier mined from bill/motion firmantes data (found 2026-09-03)."""
+
+    @pytest.fixture
+    def congresista(self, session):
+        cong = db_models.Congresista(
+            full_name="Fernando Miguel Rospigliosi Capurro",
+            website="https://senado.congreso.gob.pe/senador/fernando-rospigliosi/",
+            photo_url="http://example.com/photo.jpg",
+            congresista_id=135,
+        )
+        session.add(cong)
+        session.flush()
+        return cong
+
+    def test_find_congresista_by_congresista_id_short_circuits_before_fuzzy(
+        self, session, congresista
+    ):
+        """A wildly different/garbage name must still match when
+        congresista_id is known -- it's tried before the fuzzy fallback,
+        not as a tiebreaker within it."""
+        result = crud_core.find_congresista(
+            session,
+            "completely different garbage name",
+            congresista_id=135,
+        )
+        assert result is not None
+        assert result.id == congresista.id
+
+    def test_find_congresista_congresista_id_none_falls_through_unchanged(
+        self, session, congresista
+    ):
+        """Regression: congresista_id=None (the default) must not change
+        existing website/alias/fuzzy behavior at all -- no match here since
+        neither website nor name correspond to the fixture."""
+        result = crud_core.find_congresista(
+            session,
+            "completely different garbage name",
+            congresista_id=None,
+        )
+        assert result is None
+
+    def test_find_congresista_unknown_congresista_id_falls_through_to_fuzzy(
+        self, session, congresista
+    ):
+        """An congresista_id that doesn't match anyone must fall through to
+        the rest of the cascade, not return None outright."""
+        result = crud_core.find_congresista(
+            session,
+            "Fernando Miguel Rospigliosi Capurro",
+            congresista_id=999999,
+        )
+        assert result is not None
+        assert result.id == congresista.id
+
+
 class TestFindCongresistaWebsite:
     """Tests for website matching in find_congresista."""
 

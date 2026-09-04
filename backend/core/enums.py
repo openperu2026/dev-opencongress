@@ -209,6 +209,15 @@ class TypeCommittee(str, Enum):
     SUBCOM_CP = "Subcomisión de Control Político"
     COM_LEV_INMUN = "Comisión de Levantamiento de Inmunidad Parlamentaria"
     COM_ORD = "Comisión Ordinaria"
+    # 2026-2031 term: the new committees index distinguishes these two --
+    # confirmed live 2026-09-02 on both senado/diputados.congreso.gob.pe.
+    # Legacy committees keep the generic COM_ORD value untouched.
+    COM_ORD_LEG = "Comisión Ordinaria Legislativa"
+    COM_ORD_NO_LEG = "Comisión Ordinaria No Legislativa"
+    # 2026-2031 term: joint/bicameral committees (members from both
+    # chambers, no single chamber parent) -- see
+    # backend/scrapers/committees.py::JOINT_COMMITTEE_URLS.
+    COM_BICAMERAL = "Comisión Bicameral"
     SUBCOM_TLC = "Sub Comisión de Seguimiento del TLC"
     COM_ESP = "Comisiones Especiales"
     COM_ETICA = "Comisión de Ética Parlamentaria"
