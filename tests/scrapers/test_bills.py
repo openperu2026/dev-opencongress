@@ -2,6 +2,7 @@ import json
 from datetime import datetime
 
 import pytest
+from loguru import logger
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -21,7 +22,7 @@ def test_create_raw_bill_sets_id_and_sections():
     data = {
         "general": {"titulo": "Ley X"},
         "firmantes": [{"nombre": "Congresista A"}],
-        # "comisiones" intentionally omitted to test "Not Found" branch
+        # "estudioComisiones" intentionally omitted to test "Not Found" branch
         "seguimientos": [{"evento": "derivado"}],
     }
 
@@ -39,6 +40,34 @@ def test_create_raw_bill_sets_id_and_sections():
     # Missing section in data => attribute should remain None
     assert raw_bill.committees is None
     assert raw_bill.api_url == "www.example.org"
+
+
+def test_apply_sections_logs_missing_committees_at_debug_others_at_warning():
+    scraper = RawBillScraper()
+    raw_bill = RawBill(id="2021_1234")
+    data = {
+        "general": {"titulo": "Ley X"},
+        # "firmantes" and "seguimientos" also omitted -- both should still
+        # warn, unlike "estudioComisiones" (committees), which is legitimately
+        # often absent/empty and shouldn't spam a warning per bill.
+    }
+
+    records = []
+    sink_id = logger.add(lambda msg: records.append(msg.record), level="DEBUG")
+    try:
+        scraper._apply_sections(raw_bill, data)
+    finally:
+        logger.remove(sink_id)
+
+    missing_by_name = {
+        r["message"].split("Missing Attribute: ")[1].split(" ")[0]: r["level"].name
+        for r in records
+        if "Missing Attribute" in r["message"]
+    }
+
+    assert missing_by_name["estudioComisiones"] == "DEBUG"
+    assert missing_by_name["firmantes"] == "WARNING"
+    assert missing_by_name["seguimientos"] == "WARNING"
 
 
 # ---------- add_bills_to_db ----------
@@ -153,7 +182,7 @@ def test_scrape_bill_appends_raw_bill(monkeypatch, session):
                 "data": {
                     "general": {"titulo": "Ley de Prueba"},
                     "firmantes": [{"nombre": "Congresista X"}],
-                    "comisiones": [{"nombre": "Comisión Y"}],
+                    "estudioComisiones": [{"nombre": "Comisión Y"}],
                     "seguimientos": [{"evento": "ingreso"}],
                 }
             }
