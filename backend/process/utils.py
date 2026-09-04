@@ -8,9 +8,12 @@ import unicodedata
 
 from backend import PARTY_ALIASES
 from backend.config import directories
+from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
 from backend.database.raw_models import RawBill, RawMotion
 from backend.process.schema import (
+    BillCongresistas,
     BillStep,
+    MotionCongresistas,
     MotionStep,
     BillOrganization,
     MotionOrganization,
@@ -302,6 +305,58 @@ def as_date(value: date | datetime | None) -> date | None:
     if isinstance(value, datetime):
         return value.date()
     return value
+
+
+def parse_signers(
+    firmantes: list[dict],
+    cong_schema_class: type[BillCongresistas] | type[MotionCongresistas],
+    id_field: str,
+    entity_id: str,
+) -> tuple[list, str | None, str | None]:
+    """Parse a raw firmantes[] list into (signer relations, author_name,
+    author_web) -- shared by process_bill/process_motion (backend/process/
+    bills.py, motions.py), which otherwise only differ in which schema
+    class and id field name (bill_id/motion_id) they use.
+    """
+    if not firmantes:
+        return [], None, None
+
+    author_info = firmantes[0]
+    author_name = author_info.get("nombre")
+    author_web = author_info.get("pagWeb")
+
+    cong_list = [
+        cong_schema_class(
+            **{id_field: entity_id},
+            nombre=cong.get("nombre"),
+            role_type=cong.get("tipoFirmanteId"),
+            web_page=cong.get("pagWeb"),
+        )
+        for cong in firmantes
+    ]
+    return cong_list, author_name, author_web
+
+
+def build_chamber_organization(
+    org_class: type[BillOrganization] | type[MotionOrganization],
+    id_field: str,
+    entity_id: str,
+    presentation_date: date | datetime | None,
+    decision_date: date | datetime | None,
+) -> BillOrganization | MotionOrganization:
+    """Build the "chamber" org relation shared by process_bill_organizations
+    and process_motion_organizations (backend/process/bills.py, motions.py)
+    -- both build exactly one org tagged with the entity's own chamber
+    (derived from its id via chamber_label_from_id), org_type="Cámara".
+    """
+    chamber_label = chamber_label_from_id(entity_id)
+    return org_class(
+        **{id_field: entity_id},
+        org_name=CHAMBER_LABEL_TO_ORG_NAME[chamber_label],
+        org_type="Cámara",
+        presentation_date=as_date(presentation_date),
+        decision_date=as_date(decision_date),
+    )
 
 
 def replace_www(url: str | None) -> str:

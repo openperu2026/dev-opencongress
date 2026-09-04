@@ -11,8 +11,11 @@ from backend.process.schema import (
     MotionStep,
     MotionText,
 )
-from backend.process.utils import create_vote_ids, as_date, chamber_label_from_id
-from backend.core.constants import CHAMBER_LABEL_TO_ORG_NAME
+from backend.process.utils import (
+    create_vote_ids,
+    build_chamber_organization,
+    parse_signers,
+)
 
 
 def _parse_datetime(value: str | None) -> date | None:
@@ -62,24 +65,9 @@ def process_motion(
     observations = general.get("observacion")
     status = classify_motion_des_estado(general.get("desEstadoMocion"))
 
-    cong_list: list[MotionCongresistas] = []
-    if firmantes:
-        author_info = firmantes[0]
-        author_name = author_info.get("nombre")
-        author_web = author_info.get("pagWeb")
-
-        for cong in firmantes:
-            cong_list.append(
-                MotionCongresistas(
-                    motion_id=motion_id,
-                    nombre=cong.get("nombre"),
-                    role_type=cong.get("tipoFirmanteId"),
-                    web_page=cong.get("pagWeb"),
-                )
-            )
-    else:
-        author_name = None
-        author_web = None
+    cong_list, author_name, author_web = parse_signers(
+        firmantes, MotionCongresistas, "motion_id", motion_id
+    )
 
     motion_steps = process_motion_steps(raw_motion)
     motion_approved = is_motion_approved(motion_steps, status)
@@ -178,13 +166,12 @@ def process_motion_organizations(
     presentation_date = dates.get("presentation_date", None)
     decision_date = dates.get("final_chamber_decision_date", None)
 
-    chamber_label = chamber_label_from_id(raw_motion.id)
     return [
-        MotionOrganization(
-            motion_id=raw_motion.id,
-            org_name=CHAMBER_LABEL_TO_ORG_NAME[chamber_label],
-            org_type="Cámara",
-            presentation_date=as_date(presentation_date),
-            decision_date=as_date(decision_date),
+        build_chamber_organization(
+            MotionOrganization,
+            "motion_id",
+            raw_motion.id,
+            presentation_date,
+            decision_date,
         )
     ]
