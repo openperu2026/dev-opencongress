@@ -474,6 +474,38 @@ class ScraperRun(Base):
     scraped_rows: Mapped[int] = mapped_column(nullable=False)
 
 
+class ScrapeGapRetry(Base):
+    """
+    Tracks retry attempts for individual scrape ids discovered as gaps
+    (missing between the observed min and max id) in a raw table's
+    watermark sequence, so a legitimately-nonexistent id (a withdrawn or
+    renumbered legislative item) isn't retried forever once it has failed
+    repeatedly, while a transient failure (network error, recaptcha) still
+    gets a bounded number of automatic retries on subsequent runs.
+
+    Attributes:
+        raw_model_name (str): Name of the raw model this gap belongs to
+            (e.g. "RawBill", "RawMotion", "RawLey") -- scopes the id
+            namespace, since different raw models can share numeric ids.
+        gap_id (str): The numeric scrape id that is missing from the
+            sequence, as a string.
+        attempts (int): Number of retry attempts made so far.
+        last_attempt_at (datetime): Timestamp of the most recent attempt.
+        skipped (bool): True once ``attempts`` has reached the configured
+            cap -- excluded from future gap-retry passes.
+    """
+
+    __tablename__ = "scrape_gap_retries"
+
+    raw_model_name: Mapped[str] = mapped_column(primary_key=True)
+    gap_id: Mapped[str] = mapped_column(primary_key=True)
+    attempts: Mapped[int] = mapped_column(nullable=False, default=0)
+    last_attempt_at: Mapped[datetime] = mapped_column(nullable=False)
+    skipped: Mapped[bool] = mapped_column(
+        nullable=False, server_default=expression.false(), default=False
+    )
+
+
 class ModelCostLedger(Base):
     """
     Cumulative real spend for one LLM model, used to enforce a persistent

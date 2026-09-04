@@ -42,6 +42,7 @@ from backend.database.raw_models import (
     RawMotion,
     RawOrganization,
     RawBillDocument,
+    ScrapeGapRetry,
 )
 from backend.process.bancadas import process_bancada
 from backend.process.bills import (
@@ -232,6 +233,127 @@ class OpenPeruOrchestrator:
         if not legacy_ids:
             return 0
         return max(int(item.split("_", 1)[1]) for item in legacy_ids)
+
+    # Number of failed retry attempts a single gap id gets before it's
+    # marked permanently skipped (see _find_id_gaps/_record_gap_retry_outcomes).
+    # A legitimately-nonexistent id (withdrawn/renumbered legislative item)
+    # is indistinguishable from a transient failure by id alone, so this
+    # caps the cost of never finding out rather than trying to tell them
+    # apart up front.
+    MAX_GAP_RETRY_ATTEMPTS = 5
+
+    def _find_id_gaps(
+        self,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        id_suffix: str | None = None,
+    ) -> list[int]:
+        """Return numeric ids missing between the observed min and max id
+        in ``raw_model`` -- e.g. an id that failed to scrape mid-range on a
+        prior run and was never retried since only ids ABOVE the watermark
+        get picked up by _get_last_id_scraped. Uses the same three
+        id-format branches as _get_last_id_scraped (bare/id_suffix-tagged/
+        legacy year_number); ids already marked permanently skipped in
+        ScrapeGapRetry are excluded.
+
+        Note: the legacy branch (no id_suffix) inherits the same
+        single-legislative-year assumption _get_last_id_scraped already
+        depends on -- safe today only because _scrape_range hardcodes
+        `year = 2021` (see its own "TODO: update this for next congreso"),
+        so legacy bills/motions/leyes ids are single-year by construction.
+        Revisit this if that TODO is ever addressed.
+        """
+        with self.DBSession() as db:
+            ids = db.scalars(select(raw_model.id).distinct()).all()
+
+        if not ids:
+            return []
+
+        if raw_model is RawLey:
+            numbers = sorted(int(item) for item in ids)
+        elif id_suffix is not None:
+            matching = [item for item in ids if item.endswith(f"-{id_suffix}")]
+            if not matching:
+                return []
+            numbers = sorted(int(item.split("-", 1)[0]) for item in matching)
+        else:
+            legacy_ids = [item for item in ids if "_" in item]
+            if not legacy_ids:
+                return []
+            numbers = sorted(int(item.split("_", 1)[1]) for item in legacy_ids)
+
+        full_range = set(range(numbers[0], numbers[-1] + 1))
+        missing = sorted(full_range - set(numbers))
+        if not missing:
+            return []
+
+        raw_model_name = raw_model.__name__
+        with self.DBSession() as db:
+            skipped_ids = {
+                int(row.gap_id)
+                for row in db.query(ScrapeGapRetry).filter(
+                    ScrapeGapRetry.raw_model_name == raw_model_name,
+                    ScrapeGapRetry.skipped.is_(True),
+                )
+            }
+        return [n for n in missing if n not in skipped_ids]
+
+    def _record_gap_retry_outcomes(
+        self,
+        raw_model: Type[RawBill] | Type[RawMotion] | Type[RawLey],
+        attempted_ids: list[int],
+        id_suffix: str | None = None,
+    ) -> None:
+        """After attempting to re-scrape a batch of gap ids, bump the
+        retry count for any id still missing from ``raw_model`` and mark
+        it permanently skipped once MAX_GAP_RETRY_ATTEMPTS is reached. An
+        id that now exists is left alone -- it's no longer a gap, nothing
+        to track.
+        """
+        if not attempted_ids:
+            return
+
+        raw_model_name = raw_model.__name__
+        with self.DBSession() as db:
+            existing_ids = set(db.scalars(select(raw_model.id).distinct()).all())
+
+            def _id_exists(number: int) -> bool:
+                if raw_model is RawLey:
+                    return str(number) in existing_ids
+                if id_suffix is not None:
+                    return any(
+                        item.endswith(f"-{id_suffix}")
+                        and int(item.split("-", 1)[0]) == number
+                        for item in existing_ids
+                    )
+                return any(
+                    "_" in item and int(item.split("_", 1)[1]) == number
+                    for item in existing_ids
+                )
+
+            for number in attempted_ids:
+                if _id_exists(number):
+                    continue
+
+                gap_id = str(number)
+                row = db.get(ScrapeGapRetry, (raw_model_name, gap_id))
+                if row is None:
+                    row = ScrapeGapRetry(
+                        raw_model_name=raw_model_name,
+                        gap_id=gap_id,
+                        attempts=0,
+                        last_attempt_at=datetime.now(),
+                        skipped=False,
+                    )
+                    db.add(row)
+                row.attempts += 1
+                row.last_attempt_at = datetime.now()
+                if row.attempts >= self.MAX_GAP_RETRY_ATTEMPTS:
+                    row.skipped = True
+                    logger.warning(
+                        f"{raw_model_name} id {gap_id} failed {row.attempts} "
+                        "gap-retry attempts -- marking permanently skipped"
+                    )
+            db.commit()
 
     def _load_scraper_results(self, scraper_name: str) -> None:
         """Persist a ScraperStats row for ``scraper_name`` and log a one-line summary."""
@@ -842,22 +964,66 @@ class OpenPeruOrchestrator:
         flush_every: int = 100,
         entity_name: str = "items",
     ) -> ScraperStats:
-        """Scrape ids from (last_scraped+1) up to the remote max, flushing every ``flush_every`` rows."""
+        """Scrape ids from (last_scraped+1) up to the remote max, flushing
+        every ``flush_every`` rows. Also retries any gap ids found below
+        the watermark (see _find_id_gaps) before the forward scan -- a
+        gap-retry sub-loop, throttled the same as _scrape_chamber_range's
+        forward pass so a first-ever gap backfill can't hammer the live
+        site unattended, and capped per-id via ScrapeGapRetry so a
+        legitimately-nonexistent id isn't retried forever.
+        """
         start = self._get_last_id_scraped(raw_model) + 1
         end = get_last_id(entity_name)
         # TODO: update this for next congreso
         year = 2021
 
-        logger.info(f"Scraping {entity_name} in range {year}_{start}..{year}_{end}")
-
-        start_time = datetime.now()
-        count = 0
-
-        for number in tqdm(range(start, end + 1), desc=entity_name):
+        def _call_scrape_fn(number: int) -> None:
             if entity_name == "Leyes":
                 scrape_fn(number)
             else:
                 scrape_fn(str(year), str(number))
+
+        start_time = datetime.now()
+        count = 0
+
+        gaps = self._find_id_gaps(raw_model)
+        if gaps:
+            logger.info(f"Retrying {len(gaps)} gap id(s) for {entity_name}: {gaps}")
+            for idx, number in enumerate(gaps, start=1):
+                try:
+                    _call_scrape_fn(number)
+                except Exception as exc:
+                    logger.warning(
+                        f"Gap retry failed for {entity_name} id {number}: {exc}"
+                    )
+
+                current_length = len(getattr(scraper, buffer_attr))
+                if current_length >= flush_every:
+                    count += current_length
+                    load_fn()
+
+                if idx % 10 == 0:
+                    time.sleep(2)
+
+            # Flush before checking outcomes -- otherwise a successfully
+            # re-scraped gap id would still look "missing" to
+            # _record_gap_retry_outcomes (it checks the DB, not the
+            # in-memory buffer), incorrectly bumping its retry count.
+            remaining_gap_buffer = len(getattr(scraper, buffer_attr))
+            if remaining_gap_buffer:
+                count += remaining_gap_buffer
+                load_fn()
+
+            self._record_gap_retry_outcomes(raw_model, gaps)
+
+        logger.info(f"Scraping {entity_name} in range {year}_{start}..{year}_{end}")
+
+        for number in tqdm(range(start, end + 1), desc=entity_name):
+            try:
+                _call_scrape_fn(number)
+            except Exception as exc:
+                logger.warning(f"Scrape failed for {entity_name} id {number}: {exc}")
+                continue
 
             current_length = len(getattr(scraper, buffer_attr))
 
@@ -906,15 +1072,53 @@ class OpenPeruOrchestrator:
             cod_tipo_parl=CHAMBER_LABEL_TO_COD_TIPO_PARL[chamber],
         )
 
-        logger.info(f"Scraping {entity_name} ({chamber}) in range {start}..{end}")
-
         start_time = datetime.now()
         count = 0
+
+        gaps = self._find_id_gaps(raw_model, id_suffix=id_suffix)
+        if gaps:
+            logger.info(
+                f"Retrying {len(gaps)} gap id(s) for {entity_name} ({chamber}): {gaps}"
+            )
+            for idx, number in enumerate(gaps, start=1):
+                try:
+                    scrape_fn(chamber, number)
+                except Exception as exc:
+                    logger.warning(
+                        f"Gap retry failed for {entity_name} ({chamber}) id {number}: {exc}"
+                    )
+
+                current_length = len(getattr(scraper, buffer_attr))
+                if current_length >= flush_every:
+                    count += current_length
+                    load_fn()
+
+                if idx % 10 == 0:
+                    time.sleep(2)
+
+            # Flush before checking outcomes -- otherwise a successfully
+            # re-scraped gap id would still look "missing" to
+            # _record_gap_retry_outcomes (it checks the DB, not the
+            # in-memory buffer), incorrectly bumping its retry count.
+            remaining_gap_buffer = len(getattr(scraper, buffer_attr))
+            if remaining_gap_buffer:
+                count += remaining_gap_buffer
+                load_fn()
+
+            self._record_gap_retry_outcomes(raw_model, gaps, id_suffix=id_suffix)
+
+        logger.info(f"Scraping {entity_name} ({chamber}) in range {start}..{end}")
 
         for idx, number in enumerate(
             tqdm(range(start, end + 1), desc=f"{entity_name} ({chamber})"), start=1
         ):
-            scrape_fn(chamber, number)
+            try:
+                scrape_fn(chamber, number)
+            except Exception as exc:
+                logger.warning(
+                    f"Scrape failed for {entity_name} ({chamber}) id {number}: {exc}"
+                )
+                continue
 
             current_length = len(getattr(scraper, buffer_attr))
 

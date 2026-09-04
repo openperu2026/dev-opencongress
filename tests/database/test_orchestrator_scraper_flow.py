@@ -6,7 +6,7 @@ from types import SimpleNamespace
 from backend.database import orchestrator as orchestrator_module
 from backend.database.crud.pipeline_core import ScraperStats
 from backend.database.orchestrator import OpenPeruOrchestrator
-from backend.database.raw_models import RawBill, RawLey, RawMotion
+from backend.database.raw_models import RawBill, RawLey, RawMotion, ScrapeGapRetry
 
 
 class DummyStage:
@@ -799,6 +799,408 @@ def test_get_last_id_scraped_chamber_scoped_no_match_returns_zero(engine, sessio
     assert orch._get_last_id_scraped(RawBill, id_suffix="S") == 0
 
 
+# ---------- _find_id_gaps ----------
+
+
+def test_find_id_gaps_detects_missing_legacy_id(engine, session):
+    for bill_id in ("2021_1", "2021_2", "2021_4", "2021_5"):
+        session.add(
+            RawBill(
+                id=bill_id,
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.commit()
+
+    orch = OpenPeruOrchestrator(engine=engine)
+    assert orch._find_id_gaps(RawBill) == [3]
+
+
+def test_find_id_gaps_no_gaps_returns_empty(engine, session):
+    for bill_id in ("2021_1", "2021_2", "2021_3"):
+        session.add(
+            RawBill(
+                id=bill_id,
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.commit()
+
+    orch = OpenPeruOrchestrator(engine=engine)
+    assert orch._find_id_gaps(RawBill) == []
+
+
+def test_find_id_gaps_empty_table_returns_empty(engine, session):
+    orch = OpenPeruOrchestrator(engine=engine)
+    assert orch._find_id_gaps(RawBill) == []
+
+
+def test_find_id_gaps_chamber_scoped(engine, session):
+    for bill_id in ("00001-2026-2031-S", "00003-2026-2031-S"):
+        session.add(
+            RawBill(
+                id=bill_id,
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.commit()
+
+    orch = OpenPeruOrchestrator(engine=engine)
+    assert orch._find_id_gaps(RawBill, id_suffix="S") == [2]
+
+
+def test_find_id_gaps_ley_bare_ints(engine, session):
+    for ley_id in (32558, 32560):
+        session.add(
+            RawLey(
+                id=ley_id,
+                data="<root/>",
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.commit()
+
+    orch = OpenPeruOrchestrator(engine=engine)
+    assert orch._find_id_gaps(RawLey) == [32559]
+
+
+def test_find_id_gaps_excludes_permanently_skipped_ids(engine, session):
+    for bill_id in ("2021_1", "2021_2", "2021_4", "2021_5"):
+        session.add(
+            RawBill(
+                id=bill_id,
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.add(
+        ScrapeGapRetry(
+            raw_model_name="RawBill",
+            gap_id="3",
+            attempts=5,
+            last_attempt_at=datetime(2026, 1, 1),
+            skipped=True,
+        )
+    )
+    session.commit()
+
+    orch = OpenPeruOrchestrator(engine=engine)
+    assert orch._find_id_gaps(RawBill) == []
+
+
+# ---------- _record_gap_retry_outcomes / retry cap ----------
+
+
+def test_record_gap_retry_outcomes_bumps_attempts_for_still_missing_id(engine, session):
+    orch = OpenPeruOrchestrator(engine=engine)
+    orch._record_gap_retry_outcomes(RawBill, [3])
+
+    with orch.DBSession() as db:
+        row = (
+            db.query(ScrapeGapRetry)
+            .filter(
+                ScrapeGapRetry.raw_model_name == "RawBill",
+                ScrapeGapRetry.gap_id == "3",
+            )
+            .first()
+        )
+        assert row.attempts == 1
+        assert row.skipped is False
+
+
+def test_record_gap_retry_outcomes_ignores_id_that_now_exists(engine, session):
+    session.add(
+        RawBill(
+            id="2021_3",
+            timestamp=datetime(2026, 1, 1),
+            last_update=True,
+            changed=True,
+            processed=False,
+        )
+    )
+    session.commit()
+
+    orch = OpenPeruOrchestrator(engine=engine)
+    orch._record_gap_retry_outcomes(RawBill, [3])
+
+    with orch.DBSession() as db:
+        assert (
+            db.query(ScrapeGapRetry)
+            .filter(ScrapeGapRetry.raw_model_name == "RawBill")
+            .count()
+            == 0
+        )
+
+
+def test_record_gap_retry_outcomes_marks_permanently_skipped_after_cap(engine, session):
+    """Regression test for the gap-retry cap (/plan-eng-review Phase 3,
+    2026-09-04): a gap id that keeps failing must stop being retried after
+    MAX_GAP_RETRY_ATTEMPTS, so a legitimately-nonexistent id (withdrawn/
+    renumbered legislative item) doesn't cost a live-site request forever."""
+    orch = OpenPeruOrchestrator(engine=engine)
+
+    for expected_attempts in range(1, orch.MAX_GAP_RETRY_ATTEMPTS + 1):
+        orch._record_gap_retry_outcomes(RawBill, [3])
+
+        with orch.DBSession() as db:
+            row = (
+                db.query(ScrapeGapRetry)
+                .filter(
+                    ScrapeGapRetry.raw_model_name == "RawBill",
+                    ScrapeGapRetry.gap_id == "3",
+                )
+                .first()
+            )
+            assert row.attempts == expected_attempts
+            assert row.skipped == (expected_attempts >= orch.MAX_GAP_RETRY_ATTEMPTS)
+
+
+# ---------- gap-retry integrated into _scrape_range/_scrape_chamber_range ----------
+
+
+def test_scrape_range_retries_gap_before_forward_scan(monkeypatch, engine, session):
+    for bill_id in ("2021_1", "2021_2", "2021_4"):
+        session.add(
+            RawBill(
+                id=bill_id,
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.commit()
+
+    calls = []
+    scraper = SimpleNamespace(raw_bills=[])
+    orch = OpenPeruOrchestrator(engine=engine)
+
+    def scrape_bill(year, number):
+        calls.append((year, number))
+        scraper.raw_bills.append(
+            RawBill(
+                id=f"{year}_{number}",
+                timestamp=datetime(2026, 1, 2),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+
+    def load_raw_bills():
+        with orch.DBSession() as db:
+            db.bulk_save_objects(scraper.raw_bills)
+            db.commit()
+        scraper.raw_bills.clear()
+
+    monkeypatch.setattr(orchestrator_module, "get_last_id", lambda entity_name: 4)
+
+    stats = orch._scrape_range(
+        scraper=scraper,
+        raw_model=RawBill,
+        scrape_fn=scrape_bill,
+        buffer_attr="raw_bills",
+        load_fn=load_raw_bills,
+        flush_every=100,
+        entity_name="Bills",
+    )
+
+    # Gap id 3 is retried; the forward scan (start=5, end=4) is empty, so
+    # only the gap-retry call should appear.
+    assert calls == [("2021", "3")]
+    assert stats.scrapped == 1
+
+    with orch.DBSession() as db:
+        # The gap-retry buffer is flushed to the DB BEFORE outcomes are
+        # checked -- a successfully re-scraped gap id must not be
+        # recorded as a failed retry attempt.
+        assert (
+            db.query(ScrapeGapRetry)
+            .filter(ScrapeGapRetry.raw_model_name == "RawBill")
+            .count()
+            == 0
+        )
+        assert db.query(RawBill).filter(RawBill.id == "2021_3").count() == 1
+
+
+def test_scrape_range_continues_past_single_id_failure(monkeypatch, engine, session):
+    """Regression test for the per-id try/except fix (/plan-eng-review
+    Phase 3, 2026-09-04): before the fix, an unhandled exception from
+    scrape_fn aborted the whole range scrape, losing that run's
+    buffered-but-unflushed rows."""
+    calls = []
+    scraper = SimpleNamespace(raw_motions=[])
+    orch = OpenPeruOrchestrator(engine=engine)
+
+    def scrape_motion(year, number):
+        calls.append((year, number))
+        if number == "2":
+            raise RuntimeError("simulated transient failure")
+        scraper.raw_motions.append(object())
+
+    def load_raw_motions():
+        scraper.raw_motions.clear()
+
+    monkeypatch.setattr(orchestrator_module, "get_last_id", lambda entity_name: 3)
+
+    stats = orch._scrape_range(
+        scraper=scraper,
+        raw_model=RawMotion,
+        scrape_fn=scrape_motion,
+        buffer_attr="raw_motions",
+        load_fn=load_raw_motions,
+        flush_every=100,
+        entity_name="Motions",
+    )
+
+    assert calls == [("2021", "1"), ("2021", "2"), ("2021", "3")]
+    assert stats.scrapped == 2
+
+
+def test_scrape_range_gap_retry_throttles_every_10_items(monkeypatch, engine, session):
+    session.add(
+        RawBill(
+            id="2021_1",
+            timestamp=datetime(2026, 1, 1),
+            last_update=True,
+            changed=True,
+            processed=False,
+        )
+    )
+    session.add(
+        RawBill(
+            id="2021_31",
+            timestamp=datetime(2026, 1, 1),
+            last_update=True,
+            changed=True,
+            processed=False,
+        )
+    )
+    session.commit()
+
+    scraper = SimpleNamespace(raw_bills=[])
+    orch = OpenPeruOrchestrator(engine=engine)
+
+    def scrape_bill(year, number):
+        scraper.raw_bills.append(object())
+
+    def load_raw_bills():
+        scraper.raw_bills.clear()
+
+    monkeypatch.setattr(orchestrator_module, "get_last_id", lambda entity_name: 31)
+    sleep_calls = []
+    monkeypatch.setattr(
+        orchestrator_module.time, "sleep", lambda s: sleep_calls.append(s)
+    )
+
+    orch._scrape_range(
+        scraper=scraper,
+        raw_model=RawBill,
+        scrape_fn=scrape_bill,
+        buffer_attr="raw_bills",
+        load_fn=load_raw_bills,
+        flush_every=100,
+        entity_name="Bills",
+    )
+
+    # 29 gap ids (2..30) -> idx 10 and idx 20 cross the boundary -> 2 sleep
+    # calls from the gap-retry sub-loop (the forward scan is empty here:
+    # start=32, end=31).
+    assert sleep_calls == [2, 2]
+
+
+def test_scrape_range_gap_id_stops_retrying_after_cap_reached(
+    monkeypatch, engine, session
+):
+    session.add(
+        RawBill(
+            id="2021_1",
+            timestamp=datetime(2026, 1, 1),
+            last_update=True,
+            changed=True,
+            processed=False,
+        )
+    )
+    session.add(
+        RawBill(
+            id="2021_3",
+            timestamp=datetime(2026, 1, 1),
+            last_update=True,
+            changed=True,
+            processed=False,
+        )
+    )
+    session.commit()
+
+    scraper = SimpleNamespace(raw_bills=[])
+    orch = OpenPeruOrchestrator(engine=engine)
+    attempts_seen = []
+
+    def scrape_bill(year, number):
+        if number == "2":
+            attempts_seen.append(number)
+            raise RuntimeError("permanently missing item")
+        scraper.raw_bills.append(object())
+
+    def load_raw_bills():
+        scraper.raw_bills.clear()
+
+    monkeypatch.setattr(orchestrator_module, "get_last_id", lambda entity_name: 3)
+
+    for _ in range(orch.MAX_GAP_RETRY_ATTEMPTS):
+        orch._scrape_range(
+            scraper=scraper,
+            raw_model=RawBill,
+            scrape_fn=scrape_bill,
+            buffer_attr="raw_bills",
+            load_fn=load_raw_bills,
+            flush_every=100,
+            entity_name="Bills",
+        )
+
+    assert len(attempts_seen) == orch.MAX_GAP_RETRY_ATTEMPTS
+
+    with orch.DBSession() as db:
+        row = (
+            db.query(ScrapeGapRetry)
+            .filter(
+                ScrapeGapRetry.raw_model_name == "RawBill",
+                ScrapeGapRetry.gap_id == "2",
+            )
+            .first()
+        )
+        assert row.attempts == orch.MAX_GAP_RETRY_ATTEMPTS
+        assert row.skipped is True
+
+    # One more run must NOT retry id 2 again -- excluded from _find_id_gaps
+    # once permanently skipped.
+    attempts_seen.clear()
+    orch._scrape_range(
+        scraper=scraper,
+        raw_model=RawBill,
+        scrape_fn=scrape_bill,
+        buffer_attr="raw_bills",
+        load_fn=load_raw_bills,
+        flush_every=100,
+        entity_name="Bills",
+    )
+    assert attempts_seen == []
+
+
 def test_scrape_chamber_range_dispatches_per_number_with_chamber(
     monkeypatch, engine, session
 ):
@@ -871,6 +1273,54 @@ def test_scrape_chamber_range_throttles_every_10_items(monkeypatch, engine, sess
 
     # 25 items -> idx 10 and idx 20 cross the boundary -> 2 sleep calls.
     assert sleep_calls == [2, 2]
+
+
+def test_scrape_chamber_range_retries_gap_before_forward_scan(
+    monkeypatch, engine, session
+):
+    for bill_id in ("00001-2026-2031-S", "00003-2026-2031-S"):
+        session.add(
+            RawBill(
+                id=bill_id,
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                changed=True,
+                processed=False,
+            )
+        )
+    session.commit()
+
+    calls = []
+    scraper = SimpleNamespace(raw_bills=[])
+    orch = OpenPeruOrchestrator(engine=engine)
+
+    def scrape_chamber_bill(chamber, number):
+        calls.append((chamber, number))
+        scraper.raw_bills.append(object())
+
+    def load_raw_bills():
+        scraper.raw_bills.clear()
+
+    monkeypatch.setattr(
+        orchestrator_module,
+        "get_last_id",
+        lambda entity_name, per_par_id=None, cod_tipo_parl=None: 3,
+    )
+
+    stats = orch._scrape_chamber_range(
+        scraper=scraper,
+        raw_model=RawBill,
+        scrape_fn=scrape_chamber_bill,
+        buffer_attr="raw_bills",
+        load_fn=load_raw_bills,
+        chamber="Senadores",
+        flush_every=100,
+        entity_name="Bills",
+    )
+
+    # Gap id 2 is retried; the forward scan (start=4, end=3) is empty.
+    assert calls == [("Senadores", 2)]
+    assert stats.scrapped == 1
 
 
 def test_scrape_pending_daily_legacy_id_unaffected_when_chamber_fn_omitted(
