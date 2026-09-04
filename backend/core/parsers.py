@@ -160,6 +160,13 @@ def parse_role_bill(value: int | str) -> TypeRoleBill:
 MOTION_TYPE_ALIASES = {
     "Otorgar Facultades de Comisión Investigadora": TypeMotion.COMISION_INVESTIGADORA,
     "Comisiones Investigadoras": TypeMotion.COMISION_INVESTIGADORA,
+    # 2026-2031 Senado labels (confirmed live 2026-09-04, audit_congresista_matching.py):
+    # the Senado site uses a different wording/capitalization than the legacy
+    # Diputados labels TypeMotion's own values were built from.
+    "MOCIÓN DE SALUDO": TypeMotion.SALUDO,
+    "PEDIDO DE CONFORMACIÓN DE COMISIÓN ESPECIAL": TypeMotion.COMISION_ESPECIAL,
+    "Pedido de invitación al Consejo de Ministros o a los ministros en forma individual para informar": TypeMotion.INFORME_MINISTROS,
+    "DE INTERÉS NACIONAL": TypeMotion.INTERES,
 }
 
 
@@ -179,11 +186,25 @@ def parse_motion_type(value: str | None) -> TypeMotion:
     raise ValueError(f"Unknown motion_type: {value!r}")
 
 
+PROPONENT_ALIASES = {
+    # Case variant of Proponents.PODER_EJECUTIVO ("Poder Ejecutivo") --
+    # confirmed present in both legacy and 2026-2031 Diputados bills, so
+    # this is a pre-existing gap, not bicameral-specific.
+    "PODER EJECUTIVO": Proponents.PODER_EJECUTIVO,
+    # 2026-2031 Diputados label for an executive-branch-proposed bill --
+    # the President is the head of the executive branch.
+    "Presidente de la República": Proponents.PODER_EJECUTIVO,
+}
+
+
 def parse_proponent(value: str) -> Proponents:
     if value is None:
         raise ValueError("proponent cannot be null")
 
     v = " ".join(value.strip().split())
+
+    if v in PROPONENT_ALIASES:
+        return PROPONENT_ALIASES[v]
 
     try:
         return Proponents(v)

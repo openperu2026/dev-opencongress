@@ -32,13 +32,13 @@ DB_PATH = settings.DB_URL
 
 
 class SharedRawScraperBase:
-    def __init__(self, session=None, engine=None, db_path: str = DB_PATH):
+    def __init__(self, session=None, engine=None):
         if session is not None:
             self.session = session
             self.engine = session.get_bind()
             self.Session = sessionmaker(bind=self.engine)
         else:
-            self.engine = engine or create_engine(db_path)
+            self.engine = engine or create_engine(DB_PATH)
             self.Session = sessionmaker(bind=self.engine)
             self.session = None
 

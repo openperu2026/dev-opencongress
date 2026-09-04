@@ -370,7 +370,9 @@ def replace_www(url: str | None) -> str:
     )
 
 
-def get_sentence_case(source: str) -> str:
+def get_sentence_case(source: str | None) -> str | None:
+    if source is None:
+        return None
     return source.upper()
     # OLD VERSION TO IMPROVE. RIGHT NOW WE WILL RELEASE WITH UPPER CASE
     # output = ""
