@@ -468,9 +468,111 @@ def test_get_chamber_roster_fetch_failure_returns_empty(monkeypatch):
     assert cong_scraper.get_chamber_roster("Senadores") == []
 
 
+def test_get_chamber_profile_data_extracts_votes_and_og_image(monkeypatch):
+    """Regression test for the higher-res photo fix (/plan-eng-review
+    Phase 7, 2026-09-04): confirmed live 2026-09-04 that the roster
+    listing's own `photo` field is a WordPress `-150x150` thumbnail, while
+    the individual profile page's <meta property="og:image"> holds a
+    meaningfully larger version -- extracted from the SAME fetch already
+    used for the votes count, not a second request."""
+    cong_scraper = RawCongresistasScraper()
+    html = """
+    <html><head>
+      <meta property="og:image" content="https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg">
+    </head><body>
+      <div class="summary__label">Votación obtenida</div>
+      <div class="summary__value">25,642</div>
+    </body></html>
+    """
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda *a, **k: fromstring(html),
+    )
+
+    votes, photo_url = cong_scraper._get_chamber_profile_data(
+        "https://senado.congreso.gob.pe/senador/example/"
+    )
+
+    assert votes == "25,642"
+    assert (
+        photo_url
+        == "https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg"
+    )
+
+
+def test_get_chamber_profile_data_missing_og_image_returns_none(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    html = "<html><head></head><body>no summary here</body></html>"
+    monkeypatch.setattr(
+        "backend.scrapers.congresistas.parse_url",
+        lambda *a, **k: fromstring(html),
+    )
+
+    votes, photo_url = cong_scraper._get_chamber_profile_data(
+        "https://senado.congreso.gob.pe/senador/example/"
+    )
+
+    assert votes == "0"
+    assert photo_url is None
+
+
+def test_get_chamber_profile_data_fetch_failure_returns_defaults(monkeypatch):
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr("backend.scrapers.congresistas.parse_url", lambda *a, **k: None)
+
+    votes, photo_url = cong_scraper._get_chamber_profile_data(
+        "https://senado.congreso.gob.pe/senador/example/"
+    )
+
+    assert votes == "0"
+    assert photo_url is None
+
+
+def test_create_chamber_congresista_uses_higher_res_profile_photo(monkeypatch):
+    """The profile page's photo must win over the roster's own (lower-res)
+    `photo` field when both are available."""
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        cong_scraper,
+        "_get_chamber_profile_data",
+        lambda url: (
+            "25,642",
+            "https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg",
+        ),
+    )
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    assert (
+        'src="https://senado.congreso.gob.pe/wp-content/uploads/2026/07/foto-full.jpg"'
+        in raw.profile_content
+    )
+    assert _ROSTER_ENTRY["photo"] not in raw.profile_content
+
+
+def test_create_chamber_congresista_falls_back_to_roster_photo_when_profile_fetch_fails(
+    monkeypatch,
+):
+    """If the profile-page fetch fails or has no og:image, fall back to the
+    roster listing's own (lower-res) `photo` field rather than losing the
+    photo entirely."""
+    cong_scraper = RawCongresistasScraper()
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("0", None)
+    )
+    monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
+
+    raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
+
+    assert f'src="{_ROSTER_ENTRY["photo"]}"' in raw.profile_content
+
+
 def test_create_chamber_congresista_sets_chamber_and_leg_period(monkeypatch):
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("25,642", None)
+    )
     monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: '{"data": []}')
 
     raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
@@ -485,7 +587,9 @@ def test_create_chamber_congresista_without_url_skips_cargos_fetch(monkeypatch):
     """No profile url -> _get_chamber_cargos must never be called (would
     build a malformed urljoin target)."""
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("0", None)
+    )
 
     def _boom(url):
         raise AssertionError("_get_chamber_cargos should not be called without a url")
@@ -669,7 +773,9 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
     from backend.process.congresistas import process_profile_content
 
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "25,642")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("25,642", None)
+    )
     monkeypatch.setattr(cong_scraper, "_get_chamber_cargos", lambda url: None)
 
     raw = cong_scraper.create_chamber_congresista("Senadores", _ROSTER_ENTRY)
@@ -689,7 +795,9 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
 
 def test_extract_chamber_congresistas_tracks_all_entries(monkeypatch):
     cong_scraper = RawCongresistasScraper()
-    monkeypatch.setattr(cong_scraper, "_get_chamber_votes", lambda url: "0")
+    monkeypatch.setattr(
+        cong_scraper, "_get_chamber_profile_data", lambda url: ("0", None)
+    )
     monkeypatch.setattr(cong_scraper, "update_tracking", lambda c: [c])
 
     second_entry = dict(_ROSTER_ENTRY, name="Otro, Congresista")

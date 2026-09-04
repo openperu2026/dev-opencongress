@@ -235,26 +235,41 @@ class RawCongresistasScraper(SharedRawScraperBase):
 
         return roster if isinstance(roster, list) else []
 
-    def _get_chamber_votes(self, profile_url: str) -> str:
-        """Fetch "Votación obtenida" from a 2026-2031 profile page.
+    def _get_chamber_profile_data(self, profile_url: str) -> tuple[str, str | None]:
+        """Fetch a 2026-2031 congresista's own profile page ONCE, returning
+        (votes, higher_res_photo_url).
 
-        Confirmed live 2026-08-31: value found via a `*summary__label`/
-        `*summary__value` pair -- prefix (senador-/diputado-) varies by
-        chamber, so matched by class suffix rather than the full name.
+        Votes: confirmed live 2026-08-31, value found via a
+        `*summary__label`/`*summary__value` pair -- prefix (senador-/
+        diputado-) varies by chamber, so matched by class suffix rather
+        than the full name.
+
+        Photo: confirmed live 2026-09-04 -- the roster listing's own
+        `photo` field is a WordPress `-150x150` thumbnail (e.g. 4.7KB),
+        while this page's `<meta property="og:image">` points at a
+        meaningfully larger version (e.g. 35KB, 800x800) that isn't
+        exposed anywhere in the roster JSON. Extracted from this SAME
+        fetch (already needed for the votes count) rather than a second
+        request to the same URL.
         """
         html = parse_url(profile_url)
         if html is None:
-            return "0"
+            return "0", None
+
+        votes = "0"
         labels = html.xpath(
             '//*[contains(@class, "summary__label") '
             'and normalize-space(text())="Votación obtenida"]'
         )
-        if not labels:
-            return "0"
-        value_node = labels[0].getnext()
-        if value_node is None:
-            return "0"
-        return value_node.text_content().strip() or "0"
+        if labels:
+            value_node = labels[0].getnext()
+            if value_node is not None:
+                votes = value_node.text_content().strip() or "0"
+
+        photo_nodes = html.xpath('//meta[@property="og:image"]/@content')
+        photo_url = photo_nodes[0].strip() if photo_nodes and photo_nodes[0] else None
+
+        return votes, photo_url
 
     @staticmethod
     def _parse_cargos_date(value: str | None) -> str | None:
@@ -352,19 +367,25 @@ class RawCongresistasScraper(SharedRawScraperBase):
         return json.dumps({"data": memberships})
 
     @staticmethod
-    def _synthesize_chamber_profile_html(entry: dict, votes: str) -> str:
+    def _synthesize_chamber_profile_html(
+        entry: dict, votes: str, photo_url: str
+    ) -> str:
         """Build a minimal HTML doc using the SAME class names
         process_profile_content() (backend/process/congresistas.py) already
         parses for legacy congresistas -- keeps that function's contract
         (.nombres/.grupo/.foto/.votacion/.representa/.condicion) stable
         regardless of which site the data came from, so it needs zero
         changes for the 2026-2031 path.
+
+        photo_url is resolved by the caller (create_chamber_congresista) --
+        the higher-res profile-page photo when available, falling back to
+        the roster listing's own (lower-res) `photo` field otherwise.
         """
         name = html_lib.escape(entry.get("name") or "")
         group = html_lib.escape(entry.get("group") or entry.get("partido") or "")
         district = html_lib.escape(entry.get("district") or "")
         condition = html_lib.escape(entry.get("condition") or "")
-        photo = html_lib.escape(entry.get("photo") or "")
+        photo = html_lib.escape(photo_url or "")
         votes_escaped = html_lib.escape(votes)
         return (
             "<html><body>"
@@ -379,8 +400,12 @@ class RawCongresistasScraper(SharedRawScraperBase):
 
     def create_chamber_congresista(self, chamber: str, entry: dict) -> RawCongresista:
         profile_url = entry.get("url", "")
-        votes = self._get_chamber_votes(profile_url) if profile_url else "0"
-        profile_content = self._synthesize_chamber_profile_html(entry, votes)
+        if profile_url:
+            votes, high_res_photo_url = self._get_chamber_profile_data(profile_url)
+        else:
+            votes, high_res_photo_url = "0", None
+        photo_url = high_res_photo_url or entry.get("photo") or ""
+        profile_content = self._synthesize_chamber_profile_html(entry, votes, photo_url)
         memberships_content = (
             self._get_chamber_cargos(profile_url) if profile_url else None
         )
