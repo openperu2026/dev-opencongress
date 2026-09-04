@@ -63,7 +63,7 @@ class RawBillScraper:
         self.section_mapping = {
             "general": "general",
             "firmantes": "congresistas",
-            "comisiones": "committees",
+            "estudioComisiones": "committees",
             "seguimientos": "steps",
         }
 
@@ -117,6 +117,15 @@ class RawBillScraper:
             finally:
                 browser.close()
 
+    # estudioComisiones (committees) is legitimately absent/empty for most
+    # bills -- it only fills in once a committee formally studies the bill.
+    # The committee-assignment history that actually matters downstream
+    # (process_bill_steps -> BillStep.step_committees) comes from a
+    # different, always-present field: seguimientos[].desComisiones. So a
+    # missing estudioComisiones is expected, not a scrape problem -- log it
+    # at debug, not warning.
+    _OPTIONAL_SECTIONS = {"estudioComisiones"}
+
     def _apply_sections(self, raw_bill: RawBill, data: dict) -> RawBill:
         """Populate general/congresistas/committees/steps on an already
         id-stamped RawBill from a fetched detail payload. Shared by both
@@ -126,7 +135,12 @@ class RawBillScraper:
             # (since sections can be empty lists themselves)
             attribute_value = data.get(raw_name, "Not Found")
             if attribute_value == "Not Found":
-                logger.warning(
+                log_fn = (
+                    logger.debug
+                    if raw_name in self._OPTIONAL_SECTIONS
+                    else logger.warning
+                )
+                log_fn(
                     f"{raw_bill.id} - Missing Attribute: {raw_name} ({attribute_name})"
                 )
             else:
@@ -220,8 +234,12 @@ class RawBillScraper:
         Live-confirmed 2026-09-01 (post-implementation spot-check, both
         chambers): the detail route resolves via the real opaque
         expediente/{token1}/{token2}?codTipoParl={S|D} GET, and the
-        resulting body carries general/firmantes/comisiones/seguimientos
-        exactly matching legacy's section_mapping -- no schema drift.
+        resulting body carries general/firmantes/estudioComisiones/
+        seguimientos matching legacy's section_mapping (re-verified live
+        2026-09-03: the committee-study section is actually keyed
+        "estudioComisiones", not "comisiones" -- that key doesn't exist on
+        either term's payload and this scraper had been silently missing it
+        for every bill, legacy and 2026-2031 alike, until fixed).
         """
         bill_id = f"{bill_number:05d}-{CHAMBER_LEG_PERIOD}-{CHAMBER_LABEL_TO_ID_SUFFIX[chamber]}"
         bill_url = (
