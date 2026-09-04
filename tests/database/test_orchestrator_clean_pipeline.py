@@ -136,12 +136,11 @@ def test_process_congresistas_creates_party_and_chamber_memberships(
 def test_process_congresistas_persists_earlier_rows_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04): before the fix, a single db.commit() after the
-    whole loop meant one row's db.rollback() discarded every earlier row's
-    uncommitted work from the same run, even though stats.processed already
-    counted those earlier rows as successes. Confirms each row now commits
-    independently."""
+    """Regression test for the transaction-boundary fix: before the fix, a
+    single db.commit() after the whole loop meant one row's db.rollback()
+    discarded every earlier row's uncommitted work from the same run, even
+    though stats.processed already counted those earlier rows as successes.
+    Confirms each row now commits independently."""
     monkeypatch.setattr(
         "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
     )
@@ -500,9 +499,8 @@ def test_first_load_does_not_override_start_date_when_membership_already_exists(
 def test_process_organization_definitions_persists_earlier_committees_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04) applied to _process_organization_definitions's
-    committees sub-loop."""
+    """Regression test for the transaction-boundary fix applied to
+    _process_organization_definitions's committees sub-loop."""
     import backend.database.orchestrator as orch_module
 
     def flaky_process_committee(raw_comm):
@@ -564,8 +562,8 @@ def test_process_organization_definitions_persists_earlier_committees_when_a_lat
 def test_process_admin_memberships_persists_earlier_rows_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04) applied to _process_admin_memberships."""
+    """Regression test for the transaction-boundary fix applied to
+    _process_admin_memberships."""
     import backend.database.orchestrator as orch_module
 
     def flaky_process_admin_org(raw_org):
@@ -628,8 +626,8 @@ def test_process_admin_memberships_persists_earlier_rows_when_a_later_row_fails(
 def test_process_bancada_definitions_persists_earlier_rows_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04) applied to _process_bancada_definitions."""
+    """Regression test for the transaction-boundary fix applied to
+    _process_bancada_definitions."""
     import backend.database.orchestrator as orch_module
 
     def flaky_process_bancada(raw_bancada):
@@ -680,10 +678,10 @@ def test_process_bancada_definitions_persists_earlier_rows_when_a_later_row_fail
 def test_process_bancada_memberships_persists_earlier_rows_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04) applied to _process_bancada_memberships. Feeds raw
-    rows directly (bypassing _process_bancada_definitions) since this method
-    has its own independent query on RawBancada.processed."""
+    """Regression test for the transaction-boundary fix applied to
+    _process_bancada_memberships. Feeds raw rows directly (bypassing
+    _process_bancada_definitions) since this method has its own independent
+    query on RawBancada.processed."""
     import backend.database.orchestrator as orch_module
 
     def flaky_process_bancada(raw_bancada):
@@ -869,8 +867,8 @@ def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrat
 def test_process_bills_persists_earlier_rows_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04) applied to _process_bills."""
+    """Regression test for the transaction-boundary fix applied to
+    _process_bills."""
     real_upsert_bill = crud_bills.upsert_bill
 
     def flaky_upsert_bill(db, bill_schema):
@@ -1099,8 +1097,8 @@ def test_process_motions_loads_motion_when_author_is_missing(orchestrator):
 def test_process_motions_persists_earlier_rows_when_a_later_row_fails(
     orchestrator, monkeypatch
 ):
-    """Regression test for the transaction-boundary fix (/plan-eng-review
-    Phase 1, 2026-09-04) applied to _process_motions."""
+    """Regression test for the transaction-boundary fix applied to
+    _process_motions."""
     real_upsert_motion = crud_motions.upsert_motion
 
     def flaky_upsert_motion(db, motion_schema):

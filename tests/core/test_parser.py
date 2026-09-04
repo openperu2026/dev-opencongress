@@ -169,9 +169,8 @@ def test_classify_motion_vote_detail_keeps_vote_family():
     ],
 )
 def test_parse_motion_type_recognizes_2026_2031_senado_labels(raw_value, expected):
-    """Regression test (found via /plan-eng-review Phase 5's live audit,
-    2026-09-04): these 4 real Senado desTipoMocion labels were missing from
-    MOTION_TYPE_ALIASES, causing every single 2026-2031 Senado motion
+    """Regression test: these 4 real Senado desTipoMocion labels were missing
+    from MOTION_TYPE_ALIASES, causing every single 2026-2031 Senado motion
     (64/64 at the time this was found) to fail process_motion() with an
     unhandled Pydantic ValidationError."""
     assert parse_motion_type(raw_value) is expected
@@ -193,22 +192,20 @@ def test_parse_motion_type_raises_on_unrecognized_value():
 
 
 def test_parse_proponent_recognizes_2026_2031_chamber_self_proposed_labels():
-    """Regression test (found via /plan-eng-review Phase 5's live audit,
-    2026-09-04): the bicameral term labels a chamber-self-proposed bill
+    """Regression test: the bicameral term labels a chamber-self-proposed bill
     per-chamber ("Senado de la República" / "Cámara de Diputados") instead
     of the old unicameral "Congreso" bucket -- kept as distinct Proponents
-    values (not aliased to CONGRESO) per explicit decision, so which
-    chamber self-proposed a bill stays visible in bicameral-era data."""
+    values (not aliased to CONGRESO), so which chamber self-proposed a bill
+    stays visible in bicameral-era data."""
     assert parse_proponent("Senado de la República") is Proponents.SENADO
     assert parse_proponent("Cámara de Diputados") is Proponents.DIPUTADOS
 
 
 def test_parse_proponent_recognizes_executive_branch_variants():
-    """Regression test (found via /plan-eng-review Phase 5's live audit,
-    2026-09-04): 'PODER EJECUTIVO' (uppercase) is a pre-existing gap
-    affecting 146 legacy bills currently in the live DB, not just
-    bicameral-era data; 'Presidente de la República' is a new 2026-2031
-    Diputados label for the same executive branch."""
+    """Regression test: 'PODER EJECUTIVO' (uppercase) is a pre-existing gap
+    affecting legacy bills, not just bicameral-era data; 'Presidente de la
+    República' is a new 2026-2031 Diputados label for the same executive
+    branch."""
     assert parse_proponent("PODER EJECUTIVO") is Proponents.PODER_EJECUTIVO
     assert parse_proponent("Presidente de la República") is Proponents.PODER_EJECUTIVO
 

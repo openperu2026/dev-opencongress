@@ -22,8 +22,8 @@ class RawBancadaScraper(SharedRawScraperBase):
     (through 2021-2026) scrapes a real per-bancada membership table from
     www3.congreso.gob.pe. 2026-2031 BICAMERAL TERM does NOT scrape a
     membership table at all -- the real grupos-parlamentarios/ page on the
-    new sites carries no member data (confirmed live 2026-08-31, Phase B
-    plan Step B0 item 2) -- membership is instead derived from the
+    new sites carries no member data (confirmed live 2026-08-31) --
+    membership is instead derived from the
     congresistas roster's own `group` field and synthesized into the same
     HTML shape process_bancada() already parses. Both paths write RawBancada
     rows to the same table (chamber column: NULL for legacy, "Senadores"/
@@ -200,9 +200,9 @@ class RawBancadaScraper(SharedRawScraperBase):
         process_bancada() (backend/process/bancadas.py) already parses --
         from the congresistas roster's `group` field, grouped by bancada.
 
-        Confirmed live 2026-08-31 (Phase B plan, Step B0 item 2): the real
-        grupos-parlamentarios/ page carries no per-bancada membership table
-        for 2026-2031 (just a static name + regulations-doc-link list) --
+        Confirmed live 2026-08-31: the real grupos-parlamentarios/ page
+        carries no per-bancada membership table for 2026-2031 (just a
+        static name + regulations-doc-link list) --
         the congresistas roster is the only source of "who belongs to which
         bancada" for the new term, so this reconstructs process_bancada()'s
         expected internal shape instead of adding a second parser. Each

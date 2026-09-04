@@ -194,7 +194,7 @@ def test_scrape_motion_appends_raw_motion(monkeypatch, session):
     assert general_dict["titulo"] == "Moción X"
 
 
-# ---------- 2026-2031 chamber motions (Phase B2) ----------
+# ---------- 2026-2031 chamber motions ----------
 
 
 def test_create_chamber_raw_motion_uses_explicit_id():

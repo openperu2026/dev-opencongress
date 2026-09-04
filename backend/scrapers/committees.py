@@ -50,8 +50,8 @@ class RawCommitteeScraper(SharedRawScraperBase):
     chain, one RawCommittee row per (year, type) covering many committees.
     2026-2031 BICAMERAL TERM scrapes the new per-chamber comisiones/ index
     (name+link pairs only, no year/type dropdown on that site at all --
-    confirmed live 2026-08-31, Phase B plan Step B0 item 3) and covers
-    committee EXISTENCE only, not membership -- see get_chamber_committees's
+    confirmed live 2026-08-31) and covers committee EXISTENCE only, not
+    membership -- see get_chamber_committees's
     docstring for why per-committee membership is deliberately not wired up
     here. Both paths write RawCommittee rows to the same table (chamber
     column: NULL for legacy, "Senadores"/"Diputados" for the new term).

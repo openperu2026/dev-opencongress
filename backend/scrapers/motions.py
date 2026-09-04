@@ -115,8 +115,8 @@ class RawMotionScraper(SharedRawScraperBase):
 
     # =====================================================================
     # 2026-2031 BICAMERAL TERM -- chamber-prefixed id, bare-year url,
-    # confirmed live 2026-09-01 (Phase B2 plan, Step B2-0 item 2). Response
-    # body shape confirmed matching legacy's firmantes/seguimientos keys.
+    # confirmed live 2026-09-01. Response body shape confirmed matching
+    # legacy's firmantes/seguimientos keys.
     # =====================================================================
 
     def scrape_chamber_motion(self, chamber: str, motion_number: int) -> None:

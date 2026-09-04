@@ -21,7 +21,7 @@ BASE_URLS = {
 
 # 2026-2031 term. "Consejo Directivo" is deliberately absent -- confirmed
 # live 2026-08-31 that diputados.congreso.gob.pe/consejo-directivo/ 404s;
-# treated as removed under the new structure (Phase B plan, Step B0 item 4).
+# treated as removed under the new structure.
 # Comisión Permanente is scraped once as a single joint entity, not per
 # chamber -- see get_chamber_organizations.
 CHAMBER_ADMIN_ORG_SLUGS = {

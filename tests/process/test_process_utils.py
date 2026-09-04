@@ -26,11 +26,10 @@ def test_get_sentence_case_uppercases_source():
 
 
 def test_get_sentence_case_returns_none_for_none():
-    """Regression test (found via /plan-eng-review Phase 5's live audit,
-    2026-09-04): a null `observaciones` field in a raw bill's general JSON
-    -- real and current for every 2026-2031 Senado bill (6/6 at the time
-    this was found) -- crashed process_bill() with an unhandled
-    AttributeError ('NoneType' object has no attribute 'upper')."""
+    """Regression test: a null `observaciones` field in a raw bill's general
+    JSON -- real and current for every 2026-2031 Senado bill -- crashed
+    process_bill() with an unhandled AttributeError ('NoneType' object has
+    no attribute 'upper')."""
     assert get_sentence_case(None) is None
 
 

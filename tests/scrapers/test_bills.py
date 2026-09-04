@@ -202,7 +202,7 @@ def test_scrape_bill_appends_raw_bill(monkeypatch, session):
     assert json.loads(bill.steps)[0]["evento"] == "ingreso"
 
 
-# ---------- 2026-2031 chamber bills (Phase B2) ----------
+# ---------- 2026-2031 chamber bills ----------
 
 
 def test_create_chamber_raw_bill_uses_explicit_id():

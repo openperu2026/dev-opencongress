@@ -194,9 +194,8 @@ class RawCongresistasScraper(SharedRawScraperBase):
 
     # =====================================================================
     # 2026-2031 BICAMERAL TERM -- senado/diputados.congreso.gob.pe,
-    # confirmed live 2026-08-31 (Phase B plan, Step B0). No dropdown/period
-    # selector on these sites at all -- each domain serves only the current
-    # term's roster.
+    # confirmed live 2026-08-31. No dropdown/period selector on these sites
+    # at all -- each domain serves only the current term's roster.
     # =====================================================================
 
     def get_chamber_roster(self, chamber: str) -> list[dict]:
@@ -326,8 +325,8 @@ class RawCongresistasScraper(SharedRawScraperBase):
             strong_text = strong_nodes[0].text_content().strip() if strong_nodes else ""
             if strong_text.lower() == "grupo parlamentario":
                 # Bancada membership -- already scraped via the dedicated
-                # RawBancadaScraper.get_chamber_bancadas path (Phase B1);
-                # routing it through here too would double-source the same
+                # RawBancadaScraper.get_chamber_bancadas path; routing it
+                # through here too would double-source the same
                 # fact, and map_org_fields() has no Bancada case at all
                 # (it would silently default to org_type="Comisión").
                 continue

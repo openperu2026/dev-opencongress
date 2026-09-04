@@ -527,6 +527,20 @@ These records are stored on the table `model_cost_ledger` with the following col
 | updated_at | DateTime | | Timestamp of the last increment |
 
 
+### ScrapeGapRetry
+
+Tracks retry attempts for individual scrape ids discovered as gaps (missing between the observed min and max id) in a raw table's watermark sequence, so a legitimately-nonexistent id (a withdrawn or renumbered legislative item) isn't retried forever once it has failed repeatedly, while a transient failure (network error, recaptcha) still gets a bounded number of automatic retries on subsequent runs.
+
+These records are stored on the table `scrape_gap_retries` with the following columns:
+
+| Column | Type | Key | Description |
+|---|---|---|---|
+| raw_model_name | String | PK | Name of the raw model this gap belongs to (e.g. "RawBill", "RawMotion", "RawLey") — scopes the id namespace, since different raw models can share numeric ids. |
+| gap_id | String | PK | The numeric scrape id that is missing from the sequence, as a string. |
+| attempts | Integer | | Number of retry attempts made so far. |
+| last_attempt_at | DateTime | | Timestamp of the most recent attempt. |
+| skipped | Boolean | | True once `attempts` has reached the configured cap (`MAX_GAP_RETRY_ATTEMPTS` in `backend/database/orchestrator.py`) — excluded from future gap-retry passes. |
+
 ### RawBancada 
 Stores scraped results from the Congress website endpoint for the list of bancadas (political groups).
 

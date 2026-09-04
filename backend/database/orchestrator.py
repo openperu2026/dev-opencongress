@@ -452,7 +452,7 @@ class OpenPeruOrchestrator:
         leg_period: when None (default) or settings.LEG_PERIOD (the current
         term, "2026-2031"), scrape_others runs ONLY the current-period
         chamber-specific congresistas/bancadas/committees/organizations
-        scrape (Phase B1); the legacy (through 2021-2026) reference scrape
+        scrape; the legacy (through 2021-2026) reference scrape
         is skipped by default -- that data is now historical/stable and
         doesn't need continuous re-scraping. Passing any OTHER explicit
         value (e.g. "2021-2026") flips this: it opts back into the legacy
@@ -461,7 +461,7 @@ class OpenPeruOrchestrator:
         Bills/motions are NOT subject to this asymmetry: their legacy scrape
         always runs regardless of leg_period (old bills/motions can still
         gain new documents/votes/status), and their 2026-2031 chamber-
-        specific range scrapers (Phase B2) run when leg_period is None or
+        specific range scrapers run when leg_period is None or
         settings.LEG_PERIOD, same gating shape as scrape_others' current
         block.
 
@@ -758,10 +758,9 @@ class OpenPeruOrchestrator:
 
                 # =============================================================
                 # 2026-2031 BICAMERAL TERM -- independent per-chamber id
-                # sequences, confirmed live 2026-09-01 (Phase B2 plan). Each
-                # chamber gets its OWN ScraperStats entry (not combined) so
-                # "chamber X silently stopped scraping" is visible per the
-                # design doc's own stats.errors monitoring guidance.
+                # sequences (confirmed live 2026-09-01). Each chamber gets its
+                # OWN ScraperStats entry (not combined) so "chamber X silently
+                # stopped scraping" is visible in stats.errors monitoring.
                 # =============================================================
                 if leg_period in (None, settings.LEG_PERIOD):
                     for chamber in ("Senadores", "Diputados"):
@@ -1219,7 +1218,7 @@ class OpenPeruOrchestrator:
 
         chamber_scrape_fn: optional -- when a pending id is new-format
         (2026-2031, detected via chamber_label_from_id), dispatches to this
-        instead of the legacy scrape_fn(year, number) path. Reuses Phase A's
+        instead of the legacy scrape_fn(year, number) path. Reuses the
         existing chamber_label_from_id() rather than reimplementing suffix
         parsing. Legacy-format ids are entirely unaffected (identical to
         today) regardless of whether chamber_scrape_fn is provided.

@@ -319,11 +319,10 @@ def test_update_tracking_first_version_marks_changed():
 
 
 def test_update_tracking_existing_same_version_returns_empty_list():
-    """Regression test for the store-only-if-changed fix (/plan-eng-review
-    Phase 2, 2026-09-04): an unchanged snapshot must return [] and must
-    NOT flip the existing row's last_update -- the original bug flipped it
-    unconditionally in the "else" branch regardless of whether anything
-    actually changed."""
+    """Regression test for the store-only-if-changed fix: an unchanged
+    snapshot must return [] and must NOT flip the existing row's
+    last_update -- the original bug flipped it unconditionally in the
+    "else" branch regardless of whether anything actually changed."""
     engine, SessionLocal = setup_inmemory_db()
 
     scraper = make_scraper()
@@ -507,7 +506,7 @@ def test_get_raw_organizations_aborts_when_no_years(monkeypatch):
     assert any("No years found for type=Mesa Directiva" in msg for msg in warnings)
 
 
-# ---------- 2026-2031 chamber admin orgs (Phase B1) ----------
+# ---------- 2026-2031 chamber admin orgs ----------
 
 _PARLIAMENT_TABLE_HTML = """
 <html><body>

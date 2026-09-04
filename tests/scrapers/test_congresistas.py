@@ -324,11 +324,10 @@ def test_add_congresistas_to_db_persists(monkeypatch):
 
 
 def test_update_tracking_unchanged_returns_empty_list():
-    """Regression test for the store-only-if-changed fix (/plan-eng-review
-    Phase 2, 2026-09-04): re-tracking an identical congresista snapshot
-    must return [] so a caller's .extend() appends nothing, instead of
-    unconditionally storing a duplicate raw row on every scrape run
-    forever."""
+    """Regression test for the store-only-if-changed fix: re-tracking an
+    identical congresista snapshot must return [] so a caller's .extend()
+    appends nothing, instead of unconditionally storing a duplicate raw
+    row on every scrape run forever."""
     engine, SessionLocal = _setup_inmemory_db()
     with SessionLocal() as session:
         cong_scraper = RawCongresistasScraper(session=session)
@@ -415,7 +414,7 @@ def test_add_congresistas_to_db_handles_sqlalchemy_error(monkeypatch):
     assert dummy_session.rolled_back is True
 
 
-# ---------- 2026-2031 chamber scraping (Phase B1) ----------
+# ---------- 2026-2031 chamber scraping ----------
 
 _ROSTER_ENTRY = {
     "name": "Aguinaga Recuenco, Alejandro Aurelio",
@@ -469,10 +468,9 @@ def test_get_chamber_roster_fetch_failure_returns_empty(monkeypatch):
 
 
 def test_get_chamber_profile_data_extracts_votes_and_og_image(monkeypatch):
-    """Regression test for the higher-res photo fix (/plan-eng-review
-    Phase 7, 2026-09-04): confirmed live 2026-09-04 that the roster
-    listing's own `photo` field is a WordPress `-150x150` thumbnail, while
-    the individual profile page's <meta property="og:image"> holds a
+    """Regression test for the higher-res photo fix: the roster listing's
+    own `photo` field is a WordPress `-150x150` thumbnail, while the
+    individual profile page's <meta property="og:image"> holds a
     meaningfully larger version -- extracted from the SAME fetch already
     used for the votes count, not a second request."""
     cong_scraper = RawCongresistasScraper()
@@ -763,7 +761,7 @@ def test_synthesized_chamber_profile_roundtrips_through_process_profile_content(
 ):
     """CRITICAL: proves the scraper's synthetic HTML is byte-compatible with
     process_profile_content()'s existing xpath contract -- the adapter
-    pattern this Phase B1 design relies on for zero process-layer changes.
+    pattern this design relies on for zero process-layer changes.
 
     full_name is asserted in "Nombres Apellidos" order: process_profile_content
     now runs the .nombres text through split_and_sort_name, correctly

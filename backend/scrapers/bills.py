@@ -212,9 +212,9 @@ class RawBillScraper(SharedRawScraperBase):
 
     # =====================================================================
     # 2026-2031 BICAMERAL TERM -- chamber-prefixed id/url, confirmed live
-    # 2026-09-01 (Phase B2 plan, Step B2-0). Reuses the SAME Playwright
-    # navigate-and-intercept mechanism as legacy (SHARED section above)
-    # unchanged -- only the id/url construction differs.
+    # 2026-09-01. Reuses the SAME Playwright navigate-and-intercept
+    # mechanism as legacy (SHARED section above) unchanged -- only the
+    # id/url construction differs.
     # =====================================================================
 
     def scrape_chamber_bill(self, chamber: str, bill_number: int) -> None:

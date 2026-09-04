@@ -2,9 +2,7 @@
 CRUD helpers for the standalone vote/attendance review tool (`review_app/`).
 
 Kept separate from `pipeline_votes.py`, which is scoped to the votes ETL
-extraction/load pipeline, not this reviewer tool. See the approved plan at
-`~/.claude/plans/project-vote-buzzing-pillow.md` for the full design and
-`/plan-eng-review` rationale behind each function's shape.
+extraction/load pipeline, not this reviewer tool.
 """
 
 from __future__ import annotations

@@ -325,13 +325,13 @@ def test_update_tracking_marks_first_snapshot_changed():
 
 
 def test_update_tracking_identical_snapshot_returns_empty_list():
-    """Regression test for the store-only-if-changed fix (/plan-eng-review
-    Phase 2, 2026-09-04): an unchanged snapshot must return [] (so a
-    caller's .extend() appends nothing) and must NOT flip the existing
-    row's last_update -- the original bug flipped it unconditionally in
-    the "else" branch regardless of whether anything actually changed,
-    which (combined with never persisting a replacement) would have left
-    NO row marked as the current one for this entity."""
+    """Regression test for the store-only-if-changed fix: an unchanged
+    snapshot must return [] (so a caller's .extend() appends nothing) and
+    must NOT flip the existing row's last_update -- the original bug
+    flipped it unconditionally in the "else" branch regardless of whether
+    anything actually changed, which (combined with never persisting a
+    replacement) would have left NO row marked as the current one for this
+    entity."""
     engine, SessionLocal = setup_inmemory_db()
 
     scraper = make_scraper()
@@ -498,7 +498,7 @@ def test_add_bancadas_to_db_handles_sqlalchemy_error():
     assert dummy_session.close_called is True
 
 
-# ---------- 2026-2031 chamber bancadas (Phase B1) ----------
+# ---------- 2026-2031 chamber bancadas ----------
 
 
 def test_build_chamber_bancada_html_groups_by_bancada():

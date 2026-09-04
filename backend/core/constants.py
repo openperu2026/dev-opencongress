@@ -108,9 +108,9 @@ CHAMBER_LABEL_TO_ORG_NAME = {
     None: "Cámara de Diputados",
 }
 
-# Per-chamber site roots for the 2026-2031 term (confirmed live 2026-08-31 --
-# see Phase B plan, Step B0). These are separate WordPress microsites, not a
-# chamber query param on the legacy www3.congreso.gob.pe site.
+# Per-chamber site roots for the 2026-2031 term (confirmed live 2026-08-31).
+# These are separate WordPress microsites, not a chamber query param on the
+# legacy www3.congreso.gob.pe site.
 CHAMBER_BASE_URLS = {
     "Senadores": "https://senado.congreso.gob.pe",
     "Diputados": "https://diputados.congreso.gob.pe",
@@ -122,8 +122,8 @@ CHAMBER_BASE_URLS = {
 # string, so no changes needed there.
 CHAMBER_LEG_PERIOD_LABEL = "Parlamentario 2026 - 2031"
 
-# Phase B2 (bills/motions bicameral scraping) chamber-derived maps. Distinct
-# from CHAMBER_LABEL_TO_ORG_NAME above (that maps to canonical Organization
+# Bills/motions bicameral scraping chamber-derived maps. Distinct from
+# CHAMBER_LABEL_TO_ORG_NAME above (that maps to canonical Organization
 # names for the process layer) and from chamber_label_from_id's suffix map
 # in backend/process/utils.py (that maps id-suffix -> label, the inverse
 # direction) -- these three map a resolved chamber label to the specific

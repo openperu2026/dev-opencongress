@@ -454,7 +454,7 @@ def test_upload_documents_continues_after_failures():
     assert stats.failed == 2
 
 
-# ---------- Phase B1: 2026-2031 chamber scraper dispatch ----------
+# ---------- 2026-2031 chamber scraper dispatch ----------
 
 
 class DummyChamberScraper:
@@ -698,12 +698,12 @@ def test_recent_raw_exists_is_chamber_scoped(engine, session):
     assert orch._recent_raw_exists(RawCongresista, days=1) is True
 
 
-# ---------- Phase B2: bills/motions bicameral scraping ----------
+# ---------- Bills/motions bicameral scraping ----------
 
 
 def test_get_last_id_scraped_legacy_only_unaffected(engine, session):
     """Regression: only legacy ids present, id_suffix=None -> byte-identical
-    to pre-Phase-B2 behavior."""
+    to legacy (pre-bicameral) behavior."""
     session.add(
         RawBill(
             id="2021_100",
@@ -947,10 +947,10 @@ def test_record_gap_retry_outcomes_ignores_id_that_now_exists(engine, session):
 
 
 def test_record_gap_retry_outcomes_marks_permanently_skipped_after_cap(engine, session):
-    """Regression test for the gap-retry cap (/plan-eng-review Phase 3,
-    2026-09-04): a gap id that keeps failing must stop being retried after
-    MAX_GAP_RETRY_ATTEMPTS, so a legitimately-nonexistent id (withdrawn/
-    renumbered legislative item) doesn't cost a live-site request forever."""
+    """Regression test for the gap-retry cap: a gap id that keeps failing
+    must stop being retried after MAX_GAP_RETRY_ATTEMPTS, so a
+    legitimately-nonexistent id (withdrawn/renumbered legislative item)
+    doesn't cost a live-site request forever."""
     orch = OpenPeruOrchestrator(engine=engine)
 
     for expected_attempts in range(1, orch.MAX_GAP_RETRY_ATTEMPTS + 1):
@@ -1038,10 +1038,9 @@ def test_scrape_range_retries_gap_before_forward_scan(monkeypatch, engine, sessi
 
 
 def test_scrape_range_continues_past_single_id_failure(monkeypatch, engine, session):
-    """Regression test for the per-id try/except fix (/plan-eng-review
-    Phase 3, 2026-09-04): before the fix, an unhandled exception from
-    scrape_fn aborted the whole range scrape, losing that run's
-    buffered-but-unflushed rows."""
+    """Regression test for the per-id try/except fix: before the fix, an
+    unhandled exception from scrape_fn aborted the whole range scrape,
+    losing that run's buffered-but-unflushed rows."""
     calls = []
     scraper = SimpleNamespace(raw_motions=[])
     orch = OpenPeruOrchestrator(engine=engine)
@@ -1327,7 +1326,7 @@ def test_scrape_pending_daily_legacy_id_unaffected_when_chamber_fn_omitted(
     monkeypatch, engine, session
 ):
     """Regression: legacy-format pending id, chamber_scrape_fn omitted ->
-    byte-identical to pre-Phase-B2 dispatch."""
+    byte-identical to legacy (pre-bicameral) dispatch."""
     calls = []
     scraper = SimpleNamespace(raw_bills=[])
     orch = OpenPeruOrchestrator(engine=engine)
@@ -1397,7 +1396,8 @@ def test_scrape_pending_daily_dispatches_new_format_id_to_chamber_fn(
 def test_scrape_pending_daily_new_format_id_no_chamber_fn_skips_without_crash(
     monkeypatch, engine, session
 ):
-    """Defensive branch found in eng review's test-diagram trace."""
+    """Defensive branch: no chamber-scoped scrape function is registered for
+    this id format, so the stage must skip cleanly instead of crashing."""
     scraper = SimpleNamespace(raw_bills=[])
     orch = OpenPeruOrchestrator(engine=engine)
 

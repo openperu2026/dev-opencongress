@@ -98,10 +98,9 @@ def test_update_tracking_second_time_flips_previous_last_update(scraper, db_sess
 
 
 def test_update_tracking_second_time_same_data_returns_empty_list(scraper, db_session):
-    """Regression test for the store-only-if-changed fix (/plan-eng-review
-    Phase 2, 2026-09-04): an unchanged snapshot must return [] so the
-    caller's .extend() appends nothing, instead of unconditionally storing
-    a duplicate raw row forever."""
+    """Regression test for the store-only-if-changed fix: an unchanged
+    snapshot must return [] so the caller's .extend() appends nothing,
+    instead of unconditionally storing a duplicate raw row forever."""
     ley_number = "32558"
 
     # Insert first version with some data

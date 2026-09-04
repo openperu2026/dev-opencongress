@@ -127,12 +127,11 @@ def test_add_to_db_success_clears_tracking_updates():
 
 
 def test_add_to_db_failure_restores_flipped_last_update():
-    """Regression test for the compensation mechanism (/plan-eng-review
-    Phase 2, 2026-09-04, generalized from leyes.py to all 7 scrapers): if
-    the bulk-save fails after update_tracking already flipped a previous
-    row's last_update, that flip must be restored -- otherwise a failed
-    load run permanently loses track of which row is "current" for that
-    entity."""
+    """Regression test for the compensation mechanism (generalized from
+    leyes.py to all 7 scrapers): if the bulk-save fails after
+    update_tracking already flipped a previous row's last_update, that flip
+    must be restored -- otherwise a failed load run permanently loses track
+    of which row is "current" for that entity."""
     _, SessionLocal = setup_inmemory_db()
 
     with SessionLocal() as session:
