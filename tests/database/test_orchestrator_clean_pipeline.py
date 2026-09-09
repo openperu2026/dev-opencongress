@@ -347,7 +347,14 @@ def test_first_load_does_not_affect_legacy_2021_2026_memberships(
     orchestrator, monkeypatch
 ):
     """Regression: first_load=True must never force-reset legacy (pre-2026)
-    memberships' start_date to 2026-07-28."""
+    memberships' start_date to 2026-07-28.
+
+    Chamber/party memberships span the full legislative term (found
+    2026-09-09 -- see _TERM_LONG_ORG_TYPES), so both party_mem and
+    chamber_mem here derive their start_date from the 2021-2026 term's own
+    range (2021-07-28), not from the scrape timestamp (2025-08-01) or from
+    first_load's 2026-07-28 override -- neither timestamp-derivation nor
+    first_load ever apply to these two org types."""
     monkeypatch.setattr(
         "backend.database.orchestrator.get_cong_data", lambda path, **kwargs: {}
     )
@@ -381,10 +388,86 @@ def test_first_load_does_not_affect_legacy_2021_2026_memberships(
         )
         assert len(memberships) == 2
         for ms in memberships:
-            # Falls through to the existing timestamp-derived fallback
-            # (legislative year containing 2025-08-01 -> starts 2025-07-28),
-            # unaffected by first_load.
-            assert ms.start_date == date(2025, 7, 28)
+            # Both are term-long org types (Cámara/Partido) -- derive from
+            # the 2021-2026 term's own range, not the scrape timestamp.
+            assert ms.start_date == date(2021, 7, 28)
+            assert ms.end_date == date(2026, 7, 27)
+
+
+def test_membership_dates_chamber_spans_full_term_not_one_year(orchestrator):
+    """Regression (found 2026-09-09): a Cámara membership must span the
+    entire 5-year legislative term, not a single legislative year. Combined
+    with the fact that the derivation seed (scrape timestamp) advances every
+    rescrape, deriving only one year at a time is what caused a
+    duplicate-membership bug the same day (see dates_are_synthetic on
+    upsert_membership) -- this locks in the actual fix."""
+    membership = schema.Membership(
+        cong_name="Ana Torres",
+        org_name="Cámara de Diputados",
+        org_type=TypeOrganization.CHAMBER,
+        leg_period="2026-2031",
+        role="Diputado",
+        time_stamp=datetime(2027, 9, 1),  # well into the term, not day one
+    )
+
+    start, end = orchestrator._membership_dates(membership)
+
+    assert start == date(2026, 7, 28)
+    assert end == date(2031, 7, 27)
+
+
+def test_membership_dates_committee_keeps_single_year_fallback(orchestrator):
+    """Committee (and bancada/admin) memberships genuinely get reassigned
+    annually with real per-year dates from the source -- only Cámara/Partido
+    are term-long. Confirms the single-legislative-year fallback is
+    unchanged for every other org type."""
+    membership = schema.Membership(
+        cong_name="Ana Torres",
+        org_name="Comisión de Salud",
+        org_type=TypeOrganization.COMMITTEE,
+        leg_period="2026-2031",
+        role="Miembro",
+        time_stamp=datetime(2027, 9, 1),
+    )
+
+    start, end = orchestrator._membership_dates(membership)
+
+    assert start == date(2027, 7, 28)
+    assert end == date(2028, 7, 28)
+
+
+def test_membership_dates_chamber_caps_end_date_on_known_early_departure(orchestrator):
+    """Regression (found 2026-09-09): a congresista who died/was removed
+    mid-term must not get end_date extended to the full term end -- their
+    condicion (Fallecido/Destituído/Suspendido*/Inactivo) caps end_date at
+    the scrape timestamp instead, since the exact departure date isn't
+    known. An unrecognized condicion value (e.g. legacy "Titular") must
+    still default to the full term -- this is a denylist, not an allowlist."""
+    died = schema.Membership(
+        cong_name="Ana Torres",
+        org_name="Cámara de Diputados",
+        org_type=TypeOrganization.CHAMBER,
+        leg_period="2026-2031",
+        role="Diputado",
+        time_stamp=datetime(2028, 3, 15),
+        condicion="Fallecido",
+    )
+    start, end = orchestrator._membership_dates(died)
+    assert start == date(2026, 7, 28)
+    assert end == date(2028, 3, 15)
+
+    unrecognized = schema.Membership(
+        cong_name="Ana Torres",
+        org_name="Cámara de Diputados",
+        org_type=TypeOrganization.CHAMBER,
+        leg_period="2026-2031",
+        role="Diputado",
+        time_stamp=datetime(2028, 3, 15),
+        condicion="Titular",
+    )
+    start, end = orchestrator._membership_dates(unrecognized)
+    assert start == date(2026, 7, 28)
+    assert end == date(2031, 7, 27)
 
 
 def test_process_congresistas_resyncs_photo_when_photo_url_changed(

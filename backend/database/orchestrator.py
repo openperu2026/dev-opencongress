@@ -89,6 +89,7 @@ from backend.core.constants import (
     LEG_PERIOD_TO_PER_PAR_ID,
 )
 from backend.core.parsers import (
+    get_leg_period_range,
     get_processable_year_range,
     resolve_processable_leg_periods,
     LEG_PERIOD_RANGES,
@@ -101,6 +102,19 @@ from backend.core.enums import LegPeriod
 # is a TypeOrganization enum member at this stage (backend/process/schema.py),
 # not yet converted to its string .value.
 _CHAMBER_UNSCOPED_ORG_TYPES = {
+    TypeOrganization.CHAMBER,
+    TypeOrganization.PARTY,
+}
+
+# Org types whose membership spans the ENTIRE legislative term when no
+# explicit date is given, rather than a single legislative year -- a
+# congresista's own chamber seat and party affiliation don't get reassigned
+# annually the way committee/bancada/admin memberships can. Happens to be
+# the same set as _CHAMBER_UNSCOPED_ORG_TYPES today (both are about "this
+# type tracks the person's overall term status, not an internal annual
+# assignment") but kept as its own constant since the two concerns are
+# conceptually distinct and could diverge. See _membership_dates.
+_TERM_LONG_ORG_TYPES = {
     TypeOrganization.CHAMBER,
     TypeOrganization.PARTY,
 }
@@ -1456,14 +1470,60 @@ class OpenPeruOrchestrator:
     def _membership_dates(
         self, membership: Membership, *, seed_override: date | None = None
     ) -> tuple[date, date]:
-        """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28).
+        """Resolve a membership's start/end.
+
+        Chamber/party memberships (_TERM_LONG_ORG_TYPES) span the ENTIRE
+        legislative term when no explicit date is given -- found 2026-09-09:
+        these previously fell through to the same single-legislative-year
+        (Jul 28 → Jul 28) fallback as everything else, which is wrong for a
+        5-year term membership and (combined with the seed being the scrape
+        timestamp, which advances every rescrape) is what caused a
+        duplicate-membership bug fixed the same day (see dates_are_synthetic
+        on upsert_membership). Every other membership type (committee,
+        bancada, admin) keeps the single-legislative-year fallback below,
+        since those genuinely get reassigned annually with real per-year
+        dates from the source.
 
         seed_override: when given, used instead of membership.time_stamp as
-        the seed for deriving the legislative-year window (still only when
-        membership.start_date itself is unset). See _upsert_membership_schema
-        for when this is the 2026-2031 term-start date rather than the scrape
+        the seed for deriving the single-legislative-year fallback window
+        (still only when membership.start_date itself is unset, and only for
+        non-term-long org types). See _upsert_membership_schema for when
+        this is the 2026-2031 term-start date rather than the scrape
         timestamp.
+
+        A term-long membership only gets the full term end date unless
+        condicion is a KNOWN early-departure status (found 2026-09-09 in
+        production: "Fallecido", "Destituído", "Suspendido por sanción"/
+        "por Acusación Constitucional", "Inactivo") -- deliberately a
+        denylist, not an allowlist of active values, since condicion has
+        real inconsistent casing/phrasing in production ("En Ejercicio" vs
+        "en Ejercicio", plus legacy-term values like "Titular") and an
+        unrecognized-but-genuinely-active value must never be mistaken for
+        an early departure. For a known early-departure status, we don't
+        know the exact departure date -- only that it was true as of this
+        scrape -- so end_date is capped at membership.time_stamp instead.
+        This self-corrects: if a later scrape shows condicion reverted to
+        active, dates_are_synthetic matching (see upsert_membership) updates
+        the SAME row back to the full term end rather than leaving it
+        permanently truncated.
         """
+        if (
+            membership.start_date is None
+            and membership.org_type in _TERM_LONG_ORG_TYPES
+        ):
+            term_start, term_end = get_leg_period_range(membership.leg_period)
+            condicion = (membership.condicion or "").strip().lower()
+            is_known_early_departure = any(
+                keyword in condicion
+                for keyword in ("fallecido", "destitu", "suspendido", "inactivo")
+            )
+            if not is_known_early_departure:
+                return term_start, term_end
+            end = membership.time_stamp
+            if isinstance(end, datetime):
+                end = end.date()
+            return term_start, end
+
         seed = membership.start_date or seed_override or membership.time_stamp
         leg_year = get_current_leg_year(seed)
         derived_start = date(leg_year, 7, 28)
@@ -1557,10 +1617,16 @@ class OpenPeruOrchestrator:
             membership, seed_override=seed_override
         )
         extra_fields = {
-            "condicion": membership.condicion,
             "votes_in_election": membership.votes_in_election,
             "dist_electoral": membership.dist_electoral,
         }
+        # condicion only exists as a column on ChamberMembership -- party_mem
+        # now carries it too (found 2026-09-09), but purely so
+        # _membership_dates above can read the same active/inactive signal;
+        # passing it through to a PartyMembership insert would raise
+        # ("'condicion' is an invalid keyword argument for PartyMembership").
+        if org.org_type == TypeOrganization.CHAMBER.value:
+            extra_fields["condicion"] = membership.condicion
         extra_fields = {k: v for k, v in extra_fields.items() if v is not None}
         return crud_core.upsert_membership(
             db=db,
