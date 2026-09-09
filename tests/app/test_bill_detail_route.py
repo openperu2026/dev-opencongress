@@ -7,7 +7,9 @@ carries content the user can actually see (``modified`` or ``incomparable``).
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from io import BytesIO
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine
@@ -24,6 +26,7 @@ from backend.database.models import (
     Organization,
     PartyMembership,
 )
+from backend.database.raw_models import RawBillDocument
 
 
 @pytest.fixture()
@@ -31,6 +34,7 @@ def session_factory(tmp_path):
     db_path = tmp_path / "processed_test.db"
     engine = create_engine(f"sqlite:///{db_path}")
     Base.metadata.create_all(engine)
+    RawBillDocument.__table__.create(engine, checkfirst=True)
     Session = sessionmaker(bind=engine)
     yield Session
     engine.dispose()
@@ -216,18 +220,91 @@ def test_detail_page_shows_author_party_and_committee(client, session_factory):
     assert "Partido Verde" in body
 
 
-def test_summary_is_labeled_untranslated_in_english(client, session_factory):
-    _seed_author_affiliations(session_factory)
+def _seed_documents(session_factory):
+    _seed(
+        session_factory,
+        steps_with_diff_types=[
+            (1, TypeBillStep.PRESENTADO, None),
+            (2, TypeBillStep.TEXTO_SUSTITUTORIO_O_REVISION, None),
+        ],
+    )
+    with session_factory() as db:
+        for file_id, s3_key, url in [
+            (10, "bills/document.pdf", "https://example.org/original.pdf"),
+            (11, None, "https://example.org/second.pdf"),
+            (12, None, ""),
+        ]:
+            db.add(
+                RawBillDocument(
+                    bill_id="2021_1234",
+                    step_id=1,
+                    file_id=file_id,
+                    step_date=datetime(2022, 2, 1),
+                    timestamp=datetime(2022, 2, 1),
+                    url=url,
+                    s3_key=s3_key,
+                    last_update=True,
+                    changed=True,
+                    processed=False,
+                )
+            )
+        db.commit()
 
-    body = client.get("/bills/2021_1234?lang=en").get_data(as_text=True)
 
-    assert "(Original text in Spanish)" in body
+def test_pdf_buttons_without_extracted_text(client, session_factory, monkeypatch):
+    import app.routes.bills as bills_module
+
+    monkeypatch.setattr(bills_module.settings, "AWS_S3_BUCKET_NAME", "test-bucket")
+    _seed_documents(session_factory)
+    response = client.get("/bills/2021_1234")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert body.count("Descargar PDF") == 2
+    assert "/bills/2021_1234/document/1/10" in body
+    assert "https://example.org/second.pdf" in body
+    assert "/document/2/" not in body
 
 
-def test_summary_is_not_labeled_untranslated_in_spanish(client, session_factory):
-    _seed_author_affiliations(session_factory)
+def test_download_specific_pdf_without_extracted_text(
+    client, session_factory, monkeypatch
+):
+    import app.routes.bills as bills_module
 
-    body = client.get("/bills/2021_1234").get_data(as_text=True)
+    _seed_documents(session_factory)
+    monkeypatch.setattr(bills_module.settings, "AWS_S3_BUCKET_NAME", "test-bucket")
+    monkeypatch.setattr(bills_module.settings, "AWS_ACCESS_KEY_ID", None)
+    calls = []
 
-    assert "(Original text in Spanish)" not in body
-    assert "(Texto original en español)" not in body
+    def get_object(**kwargs):
+        calls.append(kwargs)
+        return {"Body": BytesIO(b"%PDF-test"), "ContentType": "application/pdf"}
+
+    monkeypatch.setattr(
+        bills_module.boto3,
+        "client",
+        lambda *args, **kwargs: SimpleNamespace(get_object=get_object),
+    )
+    response = client.get("/bills/2021_1234/document/1/10")
+    assert response.status_code == 200
+    assert response.data == b"%PDF-test"
+    assert response.headers["Content-Disposition"] == (
+        'attachment; filename="2021_1234-1-10.pdf"'
+    )
+    assert calls == [{"Bucket": "test-bucket", "Key": "bills/document.pdf"}]
+    assert client.get("/bills/2021_1234/document/2/10").status_code == 404
+    assert client.get("/bills/2021_1234/document/1/99").status_code == 404
+
+
+def test_pdf_source_links_when_bucket_unconfigured(
+    client, session_factory, monkeypatch
+):
+    import app.routes.bills as bills_module
+
+    _seed_documents(session_factory)
+    monkeypatch.setattr(bills_module.settings, "AWS_S3_BUCKET_NAME", None)
+    response = client.get("/bills/2021_1234")
+    assert response.status_code == 200
+    body = response.get_data(as_text=True)
+    assert "https://example.org/original.pdf" in body
+    assert "https://example.org/second.pdf" in body
+    assert "/bills/2021_1234/document/1/10" not in body

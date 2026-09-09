@@ -232,8 +232,19 @@
                 <label>
                     <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Proyectos de ley no aprobados')}}
                 </label>
+           
+                <button type="submit" class="search-icon-button" aria-label="{{ _('Buscar') }}">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                </button>
+
+                <a href="{{ url_for('bills.index') }}" class="clear-button bill-clean-button">
+                    {{ _('Limpiar') }}
+                </a>           
             </div>
+
         </details>
+
+       
     </div>
     </form>
 </div>
