@@ -583,31 +583,16 @@ def _chamber_exists_filter(chamber_q: str):
         )
         .exists()
     )
-    presentation_date_to_picker = _build_date_picker(
-        "presentation_date_to",
-        request.args,
-        today,
-        min_date=presentation_date_min,
-        max_date=PRESENTATION_DATE_MAX,
-    )
-    presentation_date_from = presentation_date_from_picker["selected_date"]
-    presentation_date_to = presentation_date_to_picker["selected_date"]
-    search_requested = any(
-        [
-            semantic_query,
-            title_q,
-            author_q,
-            author_party_q,
-            pley_id_q,
-            law_id_q,
-            current_step_q,
-            presentation_date_from is not None,
-            presentation_date_to is not None,
-            organization_name_q,
-            special_committee_q,
-            bill_diff_q,
-            status != "all",
-        ]
+
+
+def _period_exists_filter(period_start: date, period_end: date):
+    return (
+        select(BillOrganization.bill_id)
+        .where(
+            BillOrganization.bill_id == Bill.id,
+            BillOrganization.presentation_date.between(period_start, period_end),
+        )
+        .exists()
     )
 
 
