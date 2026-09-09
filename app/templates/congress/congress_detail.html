@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
 <div class="congress-detail-page">
@@ -6,11 +7,7 @@
         {% if available_periods|length > 1 %}
             <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
                 {% for value, label in available_periods %}
-                    {% if value == selected_period %}
-                        <span class="is-active" aria-current="page">{{ label }}</span>
-                    {% else %}
-                        <a href="{{ url_for('congress.congress_detail', congresista_id=congresista.id, leg_period_q=value) }}">{{ label }}</a>
-                    {% endif %}
+                    {{ macros.tab_link('congress.congress_detail', {}, {'leg_period_q': value}, label, is_active=(value == selected_period), url_kwargs={'congresista_id': congresista.id}) }}
                 {% endfor %}
             </nav>
         {% endif %}
@@ -41,6 +38,13 @@
 
             <section class="congress-section congress-committee-panel">
                 <h2>{{_('Membresía en comisiones')}}{% if selected_period_label %} &mdash; {{ selected_period_label }}{% endif %}</h2>
+                {% if available_years %}
+                    <div class="year-tabs" aria-label="{{ _('Año legislativo') }}">
+                        {% for value, label in available_years %}
+                            {{ macros.tab_link('congress.congress_detail', {'leg_period_q': selected_period}, {'leg_year_q': value}, label, is_active=(value == selected_year), css_class="year-tab-button", url_kwargs={'congresista_id': congresista.id}) }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
                 {% if memberships %}
                     {% set spanish_months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
                     <ul class="committee-membership-list">
@@ -128,11 +132,15 @@
             {% endif %}
         </section>
         <br>
-        <p class="congress-action">
-            <a href="{{ url_for('bills.index', author_q=congresista.full_name, leg_period_q=selected_period) }}">
-                {{_('Ver todos los proyectos de ley presentados')}}
-            </a>
-        </p>
+        <form method="post" action="{{ url_for('bills.index') }}" class="tab-form">
+            <input type="hidden" name="author_q" value="{{ congresista.full_name }}">
+            <input type="hidden" name="leg_period_q" value="{{ selected_period }}">
+            <p class="congress-action">
+                <button type="submit" class="link-button">
+                    {{_('Ver todos los proyectos de ley presentados')}}
+                </button>
+            </p>
+        </form>
 
 
         <p class="congress-source">

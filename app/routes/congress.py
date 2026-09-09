@@ -8,7 +8,6 @@ from flask import (
     redirect,
     render_template,
     request,
-    url_for,
 )
 from flask_babel import gettext as _
 from sqlalchemy import case, func, or_, select
@@ -21,14 +20,15 @@ from backend.database.models import (
     Membership,
     Organization,
 )
+from backend.process.utils import get_current_leg_year
 
 
 from .utils import (
     CHAMBER_ORG_NAME_TO_UI_SLUG,
     CHAMBER_UI_TO_ORG_NAME,
     LEG_PERIOD_UI_OPTIONS,
+    create_bancada_option,
     create_committee_option,
-    create_party_option,
     create_region_option,
     create_special_committee_option,
     latest_org_name,
@@ -227,6 +227,45 @@ def _congresista_period_data(db, congresista_id: int) -> dict[str, SimpleNamespa
     return by_period
 
 
+def _leg_year_buckets(selected_period: str) -> list[tuple[str, str]]:
+    """Annual legislative-year buckets within a 5-year leg_period,
+    most-recent-first. Uses get_current_leg_year's own Jul-27 cutoff (the
+    definition already used to bucket committee reassignments elsewhere,
+    see _membership_dates) rather than a second, hand-rolled boundary --
+    a membership's start_date this way always lands in the same bucket
+    here as it would anywhere else in the codebase."""
+    period_start, period_end = leg_period_date_range(selected_period)
+    first_leg_year = get_current_leg_year(period_start)
+    num_years = period_end.year - period_start.year
+    buckets = [
+        (
+            f"{first_leg_year + i}-{first_leg_year + i + 1}",
+            f"{first_leg_year + i} - {first_leg_year + i + 1}",
+        )
+        for i in range(num_years)
+    ]
+    buckets.reverse()
+    return buckets
+
+
+def _leg_year_bucket_value(
+    buckets: list[tuple[str, str]], value_date: date
+) -> str | None:
+    """Bucket value for a membership's start_date, clamped to the nearest
+    edge bucket if the date falls slightly outside this leg_period's span
+    (e.g. a scraped date a day or two off the exact term boundary)."""
+    if not buckets:
+        return None
+    leg_year = get_current_leg_year(value_date)
+    value = f"{leg_year}-{leg_year + 1}"
+    if value in {v for v, _label in buckets}:
+        return value
+    # buckets is most-recent-first; clamp to whichever edge is nearer.
+    oldest_value = buckets[-1][0]
+    newest_value = buckets[0][0]
+    return oldest_value if leg_year < int(oldest_value.split("-")[0]) else newest_value
+
+
 def _photo_mimetype(photo_bytes: bytes) -> str:
     if photo_bytes.startswith(b"\xff\xd8\xff"):
         return "image/jpeg"
@@ -237,16 +276,20 @@ def _photo_mimetype(photo_bytes: bytes) -> str:
     return "application/octet-stream"
 
 
-@congress_bp.route("/congress")
+@congress_bp.route("/congress", methods=["GET", "POST"])
 def index():
-    name_q = request.args.get("name_q", "").strip()
-    party_q = request.args.get("party_q", "").strip()
-    region_q = request.args.get("region_q", "").strip()
-    commission_q = request.args.get("commission_q", "").strip()
-    special_committee_q = request.args.get("special_committee_q", "").strip()
-    chamber_q = request.args.get("chamber_q", "").strip()
-    leg_period_q = request.args.get("leg_period_q", "").strip()
-    page = request.args.get("page", 1, type=int)
+    # request.values (not request.args) so this route works identically
+    # whether filters arrive via GET query string or POST form body -- the
+    # search form and all tab/pagination controls submit via POST so the
+    # browser's address bar never shows the filter state.
+    name_q = request.values.get("name_q", "").strip()
+    bancada_q = request.values.get("bancada_q", "").strip()
+    region_q = request.values.get("region_q", "").strip()
+    commission_q = request.values.get("commission_q", "").strip()
+    special_committee_q = request.values.get("special_committee_q", "").strip()
+    chamber_q = request.values.get("chamber_q", "").strip()
+    leg_period_q = request.values.get("leg_period_q", "").strip()
+    page = request.values.get("page", 1, type=int)
     page = page if page and page > 0 else 1
     per_page = 50
 
@@ -263,7 +306,7 @@ def index():
 
     congresistas = []
     filters = []
-    party_options = []
+    bancada_options = []
     region_options = []
     committee_options = []
     special_committee_options = []
@@ -274,25 +317,13 @@ def index():
 
     search_params = dict(
         name_q=name_q,
-        party_q=party_q,
+        bancada_q=bancada_q,
         region_q=region_q,
         commission_q=commission_q,
         special_committee_q=special_committee_q,
         chamber_q=chamber_q,
         leg_period_q=leg_period_q,
     )
-
-    # Pre-built so the template just looks these up -- Jinja has no
-    # equivalent to Python's {**dict, "k": v} merge-literal syntax, so the
-    # per-tab param override has to happen here, not in the template.
-    period_tab_urls = {
-        value: url_for("congress.index", **{**search_params, "leg_period_q": value})
-        for value, _label, _enum in LEG_PERIOD_UI_OPTIONS
-    }
-    chamber_tab_urls = {
-        value: url_for("congress.index", **{**search_params, "chamber_q": value})
-        for value in [""] + list(CHAMBER_UI_TO_ORG_NAME.keys())
-    }
 
     if name_q:
         filters.append(
@@ -301,14 +332,14 @@ def index():
             )
         )
 
-    if party_q:
+    if bancada_q:
         filters.append(
             Congresista.id.in_(
                 select(Membership.person_id)
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
-                    Membership.org_type == TypeOrganization.PARTY,
-                    Organization.org_name == party_q,
+                    Membership.org_type == TypeOrganization.BANCADA,
+                    Organization.org_name == bancada_q,
                     Membership.leg_period == leg_period_q,
                 )
             )
@@ -368,7 +399,7 @@ def index():
     )
 
     with SessionProcessed() as db:
-        party_options = create_party_option(db, leg_period_q)
+        bancada_options = create_bancada_option(db, leg_period_q)
         region_options = create_region_option(db)
         committee_options = create_committee_option(db, leg_period_q)
         special_committee_options = create_special_committee_option(db)
@@ -386,7 +417,6 @@ def index():
                 SimpleNamespace(
                     number=page_number,
                     current=page_number == page,
-                    url=url_for("congress.index", page=page_number, **search_params),
                 )
                 for page_number in range(1, total_pages + 1)
             ]
@@ -414,17 +444,10 @@ def index():
             for row in rows
         ]
 
-    prev_page_url = None
-    next_page_url = None
-    if page > 1:
-        prev_page_url = url_for("congress.index", page=page - 1, **search_params)
-    if page < len(pagination_pages):
-        next_page_url = url_for("congress.index", page=page + 1, **search_params)
-
     return render_template(
         "congress/search.html",
         name_q=name_q,
-        party_q=party_q,
+        bancada_q=bancada_q,
         region_q=region_q,
         commission_q=commission_q,
         special_committee_q=special_committee_q,
@@ -435,7 +458,7 @@ def index():
         leg_period_options=LEG_PERIOD_UI_OPTIONS,
         chamber_options=CHAMBER_UI_TO_ORG_NAME,
         congresistas=congresistas,
-        party_options=party_options,
+        bancada_options=bancada_options,
         region_options=region_options,
         committee_options=committee_options,
         special_committee_options=special_committee_options,
@@ -445,11 +468,7 @@ def index():
         results_start=results_start,
         results_end=results_end,
         pagination_pages=pagination_pages,
-        prev_page_url=prev_page_url,
-        next_page_url=next_page_url,
         search_params=search_params,
-        period_tab_urls=period_tab_urls,
-        chamber_tab_urls=chamber_tab_urls,
     )
 
 
@@ -478,7 +497,7 @@ def congress_photo(congresista_id):
     abort(404)
 
 
-@congress_bp.route("/congress/<int:congresista_id>")
+@congress_bp.route("/congress/<int:congresista_id>", methods=["GET", "POST"])
 def congress_detail(congresista_id):
     with SessionProcessed() as db:
         congresista_row = db.get(Congresista, congresista_id)
@@ -492,7 +511,9 @@ def congress_detail(congresista_id):
             for value, label, _enum in LEG_PERIOD_UI_OPTIONS
             if value in period_data
         ]
-        requested_period = request.args.get("leg_period_q", "").strip()
+        # request.values (not request.args): the period tabs on this page
+        # submit via POST so the URL never carries leg_period_q.
+        requested_period = request.values.get("leg_period_q", "").strip()
         selected_period = (
             requested_period
             if requested_period in period_data
@@ -638,6 +659,36 @@ def congress_detail(congresista_id):
             .all()
         )
 
+        # Group committee memberships into year sub-tabs within the selected
+        # period -- see _leg_year_buckets for why bucketing by start_date
+        # lines up with the real per-legislative-year data.
+        available_years: list[tuple[str, str]] = []
+        selected_year = None
+        if selected_period is not None:
+            leg_year_buckets = _leg_year_buckets(selected_period)
+            memberships_by_year: dict[str, list] = {}
+            for membership in memberships:
+                year_value = _leg_year_bucket_value(
+                    leg_year_buckets, membership["start_date"]
+                )
+                memberships_by_year.setdefault(year_value, []).append(membership)
+
+            available_years = [
+                (value, label)
+                for value, label in leg_year_buckets
+                if value in memberships_by_year
+            ]
+            requested_year = request.values.get("leg_year_q", "").strip()
+            selected_year = (
+                requested_year
+                if requested_year in memberships_by_year
+                else available_years[0][0]
+                if available_years
+                else None
+            )
+            if selected_year is not None:
+                memberships = memberships_by_year[selected_year]
+
         profile_stats = {
             "assistance_rate": "45%",
             "bills_authored": bills_authored_count,
@@ -684,4 +735,6 @@ def congress_detail(congresista_id):
             available_periods=available_periods,
             selected_period=selected_period,
             selected_period_label=selected_period_label,
+            available_years=available_years,
+            selected_year=selected_year,
         )

@@ -1,35 +1,25 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
-<form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
+<div class="bill-search-form">
     <h1 class="search-title">{{_('Busca el proyecto de ley por:')}}</h1>
     <div class="period-tabs-row">
         <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
             {% for value, label, _period_enum in leg_period_options %}
-                {% if value == leg_period_q %}
-                    <span class="is-active" aria-current="page">{{ label }}</span>
-                {% else %}
-                    <a href="{{ period_tab_urls[value] }}">{{ label }}</a>
-                {% endif %}
+                {{ macros.tab_link('bills.index', search_params, {'leg_period_q': value}, label, is_active=(value == leg_period_q)) }}
             {% endfor %}
         </nav>
         {% if leg_period_q == "2026-2031" %}
             <div class="chamber-tabs" aria-label="{{ _('Cámara') }}">
-                {% if not chamber_q %}
-                    <span class="is-active">{{ _('Ambas cámaras') }}</span>
-                {% else %}
-                    <a href="{{ chamber_tab_urls[''] }}">{{ _('Ambas cámaras') }}</a>
-                {% endif %}
+                {{ macros.tab_link('bills.index', search_params, {'chamber_q': ''}, _('Ambas cámaras'), is_active=(not chamber_q), css_class="chamber-tab-button") }}
                 {% for value, org_name in chamber_options.items() %}
-                    {% if chamber_q == value %}
-                        <span class="is-active">{{ org_name }}</span>
-                    {% else %}
-                        <a href="{{ chamber_tab_urls[value] }}">{{ org_name }}</a>
-                    {% endif %}
+                    {{ macros.tab_link('bills.index', search_params, {'chamber_q': value}, org_name, is_active=(chamber_q == value), css_class="chamber-tab-button") }}
                 {% endfor %}
             </div>
         {% endif %}
     </div>
+    <form method="post" action="{{ url_for('bills.index') }}">
     <div class="bar-search">
         <div class="search-row search-row--general">
             <div class="searching-container">
@@ -245,7 +235,8 @@
             </div>
         </details>
     </div>
-</form>
+    </form>
+</div>
 
 
 {% if recent_bills and not search_requested %}
@@ -395,21 +386,17 @@
             <div class="search-pagination-label">{{ _('Página') }}</div>
             <div class="pagination-tabs">
                 {% for page_item in pagination_pages %}
-                    {% if page_item.current %}
-                        <span class="pagination-tab is-current">{{ page_item.number }}</span>
-                    {% else %}
-                        <a class="pagination-tab" href="{{ page_item.url }}">{{ page_item.number }}</a>
-                    {% endif %}
+                    {{ macros.tab_link('bills.index', search_params, {'page': page_item.number}, page_item.number, is_active=page_item.current, css_class="pagination-tab") }}
                 {% endfor %}
             </div>
 
             <div class="pagination-controls">
-                {% if prev_page_url %}
-                    <a class="pagination-prev" href="{{ prev_page_url }}">←{{ _('Anterior') }}</a>
+                {% if page > 1 %}
+                    {{ macros.tab_link('bills.index', search_params, {'page': page - 1}, '←' + _('Anterior'), css_class="pagination-prev") }}
                 {% endif %}
 
-                {% if next_page_url %}
-                    <a class="pagination-next" href="{{ next_page_url }}">{{ _('Siguiente') }}→</a>
+                {% if page < pagination_pages|length %}
+                    {{ macros.tab_link('bills.index', search_params, {'page': page + 1}, _('Siguiente') + '→', css_class="pagination-next") }}
                 {% endif %}
             </div>
         </nav>

@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from backend.core.enums import Proponents, TypeCommittee, TypeOrganization
 from backend.database.models import (
     Base,
+    BancadaMembership,
     Bill,
     BillOrganization,
     ChamberMembership,
@@ -127,6 +128,16 @@ def _seed_congress_search_data(session_factory) -> None:
                     date_dissolution=None,
                 ),
                 Organization(
+                    org_id=6,
+                    org_name="Bancada Verde",
+                    org_type=TypeOrganization.BANCADA,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
                     org_id=5,
                     org_name="Congreso de la República",
                     org_type=TypeOrganization.CHAMBER,
@@ -139,6 +150,14 @@ def _seed_congress_search_data(session_factory) -> None:
                 PartyMembership(
                     person_id=1,
                     org_id=3,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=date(2021, 1, 1),
+                    end_date=date(2026, 12, 31),
+                ),
+                BancadaMembership(
+                    person_id=1,
+                    org_id=6,
                     leg_period="2021-2026",
                     role="member",
                     start_date=date(2021, 1, 1),
@@ -195,25 +214,62 @@ def _seed_congress_search_data(session_factory) -> None:
         db.commit()
 
 
-def test_search_form_uses_selects_for_party_and_commission(client):
+def test_search_form_uses_selects_for_bancada_and_commission(client):
     response = client.get("/congress")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert '<select name="party_q" id="party_q">' in body
+    assert '<select name="bancada_q" id="bancada_q">' in body
     assert '<select name="region_q" id="region_q">' in body
     assert '<select name="commission_q" id="commission_q">' in body
     assert '<select name="special_committee_q" id="special_committee_q">' in body
-    assert 'name="party_q" value=' not in body
-    assert 'name="region_q" value=' not in body
-    assert 'name="commission_q" value=' not in body
-    assert 'name="special_committee_q" value=' not in body
+    # The <select> itself must not carry a stray value= attribute (selection
+    # happens via `selected` on its <option>s) -- hidden inputs replicating
+    # these same filters onto the tab/pagination forms are expected and fine.
+    assert '<select name="bancada_q" id="bancada_q" value=' not in body
+    assert '<select name="region_q" id="region_q" value=' not in body
+    assert '<select name="commission_q" id="commission_q" value=' not in body
+    assert (
+        '<select name="special_committee_q" id="special_committee_q" value=' not in body
+    )
     # New labels for fix (f) -- must not be placeholder-as-label
-    assert '<label for="party_q">' in body
+    assert '<label for="bancada_q">' in body
     assert '<label for="region_q">' in body
     assert '<label for="commission_q">' in body
     assert '<label for="special_committee_q">' in body
     assert '<label for="name_q">' in body
+
+
+def test_search_form_moves_committees_into_advanced_search(client):
+    response = client.get("/congress")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    advanced_start = body.index('<details class="advanced-search"')
+    advanced_end = body.index("</details>", advanced_start)
+    advanced_section = body[advanced_start:advanced_end]
+    assert '<select name="commission_q"' in advanced_section
+    assert '<select name="special_committee_q"' in advanced_section
+    # The primary row (before advanced-search) must NOT contain the visible
+    # <select> fields anymore -- hidden inputs replicating these filters onto
+    # the tab/pagination forms earlier in the page are expected and fine.
+    assert '<select name="commission_q"' not in body[:advanced_start]
+    assert '<select name="special_committee_q"' not in body[:advanced_start]
+
+
+def test_search_filters_by_selected_bancada(client, session_factory):
+    _seed_congress_search_data(session_factory)
+
+    response = client.get(
+        "/congress",
+        query_string={"bancada_q": "Bancada Verde", "leg_period_q": "2021-2026"},
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Ana Perez" in body
+    assert "Beatriz Gomez" not in body
+    assert "Bancada: Bancada Verde" in body
 
 
 def test_search_shows_all_congresistas_by_default(client, session_factory):
@@ -788,17 +844,23 @@ def test_detail_invalid_period_falls_back_to_most_recent(client, session_factory
 
 
 def test_search_to_detail_link_carries_period(client, session_factory):
+    """The mosaic card is a POST form (no query string) carrying the
+    search's active period as a hidden input into the detail route."""
     _seed_reelected_congresista(session_factory)
 
     search_body = client.get(
         "/congress", query_string={"leg_period_q": "2021-2026"}
     ).get_data(as_text=True)
-    assert "leg_period_q=2021-2026" in search_body
+    assert (
+        'action="/congress/200"' in search_body
+        and '<input type="hidden" name="leg_period_q" value="2021-2026">' in search_body
+    )
 
-    detail_body = client.get(
-        "/congress/200", query_string={"leg_period_q": "2021-2026"}
+    # Simulate submitting that exact hidden form.
+    posted_detail_body = client.post(
+        "/congress/200", data={"leg_period_q": "2021-2026"}
     ).get_data(as_text=True)
-    assert "Renovación Popular" in detail_body
+    assert "Renovación Popular" in posted_detail_body
 
 
 def test_detail_condicion_shows_no_disponible_instead_of_none(client, session_factory):
@@ -822,3 +884,42 @@ def test_detail_committee_membership_shows_start_and_end_dates(client, session_f
 
     assert "jul 2026" in body
     assert "jul 2031" in body
+
+
+def test_main_search_form_submits_via_post_with_no_query_string(
+    client, session_factory
+):
+    """The core ask: filters must not appear in the URL. The search form
+    itself posts to a bare /congress action -- no query string involved at
+    all, with or without JS."""
+    _seed_congress_search_data(session_factory)
+
+    response = client.post(
+        "/congress", data={"name_q": "Ana", "leg_period_q": "2021-2026"}
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'method="post"' in body
+    assert "Ana Perez" in body
+    assert "Beatriz Gomez" not in body
+
+
+def test_period_tab_is_a_post_form_not_a_link(client, session_factory):
+    """Tabs/pagination/mosaic-card links must never be plain GET links with
+    a query string -- they're POST forms with hidden inputs."""
+    _seed_reelected_congresista(session_factory)
+
+    body = client.get("/congress", query_string={"leg_period_q": "2026-2031"}).get_data(
+        as_text=True
+    )
+
+    assert 'href="/congress?' not in body
+    assert '<form method="post" action="/congress"' in body
+    assert '<input type="hidden" name="leg_period_q" value="2021-2026">' in body
+
+    # Simulate actually clicking the "2021-2026" tab.
+    switched = client.post("/congress", data={"leg_period_q": "2021-2026"}).get_data(
+        as_text=True
+    )
+    assert "Rosa Huamán Torres" in switched

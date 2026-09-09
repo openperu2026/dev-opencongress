@@ -1,36 +1,26 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
 
-<form class="congress-search-form" method="get" action="{{ url_for('congress.index') }}">
+<div class="congress-search-form">
     <h1 class="search-title">{{_('Busca al congresista por:')}}</h1>
     <div class="period-tabs-row">
         <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
             {% for value, label, _period_enum in leg_period_options %}
-                {% if value == leg_period_q %}
-                    <span class="is-active" aria-current="page">{{ label }}</span>
-                {% else %}
-                    <a href="{{ period_tab_urls[value] }}">{{ label }}</a>
-                {% endif %}
+                {{ macros.tab_link('congress.index', search_params, {'leg_period_q': value}, label, is_active=(value == leg_period_q)) }}
             {% endfor %}
         </nav>
         {% if leg_period_q == "2026-2031" %}
             <div class="chamber-tabs" aria-label="{{ _('Cámara') }}">
-                {% if not chamber_q %}
-                    <span class="is-active">{{ _('Ambas cámaras') }}</span>
-                {% else %}
-                    <a href="{{ chamber_tab_urls[''] }}">{{ _('Ambas cámaras') }}</a>
-                {% endif %}
+                {{ macros.tab_link('congress.index', search_params, {'chamber_q': ''}, _('Ambas cámaras'), is_active=(not chamber_q), css_class="chamber-tab-button") }}
                 {% for value, org_name in chamber_options.items() %}
-                    {% if chamber_q == value %}
-                        <span class="is-active">{{ org_name }}</span>
-                    {% else %}
-                        <a href="{{ chamber_tab_urls[value] }}">{{ org_name }}</a>
-                    {% endif %}
+                    {{ macros.tab_link('congress.index', search_params, {'chamber_q': value}, org_name, is_active=(chamber_q == value), css_class="chamber-tab-button") }}
                 {% endfor %}
             </div>
         {% endif %}
     </div>
+    <form method="post" action="{{ url_for('congress.index') }}">
     <div class="bar-search">
         <div class="congress-search-grid">
             <div class="searching-container">
@@ -39,11 +29,11 @@
             </div>
 
             <div class="searching-container">
-                <label for="party_q">{{ _('Partido') }}</label>
-                <select name="party_q" id="party_q">
-                    <option value="">{{ _('Partido') }}</option>
-                    {% for party_option in party_options or [] %}
-                        <option value="{{ party_option }}" {% if party_q == party_option %}selected{% endif %}>{{ party_option }}</option>
+                <label for="bancada_q">{{ _('Bancada') }}</label>
+                <select name="bancada_q" id="bancada_q">
+                    <option value="">{{ _('Bancada') }}</option>
+                    {% for bancada_option in bancada_options or [] %}
+                        <option value="{{ bancada_option }}" {% if bancada_q == bancada_option %}selected{% endif %}>{{ bancada_option }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -54,26 +44,6 @@
                     <option value="">{{ _('Región') }}</option>
                     {% for region_option in region_options or [] %}
                         <option value="{{ region_option }}" {% if region_q == region_option %}selected{% endif %}>{{ region_option }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="searching-container">
-                <label for="commission_q">{{ _('Comisión ordinaria') }}</label>
-                <select name="commission_q" id="commission_q">
-                    <option value="" {% if not commission_q %}selected{% endif %} disabled hidden>{{ _('Comisión ordinaria') }}</option>
-                    {% for committee_option in committee_options or [] %}
-                        <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-
-            <div class="searching-container">
-                <label for="special_committee_q">{{ _('Comisión especial') }}</label>
-                <select name="special_committee_q" id="special_committee_q">
-                    <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Comisión especial') }}</option>
-                    {% for committee_option in special_committee_options or [] %}
-                        <option value="{{ committee_option }}" {% if special_committee_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -88,8 +58,38 @@
                 {{ _('Limpiar') }}
             </a>
         </div>
+
+        <details class="advanced-search" {% if commission_q or special_committee_q %}open{% endif %}>
+            <summary class="search-section-title">
+                <span>{{ _('Opciones de búsqueda avanzada:') }}</span>
+                <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+            </summary>
+
+            <div class="search-row search-row--secondary">
+                <div class="searching-container">
+                    <label for="commission_q">{{ _('Comisión ordinaria') }}</label>
+                    <select name="commission_q" id="commission_q">
+                        <option value="" {% if not commission_q %}selected{% endif %} disabled hidden>{{ _('Comisión ordinaria') }}</option>
+                        {% for committee_option in committee_options or [] %}
+                            <option value="{{ committee_option }}" {% if commission_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="searching-container">
+                    <label for="special_committee_q">{{ _('Comisión especial') }}</label>
+                    <select name="special_committee_q" id="special_committee_q">
+                        <option value="" {% if not special_committee_q %}selected{% endif %} disabled hidden>{{ _('Comisión especial') }}</option>
+                        {% for committee_option in special_committee_options or [] %}
+                            <option value="{{ committee_option }}" {% if special_committee_q == committee_option %}selected{% endif %}>{{ committee_option }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+        </details>
     </div>
-</form>
+    </form>
+</div>
 
 <div class="search-criteria">
     <h3>{{_('Criterios de búsqueda')}}</h3>
@@ -100,8 +100,8 @@
     {% if name_q %}
         <span>{{_('Nombre')}}: {{name_q}}</span>
     {% endif %}
-    {% if party_q %}
-        <span>{{_('Partido')}}: {{party_q}}</span>
+    {% if bancada_q %}
+        <span>{{_('Bancada')}}: {{bancada_q}}</span>
     {% endif %}
     {% if region_q %}
         <span>{{_('Región')}}: {{region_q}}</span>
@@ -123,20 +123,23 @@
 
     <section class="congress-mosaic" aria-label="{{ _('Congresistas') }}">
         {% for congresista in congresistas %}
-            <a class="congress-mosaic-card" href="{{ url_for('congress.congress_detail', congresista_id=congresista.id, leg_period_q=leg_period_q) }}">
-                <span class="congress-mosaic-photo-wrap">
-                    <img
-                        class="congress-mosaic-photo"
-                        src="{{ url_for('congress.congress_photo', congresista_id=congresista.id) }}"
-                        alt="{{ _('Foto de %(name)s', name=congresista.full_name) }}"
-                        loading="lazy"
-                    >
-                </span>
-                <span class="congress-mosaic-name">{{ congresista.full_name }}</span>
-                {% if congresista.chamber_slug %}
-                    <span class="chamber-badge chamber-badge--{{ congresista.chamber_slug }}">{{ _('Senado') if congresista.chamber_slug == 'senado' else _('Diputados') }}</span>
-                {% endif %}
-            </a>
+            <form method="post" action="{{ url_for('congress.congress_detail', congresista_id=congresista.id) }}" class="tab-form">
+                <input type="hidden" name="leg_period_q" value="{{ leg_period_q }}">
+                <button type="submit" class="congress-mosaic-card">
+                    <span class="congress-mosaic-photo-wrap">
+                        <img
+                            class="congress-mosaic-photo"
+                            src="{{ url_for('congress.congress_photo', congresista_id=congresista.id) }}"
+                            alt="{{ _('Foto de %(name)s', name=congresista.full_name) }}"
+                            loading="lazy"
+                        >
+                    </span>
+                    <span class="congress-mosaic-name">{{ congresista.full_name }}</span>
+                    {% if congresista.chamber_slug %}
+                        <span class="chamber-badge chamber-badge--{{ congresista.chamber_slug }}">{{ _('Senado') if congresista.chamber_slug == 'senado' else _('Diputados') }}</span>
+                    {% endif %}
+                </button>
+            </form>
         {% endfor %}
     </section>
 
@@ -145,21 +148,17 @@
             <div class="search-pagination-label">{{ _('Página') }}</div>
             <div class="pagination-tabs">
                 {% for page_item in pagination_pages %}
-                    {% if page_item.current %}
-                        <span class="pagination-tab is-current" aria-current="page">{{ page_item.number }}</span>
-                    {% else %}
-                        <a class="pagination-tab" href="{{ page_item.url }}">{{ page_item.number }}</a>
-                    {% endif %}
+                    {{ macros.tab_link('congress.index', search_params, {'page': page_item.number}, page_item.number, is_active=page_item.current, css_class="pagination-tab") }}
                 {% endfor %}
             </div>
 
             <div class="pagination-controls">
-                {% if prev_page_url %}
-                    <a class="pagination-prev" href="{{ prev_page_url }}">←{{ _('Anterior') }}</a>
+                {% if page > 1 %}
+                    {{ macros.tab_link('congress.index', search_params, {'page': page - 1}, '←' + _('Anterior'), css_class="pagination-prev") }}
                 {% endif %}
 
-                {% if next_page_url %}
-                    <a class="pagination-next" href="{{ next_page_url }}">{{ _('Siguiente') }}→</a>
+                {% if page < pagination_pages|length %}
+                    {{ macros.tab_link('congress.index', search_params, {'page': page + 1}, _('Siguiente') + '→', css_class="pagination-next") }}
                 {% endif %}
             </div>
         </nav>

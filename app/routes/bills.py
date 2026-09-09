@@ -773,25 +773,29 @@ def _build_bill_filters(
     return filters
 
 
-@bills_bp.route("/bills")
+@bills_bp.route("/bills", methods=["GET", "POST"])
 def index():
-    semantic_query = request.args.get("semantic_query", "").strip()
-    title_q = request.args.get("title_q", "").strip()
-    author_q = request.args.get("author_q", "").strip()
-    author_party_q = request.args.get("author_party_q", "").strip()
-    status = request.args.get("status", "all").strip()
-    pley_id_q = request.args.get("pley_id_q", "").strip()
+    # request.values (not request.args) so this route works identically
+    # whether filters arrive via GET query string or POST form body -- the
+    # search form and all tab/pagination controls submit via POST so the
+    # browser's address bar never shows the filter state.
+    semantic_query = request.values.get("semantic_query", "").strip()
+    title_q = request.values.get("title_q", "").strip()
+    author_q = request.values.get("author_q", "").strip()
+    author_party_q = request.values.get("author_party_q", "").strip()
+    status = request.values.get("status", "all").strip()
+    pley_id_q = request.values.get("pley_id_q", "").strip()
     has_pley_id_q = bool(pley_id_q)
-    bill_id_q = request.args.get("bill_id_q", "").strip()
+    bill_id_q = request.values.get("bill_id_q", "").strip()
     pley_id_q = pley_id_q or bill_id_q
-    law_id_q = request.args.get("law_id_q", "").strip()
-    current_step_q = request.args.get("current_step_q", "").strip()
-    organization_name_q = request.args.get("organization_name_q", "").strip()
-    special_committee_q = request.args.get("special_committee_q", "").strip()
-    bill_diff_q = request.args.get("bill_diff_q", "").strip()
-    chamber_q = request.args.get("chamber_q", "").strip()
-    leg_period_q = request.args.get("leg_period_q", "").strip()
-    page = request.args.get("page", 1, type=int)
+    law_id_q = request.values.get("law_id_q", "").strip()
+    current_step_q = request.values.get("current_step_q", "").strip()
+    organization_name_q = request.values.get("organization_name_q", "").strip()
+    special_committee_q = request.values.get("special_committee_q", "").strip()
+    bill_diff_q = request.values.get("bill_diff_q", "").strip()
+    chamber_q = request.values.get("chamber_q", "").strip()
+    leg_period_q = request.values.get("leg_period_q", "").strip()
+    page = request.values.get("page", 1, type=int)
     page = page if page and page > 0 else 1
     per_page = 50
     max_search_results = 500
@@ -843,14 +847,14 @@ def index():
     today = min(period_end, date.today())
     presentation_date_from_picker = _build_date_picker(
         "presentation_date_from",
-        request.args,
+        request.values,
         today,
         min_date=period_start,
         max_date=today,
     )
     presentation_date_to_picker = _build_date_picker(
         "presentation_date_to",
-        request.args,
+        request.values,
         today,
         min_date=period_start,
         max_date=today,
@@ -899,18 +903,6 @@ def index():
     if presentation_date_to_picker["provided"]:
         if presentation_date_to:
             search_params["presentation_date_to"] = presentation_date_to.isoformat()
-
-    # Pre-built so the template just looks these up -- Jinja has no
-    # equivalent to Python's {**dict, "k": v} merge-literal syntax, so the
-    # per-tab param override has to happen here, not in the template.
-    period_tab_urls = {
-        value: url_for("bills.index", **{**search_params, "leg_period_q": value})
-        for value, _label, _enum in LEG_PERIOD_UI_OPTIONS
-    }
-    chamber_tab_urls = {
-        value: url_for("bills.index", **{**search_params, "chamber_q": value})
-        for value in [""] + list(CHAMBER_UI_TO_ORG_NAME.keys())
-    }
 
     if author_q and author_id_query:
         try:
@@ -1024,7 +1016,6 @@ def index():
                     SimpleNamespace(
                         number=page_number,
                         current=page_number == page,
-                        url=url_for("bills.index", page=page_number, **search_params),
                     )
                     for page_number in range(1, total_pages + 1)
                 ]
@@ -1092,22 +1083,6 @@ def index():
             recent_rows = db.execute(recent_stmt).mappings().all()
             recent_bills = _with_chamber_slug(recent_rows)
 
-    prev_page_url = None
-    next_page_url = None
-    if total_count_display is not None and pagination_pages:
-        if page > 1:
-            prev_page_url = url_for(
-                "bills.index",
-                page=page - 1,
-                **search_params,
-            )
-        if page < len(pagination_pages):
-            next_page_url = url_for(
-                "bills.index",
-                page=page + 1,
-                **search_params,
-            )
-
     return render_template(
         "bills/search.html",
         title_q=title_q,
@@ -1151,8 +1126,6 @@ def index():
         results_start=results_start,
         results_end=results_end,
         pagination_pages=pagination_pages,
-        prev_page_url=prev_page_url,
-        next_page_url=next_page_url,
         current_step_options=current_step_options,
         author_party_options=author_party_options,
         presentation_date_from_year_options=presentation_date_from_picker[
@@ -1169,8 +1142,6 @@ def index():
         special_committee_options=special_committee_options,
         search_requested=search_requested,
         search_params=search_params,
-        period_tab_urls=period_tab_urls,
-        chamber_tab_urls=chamber_tab_urls,
     )
 
 

@@ -294,7 +294,10 @@ def test_search_results_are_paginated_by_50(client, session_factory):
     assert "Bill 0001" in first_body
     assert "Bill 0050" in first_body
     assert "Bill 0051" not in first_body
-    assert "page=2" in first_body
+    # Pagination is a hidden-input POST form now (no query string exposed) --
+    # confirm the "page 2" control renders as a submit button, not a link.
+    assert '<input type="hidden" name="page" value="2">' in first_body
+    assert 'class="pagination-tab"' in first_body
 
     second_page = client.get("/bills?title_q=Bill&page=2&leg_period_q=2021-2026")
     second_body = second_page.get_data(as_text=True)
@@ -303,7 +306,8 @@ def test_search_results_are_paginated_by_50(client, session_factory):
     assert "Bill 0051" in second_body
     assert "Bill 0055" in second_body
     assert "Bill 0001" not in second_body
-    assert "page=1" in second_body
+    assert '<input type="hidden" name="page" value="1">' in second_body
+    assert 'class="pagination-prev"' in second_body
 
 
 def test_search_results_cap_at_500_plus(client, session_factory):
@@ -1188,3 +1192,45 @@ def test_chamber_column_hidden_for_legacy_period(client, session_factory):
         "/bills", query_string={"title_q": "Bill", "leg_period_q": "2026-2031"}
     ).get_data(as_text=True)
     assert "Cámara" in modern_body
+
+
+def test_main_search_form_submits_via_post_with_no_query_string(
+    client, session_factory
+):
+    """The core ask: filters must not appear in the URL. The search form
+    itself posts to a bare /bills action -- no query string involved at
+    all, with or without JS."""
+    _seed_bill_search_data(session_factory)
+
+    response = client.post(
+        "/bills", data={"title_q": "Bill 0001", "leg_period_q": "2021-2026"}
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'method="post"' in body
+    assert "2021_0001" in body
+    assert "2021_0002" not in body
+
+
+def test_period_tab_is_a_post_form_not_a_link(client, session_factory):
+    """Tabs/pagination must never be plain <a href="?..."> GET links --
+    they're POST forms with hidden inputs replicating the active filters,
+    so clicking one never puts anything in the address bar."""
+    _seed_bicameral_bills(session_factory)
+
+    body = client.get(
+        "/bills", query_string={"title_q": "Bill", "leg_period_q": "2026-2031"}
+    ).get_data(as_text=True)
+
+    assert 'href="/bills?' not in body
+    assert '<form method="post" action="/bills"' in body
+    assert '<input type="hidden" name="title_q" value="Bill">' in body
+
+    # Simulate actually clicking the "2021-2026" tab: submit its exact
+    # hidden-input set.
+    switched = client.post(
+        "/bills", data={"title_q": "Bill", "leg_period_q": "2021-2026"}
+    ).get_data(as_text=True)
+    assert "Legacy Bill" in switched
+    assert "Senado Bill" not in switched

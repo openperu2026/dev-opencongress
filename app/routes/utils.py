@@ -83,6 +83,27 @@ def latest_org_name(db, person_id: int, org_type: TypeOrganization) -> str | Non
     ).scalar_one_or_none()
 
 
+def create_bancada_option(db, leg_period_q: str):
+    """Bancada (parliamentary group) options -- more precise than partido
+    for search purposes, since a person's voting bloc can diverge from
+    their formal party (splits, expulsions, alliances)."""
+    return [
+        bancada_name
+        for bancada_name in db.execute(
+            select(Organization.org_name)
+            .join(Membership, Membership.org_id == Organization.org_id)
+            .where(
+                Membership.org_type == TypeOrganization.BANCADA,
+                Membership.leg_period == leg_period_q,
+            )
+            .distinct()
+            .order_by(Organization.org_name.asc())
+        )
+        .scalars()
+        .all()
+    ]
+
+
 def create_party_option(db, leg_period_q: str):
     return [
         party_name
