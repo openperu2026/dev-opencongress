@@ -1,4 +1,4 @@
-# OpenPeru
+# OpenPeru - Devlog
 
 OpenPeru is an open source civic technology project that transforms fragmented and unstructured legislative information from the Peruvian Congress into structured data that can be easily analyzed, consumed and understood.
 
