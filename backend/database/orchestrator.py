@@ -1547,6 +1547,12 @@ class OpenPeruOrchestrator:
                     if period == LegPeriod.PERIODO_2026_2031
                 )
 
+        # Must be checked before _membership_dates runs -- it never mutates
+        # `membership`, but its whole job is filling in a fallback for
+        # exactly this case, so this is the only point where "did the
+        # source give us a real date" is still knowable.
+        dates_are_synthetic = membership.start_date is None
+
         start_date, end_date = self._membership_dates(
             membership, seed_override=seed_override
         )
@@ -1566,6 +1572,7 @@ class OpenPeruOrchestrator:
             start_date=start_date,
             end_date=end_date,
             extra_fields=extra_fields,
+            dates_are_synthetic=dates_are_synthetic,
         )
 
     def _process_congresistas(

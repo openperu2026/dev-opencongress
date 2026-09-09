@@ -191,6 +191,58 @@ def test_upsert_bancada_membership_is_idempotent(session, create_congresista):
     assert session.query(db_models.Membership).count() == 1
 
 
+def test_upsert_membership_synthetic_dates_updates_in_place_instead_of_duplicating(
+    session, create_congresista
+):
+    """Regression for a real production bug (found 2026-09-09): chamber_mem/
+    party_mem never carry an explicit start_date, so _membership_dates
+    always falls back to a synthetic Jul-28-to-Jul-28 window seeded from
+    the scrape timestamp. Re-scraping the SAME ongoing membership after a
+    Jul 28 boundary passes shifts that derived window forward a year --
+    matching on the exact (now different) date range treated it as a new
+    stint and inserted a duplicate row every year. Confirmed live: 274 such
+    duplicate groups existed (136 Cámara, 136 Partido, 2 Administrativo).
+    dates_are_synthetic=True must update the existing row's dates in place
+    instead."""
+    congresista = create_congresista()
+    chamber = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+
+    first = crud_core.upsert_membership(
+        session,
+        person_id=congresista.id,
+        org_id=chamber.org_id,
+        leg_period="2021-2026",
+        org_type=TypeOrganization.CHAMBER,
+        role="Diputado",
+        start_date=date(2025, 7, 28),
+        end_date=date(2026, 7, 28),
+        dates_are_synthetic=True,
+    )
+
+    # A later re-scrape: the synthetic window shifted forward one year, but
+    # this is the exact same ongoing membership.
+    second = crud_core.upsert_membership(
+        session,
+        person_id=congresista.id,
+        org_id=chamber.org_id,
+        leg_period="2021-2026",
+        org_type=TypeOrganization.CHAMBER,
+        role="Diputado",
+        start_date=date(2026, 7, 28),
+        end_date=date(2027, 7, 28),
+        dates_are_synthetic=True,
+    )
+
+    assert second.id == first.id
+    assert session.query(db_models.ChamberMembership).count() == 1
+    assert session.query(db_models.Membership).count() == 1
+    assert second.start_date == date(2026, 7, 28)
+    assert second.end_date == date(2027, 7, 28)
+
+
 def test_upsert_organization_same_name_type_different_parent_creates_two_rows(
     session,
 ):

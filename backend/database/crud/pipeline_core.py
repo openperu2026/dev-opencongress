@@ -564,7 +564,25 @@ def upsert_membership(
     start_date: date,
     end_date: date,
     extra_fields: dict | None = None,
+    dates_are_synthetic: bool = False,
 ) -> db_models.Membership:
+    """Upsert a Membership (or subtype) row.
+
+    dates_are_synthetic: True when start_date/end_date were derived by
+    _membership_dates' Jul-28-to-Jul-28 fallback rather than sourced from
+    the raw scrape (this is the case for chamber_mem/party_mem, which never
+    carry an explicit date). Matching on the exact date range is correct
+    for memberships whose dates ARE real per-stint data (e.g. committee
+    reassignments, which genuinely get a new row each legislative year with
+    real, source-confirmed dates) -- but for a synthetic fallback, the
+    derived window shifts forward every time the row is rescraped after a
+    Jul 28 boundary passes, even though nothing about the membership itself
+    changed, and matching on it created a spurious duplicate row every year
+    (found 2026-09-09: 274 such duplicate groups in production, entirely
+    Cámara/Partido/Administrativo memberships). For a synthetic-dates
+    match, drop start_date/end_date from the lookup so the SAME ongoing
+    membership updates in place instead.
+    """
     org_type_value = _enum_value(org_type)
     role_value = _enum_value(role)
     leg_period_value = _enum_value(leg_period)
@@ -583,16 +601,21 @@ def upsert_membership(
     if extra_fields:
         payload.update(extra_fields)
 
+    filters = [
+        db_models.Membership.person_id == person_id,
+        db_models.Membership.org_id == org_id,
+        db_models.Membership.leg_period == leg_period_value,
+        db_models.Membership.org_type == org_type_value,
+        db_models.Membership.role == role_value,
+    ]
+    if not dates_are_synthetic:
+        filters.append(db_models.Membership.start_date == start_date)
+        filters.append(db_models.Membership.end_date == end_date)
+
     existing = db.scalars(
-        select(db_models.Membership).where(
-            db_models.Membership.person_id == person_id,
-            db_models.Membership.org_id == org_id,
-            db_models.Membership.leg_period == leg_period_value,
-            db_models.Membership.org_type == org_type_value,
-            db_models.Membership.role == role_value,
-            db_models.Membership.start_date == start_date,
-            db_models.Membership.end_date == end_date,
-        )
+        select(db_models.Membership)
+        .where(*filters)
+        .order_by(db_models.Membership.start_date.desc())
     ).first()
 
     return _upsert_model(
