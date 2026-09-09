@@ -18,6 +18,7 @@ from backend.database.models import (
 )
 
 import pytest
+from lxml import html
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
@@ -415,13 +416,15 @@ def test_status_all_does_not_force_search_path(client, session_factory):
     assert "Bill 0001" in body
 
 
-def test_footer_contact_link_points_to_contact_section(client):
+def test_footer_keeps_about_link_without_contact_or_placeholder_links(client):
     response = client.get("/bills")
     body = response.get_data(as_text=True)
 
     assert response.status_code == 200
-    assert '<a href="/#contact">' in body
-    assert '<a href="#">' not in body
+    footer_links = html.fromstring(body).xpath("//footer//a")
+    assert any(link.get("href") == "/#about" for link in footer_links)
+    assert all(link.get("href") not in ("/#contact", "#") for link in footer_links)
+    assert all("Contacto" not in link.text_content() for link in footer_links)
 
 
 def test_search_form_includes_new_filters(client):

@@ -66,7 +66,11 @@ def client(monkeypatch, session_factory):
     import app.routes.api.bills as api_bills_module
     import app.routes.api.congress as api_congress_module
     from app.app import create_app
+    from backend.config import settings
 
+    # Endpoint tests must not inherit authentication from a developer's .env.
+    # Authentication tests explicitly override this default when needed.
+    monkeypatch.setattr(settings, "API_AUTH_ENABLED", False)
     monkeypatch.setattr(api_bills_module, "SessionProcessed", session_factory)
     monkeypatch.setattr(api_congress_module, "SessionProcessed", session_factory)
 
