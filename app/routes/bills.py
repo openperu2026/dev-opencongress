@@ -640,6 +640,7 @@ def index():
             organization_name_q,
             special_committee_q,
             bill_diff_q,
+            status != "all",
         ]
     )
 
@@ -989,6 +990,26 @@ def bill_detail(bill_id):
 
         all_steps, latest_step = extract_steps(db, bill_id)
 
+        documents_by_step = {}
+        documents = db.execute(
+            select(RawBillDocument)
+            .where(RawBillDocument.bill_id == bill_id)
+            .order_by(RawBillDocument.step_id, RawBillDocument.file_id)
+        ).scalars()
+        for document in documents:
+            if document.s3_key and settings.AWS_S3_BUCKET_NAME:
+                document_url = url_for(
+                    "bills.bill_document",
+                    bill_id=bill_id,
+                    step_id=document.step_id,
+                    file_id=document.file_id,
+                )
+            elif document.url and document.url.startswith(("https://", "http://")):
+                document_url = document.url
+            else:
+                continue
+            documents_by_step.setdefault(document.step_id, []).append(document_url)
+
         view_change_step_ids = set()
         if bill.bill_diff:
             view_change_step_ids = set(
@@ -1055,6 +1076,7 @@ def bill_detail(bill_id):
             bill=bill,
             latest_step=latest_step,
             all_steps=all_steps,
+            documents_by_step=documents_by_step,
             view_change_step_ids=view_change_step_ids,
             bill_is_approved=bill.bill_approved,
             bill_status=bill_status,
@@ -1323,7 +1345,8 @@ def bill_difference(bill_id, step_id):
 
 
 @bills_bp.route("/bills/<bill_id>/document/<int:step_id>")
-def bill_document(bill_id, step_id):
+@bills_bp.route("/bills/<bill_id>/document/<int:step_id>/<int:file_id>")
+def bill_document(bill_id, step_id, file_id=None):
     with SessionProcessed() as db:
         bill = db.get(Bill, bill_id)
         if not bill:
@@ -1333,7 +1356,11 @@ def bill_document(bill_id, step_id):
         if not step:
             return "Not Found", 404
 
-        s3_key = _resolve_s3_key(db, bill_id, step_id)
+        if file_id is None:
+            s3_key = _resolve_s3_key(db, bill_id, step_id)
+        else:
+            document = db.get(RawBillDocument, (bill_id, step_id, file_id))
+            s3_key = document.s3_key if document else None
         if not s3_key:
             return "Document not available", 404
 
@@ -1369,6 +1396,13 @@ def bill_document(bill_id, step_id):
 
     resp = make_response(obj["Body"].read())
     resp.headers["Content-Type"] = obj.get("ContentType", "application/pdf")
-    resp.headers["Content-Disposition"] = f'inline; filename="{bill_id}-{step_id}.pdf"'
+    if file_id is None:
+        resp.headers["Content-Disposition"] = (
+            f'inline; filename="{bill_id}-{step_id}.pdf"'
+        )
+    else:
+        resp.headers["Content-Disposition"] = (
+            f'attachment; filename="{bill_id}-{step_id}-{file_id}.pdf"'
+        )
     resp.headers["Cache-Control"] = "public, max-age=86400"
     return resp

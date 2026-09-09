@@ -71,6 +71,9 @@
                 {% if step.step_id in view_change_step_ids %}
                   <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('Ver cambios')}}</a>
                 {% endif %}
+                {% for document_url in documents_by_step.get(step.step_id, []) %}
+                  <a href="{{ document_url }}" target="_blank" rel="noopener" download>{{ _('Descargar PDF') }}{% if loop.length > 1 %} {{ loop.index }}{% endif %}</a>
+                {% endfor %}
               </div>
             </div>
           {% endfor %}
