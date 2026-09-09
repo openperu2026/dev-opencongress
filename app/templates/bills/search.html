@@ -3,10 +3,40 @@
 {% block content %}
 <form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
     <h1 class="search-title">{{_('Busca el proyecto de ley por:')}}</h1>
+    <div class="period-tabs-row">
+        <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
+            {% for value, label, _period_enum in leg_period_options %}
+                {% if value == leg_period_q %}
+                    <span class="is-active" aria-current="page">{{ label }}</span>
+                {% else %}
+                    <a href="{{ period_tab_urls[value] }}">{{ label }}</a>
+                {% endif %}
+            {% endfor %}
+        </nav>
+        {% if leg_period_q == "2026-2031" %}
+            <div class="chamber-tabs" aria-label="{{ _('Cámara') }}">
+                {% if not chamber_q %}
+                    <span class="is-active">{{ _('Ambas cámaras') }}</span>
+                {% else %}
+                    <a href="{{ chamber_tab_urls[''] }}">{{ _('Ambas cámaras') }}</a>
+                {% endif %}
+                {% for value, org_name in chamber_options.items() %}
+                    {% if chamber_q == value %}
+                        <span class="is-active">{{ org_name }}</span>
+                    {% else %}
+                        <a href="{{ chamber_tab_urls[value] }}">{{ org_name }}</a>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
     <div class="bar-search">
         <div class="search-row search-row--general">
             <div class="searching-container">
                 <input type="text" name="semantic_query" value="{{ semantic_query or '' }}" placeholder="{{_('Búsqueda general...')}}">
+                {% if semantic_search_failed %}
+                    <p class="search-warning">{{ _('No pudimos completar la búsqueda semántica en este momento; se muestran los resultados de los demás filtros.') }}</p>
+                {% endif %}
             </div>
         </div>
         <div class="search-row search-row--primary">
@@ -130,7 +160,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="search-date-grid search-date-legacy-grid">
+                <noscript><div class="search-date-grid search-date-legacy-grid">
                     <div class="search-date-group">
                         <span class="search-date-label">{{ _('Desde') }}</span>
                         <div class="search-date-selects">
@@ -178,7 +208,7 @@
                             </select>
                         </div>
                     </div>
-                </div>
+                </div></noscript>
             </div>
 
             <div class="search-diff-panel">
@@ -228,6 +258,7 @@
             <tr>
                 <th>#</th>
                 <th>{{ _('ID') }}</th>
+                {% if leg_period_q == "2026-2031" %}<th>{{ _('Cámara') }}</th>{% endif %}
                 <th>{{ _('Título') }}</th>
                 <th>{{ _('Autor') }}</th>
                 <th>{{ _('Primera fecha de presentacion') }}</th>
@@ -240,6 +271,13 @@
             <tr>
                 <td data-label="#">{{ loop.index }}</td>
                 <td data-label="{{ _('ID') }}">{{ bill.pley_id }}</td>
+                {% if leg_period_q == "2026-2031" %}
+                <td data-label="{{ _('Cámara') }}">
+                    {% if bill.chamber_slug %}
+                        <span class="chamber-badge chamber-badge--{{ bill.chamber_slug }}">{{ _('Senado') if bill.chamber_slug == 'senado' else _('Diputados') }}</span>
+                    {% endif %}
+                </td>
+                {% endif %}
                 <td data-label="{{ _('Título') }}">{{ bill.title }}</td>
                 {% if bill.author_name %}
                     <td data-label="{{ _('Autor') }}">{{ bill.author_name }}</td>
@@ -262,6 +300,10 @@
 {% if bills %}
     <div class = "search-criteria">
         <h3>{{_('Criterios de búsqueda')}}</h3>
+        <span>{{ _('Periodo') }}: {{ leg_period_display }}</span>
+        {% if chamber_display %}
+            <span>{{ _('Cámara') }}: {{ chamber_display }}</span>
+        {% endif %}
         {% if title_q %}
             <span>{{_('Título')}}: {{title_q}}</span>
         {% endif %}
@@ -310,6 +352,7 @@
             <tr>
                 <th>#</th>
                 <th>{{ _('ID') }}</th>
+                {% if leg_period_q == "2026-2031" %}<th>{{ _('Cámara') }}</th>{% endif %}
                 <th>{{ _('Título') }}</th>
                 <th>{{ _('Autor') }}</th>
                 <th>{{ _('Fecha de presentación') }}</th>
@@ -322,6 +365,13 @@
             <tr>
                 <td data-label="#">{{ results_start + loop.index0 }}</td>
                 <td data-label="{{ _('ID') }}">{{ bill.pley_id }}</td>
+                {% if leg_period_q == "2026-2031" %}
+                <td data-label="{{ _('Cámara') }}">
+                    {% if bill.chamber_slug %}
+                        <span class="chamber-badge chamber-badge--{{ bill.chamber_slug }}">{{ _('Senado') if bill.chamber_slug == 'senado' else _('Diputados') }}</span>
+                    {% endif %}
+                </td>
+                {% endif %}
                 <td data-label="{{ _('Título') }}">{{ bill.title }}</td>
                 {% if bill.author_name %}
                     <td data-label="{{ _('Autor') }}">{{ bill.author_name }}</td>
@@ -365,7 +415,13 @@
         </nav>
     {% endif %}
 {% elif search_requested %}
-    <p>{{_('No se encontraron proyectos de ley.')}}</p>
+    <p>
+        {% if chamber_display %}
+            {{ _('No se encontraron proyectos de ley para %(chamber)s, periodo %(period)s.', chamber=chamber_display, period=leg_period_display) }}
+        {% else %}
+            {{ _('No se encontraron proyectos de ley para el periodo %(period)s.', period=leg_period_display) }}
+        {% endif %}
+    </p>
 {% endif %}
 
 <script>

@@ -49,10 +49,16 @@ from backend.core.enums import TypeBillStep, TypeCommittee, TypeOrganization, Vo
 from .processed_session import SessionProcessed
 from sentence_transformers import SentenceTransformer
 from .utils import (
+    CHAMBER_ORG_NAME_TO_UI_SLUG,
+    CHAMBER_UI_TO_ORG_NAME,
+    LEG_PERIOD_UI_OPTIONS,
+    committee_parent_org_ids,
     create_committee_option,
     create_party_option,
     create_special_committee_option,
     latest_org_name,
+    leg_period_date_range,
+    ordinary_committee_subtypes_for_period,
 )
 import json
 import os
@@ -62,7 +68,8 @@ from flask_babel import gettext as _
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 DATE_YEAR_MIN = 1900
-PRESENTATION_DATE_MAX = date(2026, 7, 27)
+# Date-picker bounds are now derived per-period from leg_period_date_range()
+# (see index()), replacing the old hardcoded 2021-2026-only constant.
 
 TOPIC_MAPPING = {
     "Inclusión Social y Personas con Discapacidad": [
@@ -565,110 +572,85 @@ def _build_vote_rows(db: Session, vote_event_id: str):
     return vote_rows
 
 
-@bills_bp.route("/bills")
-def index():
-    semantic_query = request.args.get("semantic_query", "").strip()
-    title_q = request.args.get("title_q", "").strip()
-    author_q = request.args.get("author_q", "").strip()
-    author_party_q = request.args.get("author_party_q", "").strip()
-    status = request.args.get("status", "all").strip()
-    pley_id_q = request.args.get("pley_id_q", "").strip()
-    has_pley_id_q = bool(pley_id_q)
-    bill_id_q = request.args.get("bill_id_q", "").strip()
-    pley_id_q = pley_id_q or bill_id_q
-    law_id_q = request.args.get("law_id_q", "").strip()
-    current_step_q = request.args.get("current_step_q", "").strip()
-    organization_name_q = request.args.get("organization_name_q", "").strip()
-    special_committee_q = request.args.get("special_committee_q", "").strip()
-    bill_diff_q = request.args.get("bill_diff_q", "").strip()
-    page = request.args.get("page", 1, type=int)
-    page = page if page and page > 0 else 1
-    per_page = 50
-    max_search_results = 500
-    _allowed_status = {"all", "approved", "not-approved"}
-    if status not in _allowed_status:
-        status = "all"
-    _allowed_bill_diff = {"", "yes", "no"}
-    if bill_diff_q not in _allowed_bill_diff:
-        bill_diff_q = ""
-    # Add search conditions to the filters and build the query.
-    filters = []
-    # Set author_display so that the author name or query is correctly shown in the
-    # search conditions, regardless of whether the input is an ID or a person's name.
-    author_display = None
-    author_id_query = author_q.isdigit()
-    author_id_int = None
-    with SessionProcessed() as db:
-        presentation_date_min = db.scalar(
-            select(func.min(BillOrganization.presentation_date))
+def _chamber_exists_filter(chamber_q: str):
+    return (
+        select(Organization.org_id)
+        .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+        .where(
+            BillOrganization.bill_id == Bill.id,
+            Organization.org_type == TypeOrganization.CHAMBER,
+            Organization.org_name == CHAMBER_UI_TO_ORG_NAME[chamber_q],
         )
-        semantic_bill_ids: list[str] = []
-        if semantic_query:
-            semantic_results = _search_semantic_bills(
-                db,
-                query=semantic_query,
-                top_k=max_search_results,
-            )
-            semantic_bill_ids = [row.bill_id for row in semantic_results]
-    today = PRESENTATION_DATE_MAX
-    presentation_date_from_picker = _build_date_picker(
-        "presentation_date_from",
-        request.args,
-        today,
-        min_date=presentation_date_min,
-        max_date=PRESENTATION_DATE_MAX,
-    )
-    presentation_date_to_picker = _build_date_picker(
-        "presentation_date_to",
-        request.args,
-        today,
-        min_date=presentation_date_min,
-        max_date=PRESENTATION_DATE_MAX,
-    )
-    presentation_date_from = presentation_date_from_picker["selected_date"]
-    presentation_date_to = presentation_date_to_picker["selected_date"]
-    search_requested = any(
-        [
-            semantic_query,
-            title_q,
-            author_q,
-            author_party_q,
-            pley_id_q,
-            law_id_q,
-            current_step_q,
-            presentation_date_from is not None,
-            presentation_date_to is not None,
-            organization_name_q,
-            special_committee_q,
-            bill_diff_q,
-            status != "all",
-        ]
+        .exists()
     )
 
-    search_params = dict(
-        semantic_query=semantic_query,
-        title_q=title_q,
-        author_q=author_q,
-        author_party_q=author_party_q,
-        status=status,
-        law_id_q=law_id_q,
-        current_step_q=current_step_q,
-        organization_name_q=organization_name_q,
-        special_committee_q=special_committee_q,
-        bill_diff_q=bill_diff_q,
+
+def _period_exists_filter(period_start: date, period_end: date):
+    return (
+        select(BillOrganization.bill_id)
+        .where(
+            BillOrganization.bill_id == Bill.id,
+            BillOrganization.presentation_date.between(period_start, period_end),
+        )
+        .exists()
     )
+
+
+def _chamber_org_name_column():
+    return (
+        select(Organization.org_name)
+        .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
+        .where(
+            BillOrganization.bill_id == Bill.id,
+            Organization.org_type == TypeOrganization.CHAMBER,
+        )
+        .limit(1)
+        .scalar_subquery()
+        .label("chamber_org_name")
+    )
+
+
+def _with_chamber_slug(rows):
+    result = []
+    for row in rows:
+        row = dict(row)
+        row["chamber_slug"] = CHAMBER_ORG_NAME_TO_UI_SLUG.get(
+            row.pop("chamber_org_name", None)
+        )
+        result.append(SimpleNamespace(**row))
+    return result
+
+
+def _build_bill_filters(
+    *,
+    title_q,
+    pley_id_q,
+    has_pley_id_q,
+    author_q,
+    author_id_query,
+    author_id_int,
+    author_party_q,
+    law_id_q,
+    current_step_q,
+    presentation_date_from,
+    presentation_date_to,
+    organization_name_q,
+    special_committee_q,
+    status,
+    bill_diff_q,
+    chamber_q,
+    leg_period_q,
+    period_start,
+    period_end,
+    committee_parent_ids,
+    semantic_query,
+    semantic_bill_ids,
+):
+    """Build the SQLAlchemy filter-clause list for the bills search query."""
+    filters = []
+
     if semantic_query:
         filters.append(Bill.id.in_(semantic_bill_ids))
-    if has_pley_id_q:
-        search_params["pley_id_q"] = pley_id_q
-    elif bill_id_q:
-        search_params["bill_id_q"] = bill_id_q
-    if presentation_date_from_picker["provided"]:
-        if presentation_date_from:
-            search_params["presentation_date_from"] = presentation_date_from.isoformat()
-    if presentation_date_to_picker["provided"]:
-        if presentation_date_to:
-            search_params["presentation_date_to"] = presentation_date_to.isoformat()
 
     if title_q:
         filters.append(
@@ -687,11 +669,6 @@ def index():
         # Since author_q may contain either an ID or a person's name, build the query
         # appropriately based on whether the input is an integer.
         if author_id_query:
-            try:
-                author_id_int = int(author_q)
-            except ValueError:
-                author_id_int = None
-
             if author_id_int is not None:
                 filters.append(Bill.author_id == author_id_int)
         else:
@@ -700,6 +677,19 @@ def index():
                     func.unaccent(func.lower(f"%{author_q}%"))
                 )
             )
+
+    if author_party_q:
+        filters.append(
+            select(Membership.person_id)
+            .join(Organization, Organization.org_id == Membership.org_id)
+            .where(
+                Membership.person_id == Bill.author_id,
+                Membership.org_type == TypeOrganization.PARTY,
+                Organization.org_name == author_party_q,
+                Membership.leg_period == leg_period_q,
+            )
+            .exists()
+        )
 
     if law_id_q:
         filters.append(
@@ -734,15 +724,21 @@ def index():
         )
 
     if organization_name_q:
+        allowed_subtypes = ordinary_committee_subtypes_for_period(leg_period_q)
+        committee_filters = [
+            BillOrganization.bill_id == Bill.id,
+            Organization.org_type == TypeOrganization.COMMITTEE,
+            Organization.org_subtype.in_(allowed_subtypes),
+            Organization.org_name == organization_name_q,
+        ]
+        if leg_period_q != "2021-2026":
+            committee_filters.append(
+                Organization.parent_org_id.in_(committee_parent_ids)
+            )
         filters.append(
             select(Organization.org_id)
             .join(BillOrganization, BillOrganization.org_id == Organization.org_id)
-            .where(
-                BillOrganization.bill_id == Bill.id,
-                Organization.org_type == TypeOrganization.COMMITTEE,
-                Organization.org_subtype == TypeCommittee.COM_ORD,
-                Organization.org_name == organization_name_q,
-            )
+            .where(*committee_filters)
             .exists()
         )
 
@@ -768,6 +764,184 @@ def index():
         filters.append(Bill.bill_diff.is_(True))
     elif bill_diff_q == "no":
         filters.append(Bill.bill_diff.is_(False))
+
+    if chamber_q:
+        filters.append(_chamber_exists_filter(chamber_q))
+
+    filters.append(_period_exists_filter(period_start, period_end))
+
+    return filters
+
+
+@bills_bp.route("/bills")
+def index():
+    semantic_query = request.args.get("semantic_query", "").strip()
+    title_q = request.args.get("title_q", "").strip()
+    author_q = request.args.get("author_q", "").strip()
+    author_party_q = request.args.get("author_party_q", "").strip()
+    status = request.args.get("status", "all").strip()
+    pley_id_q = request.args.get("pley_id_q", "").strip()
+    has_pley_id_q = bool(pley_id_q)
+    bill_id_q = request.args.get("bill_id_q", "").strip()
+    pley_id_q = pley_id_q or bill_id_q
+    law_id_q = request.args.get("law_id_q", "").strip()
+    current_step_q = request.args.get("current_step_q", "").strip()
+    organization_name_q = request.args.get("organization_name_q", "").strip()
+    special_committee_q = request.args.get("special_committee_q", "").strip()
+    bill_diff_q = request.args.get("bill_diff_q", "").strip()
+    chamber_q = request.args.get("chamber_q", "").strip()
+    leg_period_q = request.args.get("leg_period_q", "").strip()
+    page = request.args.get("page", 1, type=int)
+    page = page if page and page > 0 else 1
+    per_page = 50
+    max_search_results = 500
+    _allowed_status = {"all", "approved", "not-approved"}
+    if status not in _allowed_status:
+        status = "all"
+    _allowed_bill_diff = {"", "yes", "no"}
+    if bill_diff_q not in _allowed_bill_diff:
+        bill_diff_q = ""
+    _allowed_chamber = {"", "senado", "diputados"}
+    if chamber_q not in _allowed_chamber:
+        chamber_q = ""
+    _allowed_leg_period = {v for v, _, _ in LEG_PERIOD_UI_OPTIONS}
+    if leg_period_q not in _allowed_leg_period:
+        leg_period_q = "2026-2031"
+    period_start, period_end = leg_period_date_range(leg_period_q)
+    leg_period_display = next(
+        label for v, label, _ in LEG_PERIOD_UI_OPTIONS if v == leg_period_q
+    )
+    chamber_display = CHAMBER_UI_TO_ORG_NAME.get(chamber_q)
+
+    # Set author_display so that the author name or query is correctly shown in the
+    # search conditions, regardless of whether the input is an ID or a person's name.
+    author_display = None
+    author_id_query = author_q.isdigit()
+    author_id_int = None
+    semantic_search_failed = False
+    with SessionProcessed() as db:
+        semantic_bill_ids: list[str] = []
+        if semantic_query:
+            try:
+                semantic_results = _search_semantic_bills(
+                    db,
+                    query=semantic_query,
+                    top_k=max_search_results,
+                )
+                semantic_bill_ids = [row.bill_id for row in semantic_results]
+            except Exception:
+                current_app.logger.exception(
+                    "semantic search failed for query=%r", semantic_query
+                )
+                semantic_search_failed = True
+        committee_parent_ids = (
+            committee_parent_org_ids(db, chamber_q)
+            if leg_period_q != "2021-2026"
+            else []
+        )
+
+    today = min(period_end, date.today())
+    presentation_date_from_picker = _build_date_picker(
+        "presentation_date_from",
+        request.args,
+        today,
+        min_date=period_start,
+        max_date=today,
+    )
+    presentation_date_to_picker = _build_date_picker(
+        "presentation_date_to",
+        request.args,
+        today,
+        min_date=period_start,
+        max_date=today,
+    )
+    presentation_date_from = presentation_date_from_picker["selected_date"]
+    presentation_date_to = presentation_date_to_picker["selected_date"]
+    search_requested = any(
+        [
+            semantic_query,
+            title_q,
+            author_q,
+            author_party_q,
+            pley_id_q,
+            law_id_q,
+            current_step_q,
+            presentation_date_from is not None,
+            presentation_date_to is not None,
+            organization_name_q,
+            special_committee_q,
+            bill_diff_q,
+            status != "all",
+        ]
+    )
+
+    search_params = dict(
+        semantic_query=semantic_query,
+        title_q=title_q,
+        author_q=author_q,
+        author_party_q=author_party_q,
+        status=status,
+        law_id_q=law_id_q,
+        current_step_q=current_step_q,
+        organization_name_q=organization_name_q,
+        special_committee_q=special_committee_q,
+        bill_diff_q=bill_diff_q,
+        chamber_q=chamber_q,
+        leg_period_q=leg_period_q,
+    )
+    if has_pley_id_q:
+        search_params["pley_id_q"] = pley_id_q
+    elif bill_id_q:
+        search_params["bill_id_q"] = bill_id_q
+    if presentation_date_from_picker["provided"]:
+        if presentation_date_from:
+            search_params["presentation_date_from"] = presentation_date_from.isoformat()
+    if presentation_date_to_picker["provided"]:
+        if presentation_date_to:
+            search_params["presentation_date_to"] = presentation_date_to.isoformat()
+
+    # Pre-built so the template just looks these up -- Jinja has no
+    # equivalent to Python's {**dict, "k": v} merge-literal syntax, so the
+    # per-tab param override has to happen here, not in the template.
+    period_tab_urls = {
+        value: url_for("bills.index", **{**search_params, "leg_period_q": value})
+        for value, _label, _enum in LEG_PERIOD_UI_OPTIONS
+    }
+    chamber_tab_urls = {
+        value: url_for("bills.index", **{**search_params, "chamber_q": value})
+        for value in [""] + list(CHAMBER_UI_TO_ORG_NAME.keys())
+    }
+
+    if author_q and author_id_query:
+        try:
+            author_id_int = int(author_q)
+        except ValueError:
+            author_id_int = None
+
+    filters = _build_bill_filters(
+        title_q=title_q,
+        pley_id_q=pley_id_q,
+        has_pley_id_q=has_pley_id_q,
+        author_q=author_q,
+        author_id_query=author_id_query,
+        author_id_int=author_id_int,
+        author_party_q=author_party_q,
+        law_id_q=law_id_q,
+        current_step_q=current_step_q,
+        presentation_date_from=presentation_date_from,
+        presentation_date_to=presentation_date_to,
+        organization_name_q=organization_name_q,
+        special_committee_q=special_committee_q,
+        status=status,
+        bill_diff_q=bill_diff_q,
+        chamber_q=chamber_q,
+        leg_period_q=leg_period_q,
+        period_start=period_start,
+        period_end=period_end,
+        committee_parent_ids=committee_parent_ids,
+        semantic_query=semantic_query,
+        semantic_bill_ids=semantic_bill_ids,
+    )
 
     bills = []
     recent_bills = []
@@ -795,8 +969,8 @@ def index():
             .all()
         ]
         # Create a list of dropdown options from the database.
-        author_party_options = create_party_option(db)
-        organization_name_options = create_committee_option(db)
+        author_party_options = create_party_option(db, leg_period_q)
+        organization_name_options = create_committee_option(db, leg_period_q)
         special_committee_options = create_special_committee_option(db)
 
         if search_requested:
@@ -822,6 +996,7 @@ def index():
                     latest_bill_dates.c.latest_presentation_date.label(
                         "presentation_date"
                     ),
+                    _chamber_org_name_column(),
                 )
                 .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
                 .outerjoin(latest_bill_dates, latest_bill_dates.c.bill_id == Bill.id)
@@ -871,9 +1046,10 @@ def index():
                 results_start = (page - 1) * per_page + 1
                 results_end = results_start + len(rows) - 1
 
-            bills = [SimpleNamespace(**row) for row in rows]
+            bills = _with_chamber_slug(rows)
         else:
-            # Display the 10 bills with the most recent initial presentation dates by default.
+            # Display the 10 bills with the most recent initial presentation dates by
+            # default, scoped to the active period/chamber.
             earliest_bill_dates = (
                 select(
                     BillOrganization.bill_id,
@@ -884,6 +1060,10 @@ def index():
                 .group_by(BillOrganization.bill_id)
                 .subquery()
             )
+
+            recent_filters = [_period_exists_filter(period_start, period_end)]
+            if chamber_q:
+                recent_filters.append(_chamber_exists_filter(chamber_q))
 
             recent_stmt = (
                 select(
@@ -896,9 +1076,11 @@ def index():
                     earliest_bill_dates.c.first_presentation_date.label(
                         "presentation_date"
                     ),
+                    _chamber_org_name_column(),
                 )
                 .join(Congresista, Bill.author_id == Congresista.id, isouter=True)
                 .join(earliest_bill_dates, earliest_bill_dates.c.bill_id == Bill.id)
+                .where(*recent_filters)
                 .order_by(
                     earliest_bill_dates.c.first_presentation_date.desc(),
                     Bill.title.asc(),
@@ -908,7 +1090,7 @@ def index():
             )
 
             recent_rows = db.execute(recent_stmt).mappings().all()
-            recent_bills = [SimpleNamespace(**row) for row in recent_rows]
+            recent_bills = _with_chamber_slug(recent_rows)
 
     prev_page_url = None
     next_page_url = None
@@ -937,6 +1119,13 @@ def index():
         law_id_q=law_id_q,
         current_step_q=current_step_q,
         bill_diff_q=bill_diff_q,
+        chamber_q=chamber_q,
+        chamber_display=chamber_display,
+        leg_period_q=leg_period_q,
+        leg_period_display=leg_period_display,
+        leg_period_options=LEG_PERIOD_UI_OPTIONS,
+        chamber_options=CHAMBER_UI_TO_ORG_NAME,
+        semantic_search_failed=semantic_search_failed,
         presentation_date_from=presentation_date_from,
         presentation_date_to=presentation_date_to,
         presentation_date_from_provided=presentation_date_from_picker["provided"],
@@ -979,6 +1168,9 @@ def index():
         organization_name_options=organization_name_options,
         special_committee_options=special_committee_options,
         search_requested=search_requested,
+        search_params=search_params,
+        period_tab_urls=period_tab_urls,
+        chamber_tab_urls=chamber_tab_urls,
     )
 
 

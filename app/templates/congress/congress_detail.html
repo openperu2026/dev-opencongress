@@ -3,8 +3,24 @@
 {% block content %}
 <div class="congress-detail-page">
     <section class="congress-profile">
+        {% if available_periods|length > 1 %}
+            <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
+                {% for value, label in available_periods %}
+                    {% if value == selected_period %}
+                        <span class="is-active" aria-current="page">{{ label }}</span>
+                    {% else %}
+                        <a href="{{ url_for('congress.congress_detail', congresista_id=congresista.id, leg_period_q=value) }}">{{ label }}</a>
+                    {% endif %}
+                {% endfor %}
+            </nav>
+        {% endif %}
         <header class="congress-profile-header">
-            <h1>{{ congresista.full_name }}</h1>
+            <h1>
+                {{ congresista.full_name }}
+                {% if congresista.chamber_slug %}
+                    <span class="chamber-badge chamber-badge--{{ congresista.chamber_slug }}">{{ _('Senado') if congresista.chamber_slug == 'senado' else _('Diputados') }}</span>
+                {% endif %}
+            </h1>
             <p>
                 {{ congresista.party_name }} &middot; 
                 {{ congresista.dist_electoral or _('No disponible') }} &middot; 
@@ -24,17 +40,29 @@
             </div>
 
             <section class="congress-section congress-committee-panel">
-                <h2>{{_('Membresía en comisiones')}}</h2>
+                <h2>{{_('Membresía en comisiones')}}{% if selected_period_label %} &mdash; {{ selected_period_label }}{% endif %}</h2>
                 {% if memberships %}
+                    {% set spanish_months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
                     <ul class="committee-membership-list">
                         {% for membership in memberships %}
                             <li>
-                                {% if membership.org_short_name %}
-                                    <span>{{ membership.org_short_name }}</span>
-                                {% else %}
-                                    <span>{{ membership.org_name }}</span>
-                                {% endif %}
-                                <strong>{{ membership.role }}</strong>
+                                <div class="committee-name">
+                                    {% if membership.org_short_name %}
+                                        {{ membership.org_short_name }}
+                                    {% else %}
+                                        {{ membership.org_name }}
+                                    {% endif %}
+                                </div>
+                                <div class="committee-meta">
+                                    <strong>{{ membership.role }}</strong>
+                                    {% if membership.start_date or membership.end_date %}
+                                        <span class="committee-dates">
+                                            {% if membership.start_date %}{{ spanish_months[membership.start_date.month - 1] }} {{ membership.start_date.year }}{% else %}&mdash;{% endif %}
+                                            &ndash;
+                                            {% if membership.end_date %}{{ spanish_months[membership.end_date.month - 1] }} {{ membership.end_date.year }}{% else %}{{ _('presente') }}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                </div>
                             </li>
                         {% endfor %}
                     </ul>
@@ -101,7 +129,7 @@
         </section>
         <br>
         <p class="congress-action">
-            <a href="{{ url_for('bills.index', author_q=congresista.full_name) }}">
+            <a href="{{ url_for('bills.index', author_q=congresista.full_name, leg_period_q=selected_period) }}">
                 {{_('Ver todos los proyectos de ley presentados')}}
             </a>
         </p>
