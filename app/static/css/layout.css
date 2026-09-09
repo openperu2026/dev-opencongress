@@ -29,6 +29,13 @@
     --color-gold: #E8A020;
     --color-cream: #F5F0E8;
     --color-near-black: #1A1018;
+
+    /* Chamber affiliation (Senado = blue, Diputados = maroon) -- aliased to
+       existing tokens, no new hex values. */
+    --color-chamber-senado: var(--color-royal-blue);
+    --color-chamber-diputados: var(--dark-orange);
+    --color-chamber-senado-bg: #E8EFFA;
+    --color-chamber-diputados-bg: #F1E6E0;
 }
 
 html,
@@ -257,6 +264,143 @@ main {
   gap: 16px;
 }
 
+/* Shared by both search forms: period (primary) + chamber (secondary)
+   controls read as navigation tabs/chips rather than form <select>s -- they
+   sit above the rest of the filter grid since they're more consequential
+   (period changes almost the entire dataset in view) than the other
+   filters. Each non-active tab is a tiny POST <form> (see _macros.html's
+   tab_link) styled as a plain link/chip so the URL never shows the filter
+   state -- .tab-form uses `display: contents` so the wrapping <form>
+   doesn't affect layout, leaving just its <button> (styled below) and its
+   `display:none` hidden inputs. */
+.period-tabs-row {
+  margin-bottom: 18px;
+}
+
+.tab-form {
+  display: contents;
+}
+
+.bill-search-form .period-tabs,
+.congress-search-form .period-tabs {
+  margin-bottom: 10px;
+}
+
+.bill-search-form .period-tabs a,
+.bill-search-form .period-tabs .tab-form-button,
+.congress-search-form .period-tabs a,
+.congress-search-form .period-tabs .tab-form-button {
+  color: var(--color-black);
+  opacity: 0.55;
+  background: none;
+  border: none;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.bill-search-form .period-tabs a:hover,
+.bill-search-form .period-tabs .tab-form-button:hover,
+.congress-search-form .period-tabs a:hover,
+.congress-search-form .period-tabs .tab-form-button:hover {
+  opacity: 0.85;
+}
+
+.bill-search-form .period-tabs span.is-active,
+.congress-search-form .period-tabs span.is-active {
+  color: var(--color-black);
+  border-bottom-color: var(--color-highlight);
+}
+
+.chamber-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chamber-tabs a,
+.chamber-tabs span,
+.chamber-tabs .chamber-tab-button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1.5px solid #b7b7b7;
+  cursor: pointer;
+  font-family: inherit;
+  background: none;
+  display: inline-block;
+}
+
+.chamber-tabs a,
+.chamber-tabs .chamber-tab-button {
+  color: var(--color-black);
+  opacity: 0.65;
+}
+
+.chamber-tabs a:hover,
+.chamber-tabs .chamber-tab-button:hover {
+  opacity: 1;
+}
+
+.chamber-tabs span.is-active {
+  border-color: var(--color-highlight);
+  color: var(--color-highlight);
+  background: rgba(179, 57, 81, 0.08);
+}
+
+/* Year sub-tabs inside the committee-membership panel -- same pill
+   treatment as .chamber-tabs, kept as its own class since it's a
+   different grouping concern (legislative year within a period, not
+   chamber). */
+.year-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.year-tabs a,
+.year-tabs span,
+.year-tabs .year-tab-button {
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  border: 1.5px solid #b7b7b7;
+  cursor: pointer;
+  font-family: inherit;
+  background: none;
+  display: inline-block;
+}
+
+.year-tabs a,
+.year-tabs .year-tab-button {
+  color: var(--color-black);
+  opacity: 0.65;
+}
+
+.year-tabs a:hover,
+.year-tabs .year-tab-button:hover {
+  opacity: 1;
+}
+
+.year-tabs span.is-active {
+  border-color: var(--color-highlight);
+  color: var(--color-highlight);
+  background: rgba(179, 57, 81, 0.08);
+}
+
+.congress-search-grid label,
+.bill-search-form .search-row label,
+.congress-search-form .search-row label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
 
 .bill-search-form {
     max-width: 1100px;
@@ -270,11 +414,15 @@ main {
 }
 
 .bill-search-form .bar-search {
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
+  align-items: stretch;
+  width: 100%;
   gap: 22px;
 }
 
-.bill-search-form .search-row {
+.bill-search-form .search-row,
+.congress-search-form .search-row {
   display: grid;
   gap: 16px;
   width: 100%;
@@ -292,7 +440,8 @@ main {
   margin-bottom: 40px;
 }
 
-.bill-search-form .search-row--secondary {
+.bill-search-form .search-row--secondary,
+.congress-search-form .search-row--secondary {
   grid-template-columns: repeat(3, minmax(0, 1fr));
   row-gap: 16px;
 }
@@ -384,9 +533,8 @@ main {
   margin-top: 0;
 }
 
-.bill-search-form .search-date-legacy-grid {
-  display: none;
-}
+/* Legacy no-JS date grid is now hidden only via <noscript> wrapping the
+   markup itself (bills/search.html) so it still works when JS fails/is off. */
 
 .bill-search-form .search-date-group {
   display: flex;
@@ -544,7 +692,8 @@ main {
   margin: 0;
 }
 
-.bill-search-form .search-section-title {
+.bill-search-form .search-section-title,
+.congress-search-form .search-section-title {
   display: inline-flex;
   align-items: center;
   gap: 10px;
@@ -558,25 +707,30 @@ main {
   user-select: none;
 }
 
-.bill-search-form .advanced-search {
+.bill-search-form .advanced-search,
+.congress-search-form .advanced-search {
   width: 100%;
 }
 
-.bill-search-form .advanced-search summary::-webkit-details-marker {
+.bill-search-form .advanced-search summary::-webkit-details-marker,
+.congress-search-form .advanced-search summary::-webkit-details-marker {
   display: none;
 }
 
-.bill-search-form .advanced-search .fa-chevron-down {
+.bill-search-form .advanced-search .fa-chevron-down,
+.congress-search-form .advanced-search .fa-chevron-down {
   color: var(--dark-pink);
   font-size: 14px;
   transition: transform 0.18s ease;
 }
 
-.bill-search-form .advanced-search[open] .fa-chevron-down {
+.bill-search-form .advanced-search[open] .fa-chevron-down,
+.congress-search-form .advanced-search[open] .fa-chevron-down {
   transform: rotate(180deg);
 }
 
-.bill-search-form .advanced-search .search-row--secondary {
+.bill-search-form .advanced-search .search-row--secondary,
+.congress-search-form .advanced-search .search-row--secondary {
   margin-top: 14px;
 }
 
@@ -637,6 +791,8 @@ main {
 
 .bar-search {
     display: flex;
+    flex-direction: column;
+ 
 }
 
 .search-criteria,
@@ -674,6 +830,29 @@ main {
   gap: 8px;
 }
 
+/* .pagination-tab/.pagination-prev/.pagination-next are now <button>s
+   (submitting a POST form, see _macros.html's tab_link) instead of <a>
+   tags, so they need an explicit reset -- otherwise they'd pick up native
+   button chrome instead of reading as plain links like before. */
+.pagination-tab,
+.pagination-prev,
+.pagination-next {
+  background: none;
+  border: none;
+  padding: 4px 2px;
+  font-family: inherit;
+  font-size: 14px;
+  color: var(--color-highlight, #0d6efd);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+span.pagination-tab.is-active {
+  text-decoration: none;
+  font-weight: 700;
+  color: var(--color-black);
+}
+
 .search-results-table > :not(caption) > * > * {
     padding: 14px 16px;
     vertical-align: middle;
@@ -692,11 +871,25 @@ main {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  width: 100%;
   color: #15283b;
   text-decoration: none;
   background: #ffffff;
   border: 1px solid #d8e0e8;
   transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+
+/* Now a <button> submitting a POST form (see search.html) instead of an
+   <a> tag, so it doesn't show a query string for the search's active
+   period -- reset the native button chrome/typography the rule above
+   doesn't already cover. */
+button.congress-mosaic-card {
+  font-family: inherit;
+  font-size: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
 }
 
 .congress-mosaic-card:hover,
@@ -752,6 +945,7 @@ main {
   .congress-search-form .congress-search-grid,
   .bill-search-form .search-row--primary,
   .bill-search-form .search-row--secondary,
+  .congress-search-form .search-row--secondary,
   .bill-search-form .search-diff-panel,
   .bill-search-form .search-date-grid,
   .bill-search-form .search-date-native-grid {
@@ -1920,6 +2114,51 @@ svg#seatsSvg circle { cursor: default; }
     padding: 36px 24px 56px;
 }
 
+.period-tabs {
+    display: flex;
+    gap: 18px;
+    margin: 0 0 20px;
+    border-bottom: 1px solid #dde3e9;
+}
+
+.period-tabs a,
+.period-tabs span,
+.period-tabs .tab-form-button {
+    display: inline-block;
+    padding: 8px 2px 12px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+}
+
+/* .tab-form-button is a <button> (submitting a POST form, see
+   _macros.html), not an <a>/<span> -- reset native button chrome here so
+   every .period-tabs usage (this detail page and both search forms) gets
+   it, not just the ones with their own color override below. */
+.period-tabs .tab-form-button {
+    background: none;
+    border: none;
+    font-family: inherit;
+    cursor: pointer;
+}
+
+.period-tabs a,
+.period-tabs .tab-form-button {
+    color: #5f6f7f;
+}
+
+.period-tabs a:hover,
+.period-tabs .tab-form-button:hover {
+    color: #22364a;
+}
+
+.period-tabs span.is-active {
+    color: #22364a;
+    border-bottom-color: var(--color-highlight);
+}
+
 .congress-profile-header {
     margin-bottom: 28px;
 }
@@ -1964,7 +2203,7 @@ svg#seatsSvg circle { cursor: default; }
 .congress-profile-summary {
     width: 100%;
     display: grid;
-    grid-template-columns: 176px minmax(220px, 0.8fr) minmax(320px, 1.3fr);
+    grid-template-columns: 176px minmax(0, 1fr);
     align-items: start;
     gap: 28px;
     margin-bottom: 30px;
@@ -1999,25 +2238,33 @@ svg#seatsSvg circle { cursor: default; }
 
 .committee-membership-list {
     display: grid;
-    gap: 10px;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px 24px;
     list-style: none;
     margin: 0;
     padding: 0;
 }
 
 .committee-membership-list li {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: start;
-    gap: 16px;
-    padding-bottom: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-bottom: 12px;
     border-bottom: 1px solid #e3e9ef;
 }
 
-.committee-membership-list span {
+.committee-membership-list .committee-name {
     min-width: 0;
     color: #15283b;
     line-height: 1.35;
+    font-weight: 600;
+}
+
+.committee-membership-list .committee-meta {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 10px;
 }
 
 .committee-membership-list strong {
@@ -2025,6 +2272,12 @@ svg#seatsSvg circle { cursor: default; }
     font-size: 13px;
     text-transform: capitalize;
     white-space: nowrap;
+}
+
+.committee-membership-list .committee-dates {
+    font-size: 12px;
+    color: #667789;
+    font-variant-numeric: tabular-nums;
 }
 
 .congress-stats {
@@ -2111,9 +2364,22 @@ svg#seatsSvg circle { cursor: default; }
     line-height: 1.4;
 }
 
-.congress-action a {
+.congress-action a,
+.congress-action .link-button {
     color: #2563eb;
     font-weight: 700;
+}
+
+/* Now a <button> submitting a POST form instead of an <a> tag, so the
+   author-filtered bills search doesn't show a query string. */
+.link-button {
+    background: none;
+    border: none;
+    padding: 0;
+    font-family: inherit;
+    font-size: inherit;
+    text-decoration: underline;
+    cursor: pointer;
 }
 
 .congress-vote {
@@ -2134,16 +2400,6 @@ svg#seatsSvg circle { cursor: default; }
     margin-top: 26px;
 }
 
-@media (max-width: 900px) {
-    .congress-profile-summary {
-        grid-template-columns: 176px 1fr;
-    }
-
-    .congress-committee-panel {
-        grid-column: 1 / -1;
-    }
-}
-
 @media (max-width: 640px) {
     .congress-detail-page {
         padding: 28px 18px 44px;
@@ -2154,10 +2410,13 @@ svg#seatsSvg circle { cursor: default; }
         grid-template-columns: 1fr;
     }
 
-    .congress-info-list div,
-    .committee-membership-list li {
+    .congress-info-list div {
         grid-template-columns: 1fr;
         gap: 4px;
+    }
+
+    .committee-membership-list {
+        grid-template-columns: 1fr;
     }
 }
 
@@ -2337,6 +2596,18 @@ svg#seatsSvg circle { cursor: default; }
 .diff-node-badge-matched  { background: var(--color-frame); }
 .diff-node-badge-inserted { background: #4a8c4a; }
 .diff-node-badge-deleted  { background: #c25656; }
+
+.chamber-badge {
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    display: inline-block;
+}
+.chamber-badge--senado    { color: var(--color-chamber-senado);    background: var(--color-chamber-senado-bg); }
+.chamber-badge--diputados { color: var(--color-chamber-diputados); background: var(--color-chamber-diputados-bg); }
 .diff-node-id {
     font-family: monospace;
     font-size: 12px;

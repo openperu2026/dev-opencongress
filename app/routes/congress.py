@@ -1,6 +1,14 @@
+from math import ceil
 from types import SimpleNamespace
 from datetime import date
-from flask import Blueprint, Response, abort, redirect, render_template, request
+from flask import (
+    Blueprint,
+    Response,
+    abort,
+    redirect,
+    render_template,
+    request,
+)
 from flask_babel import gettext as _
 from sqlalchemy import case, func, or_, select
 from backend.core.enums import TypeCommittee, TypeOrganization
@@ -12,30 +20,129 @@ from backend.database.models import (
     Membership,
     Organization,
 )
+from backend.process.utils import get_current_leg_year
 
 
 from .utils import (
+    CHAMBER_ORG_NAME_TO_UI_SLUG,
+    CHAMBER_UI_TO_ORG_NAME,
+    LEG_PERIOD_UI_OPTIONS,
+    create_bancada_option,
     create_committee_option,
-    create_party_option,
     create_region_option,
     create_special_committee_option,
     latest_org_name,
+    leg_period_date_range,
+    ordinary_committee_subtypes_for_period,
 )
 from .processed_session import SessionProcessed
 
 congress_bp = Blueprint("congress", __name__, template_folder="../templates")
 
 
-# Get the main information of the Congressmember
+def _batch_congresista_extras(db, person_ids: list[int], leg_period_q: str):
+    """Batch-resolve each person's latest party name and their
+    leg_period-scoped chamber membership in 2 queries total, instead of the
+    previous 2-per-row N+1 pattern.
+
+    Returns (party_names: {person_id: name}, chamber_rows: {person_id: row}).
+    """
+    if not person_ids:
+        return {}, {}
+
+    latest_party = (
+        select(
+            Membership.person_id,
+            Organization.org_name.label("party_name"),
+            func.row_number()
+            .over(
+                partition_by=Membership.person_id,
+                order_by=(Membership.end_date.desc(), Membership.start_date.desc()),
+            )
+            .label("rn"),
+        )
+        .join(Organization, Organization.org_id == Membership.org_id)
+        .where(
+            Membership.person_id.in_(person_ids),
+            Membership.org_type == TypeOrganization.PARTY,
+        )
+        .subquery()
+    )
+    party_names = dict(
+        db.execute(
+            select(latest_party.c.person_id, latest_party.c.party_name).where(
+                latest_party.c.rn == 1
+            )
+        ).all()
+    )
+
+    latest_chamber = (
+        select(
+            ChamberMembership.person_id,
+            ChamberMembership.condicion,
+            ChamberMembership.dist_electoral,
+            ChamberMembership.votes_in_election,
+            Organization.org_name.label("chamber_org_name"),
+            func.row_number()
+            .over(
+                partition_by=ChamberMembership.person_id,
+                order_by=(
+                    ChamberMembership.end_date.desc(),
+                    ChamberMembership.start_date.desc(),
+                ),
+            )
+            .label("rn"),
+        )
+        .join(Organization, Organization.org_id == ChamberMembership.org_id)
+        .where(
+            ChamberMembership.person_id.in_(person_ids),
+            ChamberMembership.leg_period == leg_period_q,
+        )
+        .subquery()
+    )
+    chamber_rows = {
+        row.person_id: row
+        for row in db.execute(
+            select(latest_chamber).where(latest_chamber.c.rn == 1)
+        ).all()
+    }
+
+    return party_names, chamber_rows
+
+
+def _congresista_view_from_batch(
+    congresista: Congresista, party_name, chamber_row
+) -> SimpleNamespace:
+    return SimpleNamespace(
+        id=congresista.id,
+        full_name=congresista.full_name,
+        first_name=congresista.first_name,
+        last_name=congresista.last_name,
+        photo_url=congresista.photo_url,
+        website=congresista.website,
+        party_name=party_name,
+        dist_electoral=chamber_row.dist_electoral if chamber_row else None,
+        condicion=chamber_row.condicion if chamber_row else _("No disponible"),
+        votes_in_election=chamber_row.votes_in_election if chamber_row else 0,
+        chamber_slug=(
+            CHAMBER_ORG_NAME_TO_UI_SLUG.get(chamber_row.chamber_org_name)
+            if chamber_row
+            else None
+        ),
+    )
+
+
+# Get the main information of the Congressmember, regardless of period --
+# used only by the detail page, which shows one person's most recent
+# standing rather than a period-filtered search result.
 def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
     party_name = latest_org_name(db, congresista.id, TypeOrganization.PARTY)
     chamber_membership = db.execute(
         select(ChamberMembership)
-        .where(
-            ChamberMembership.person_id == congresista.id,
-            ChamberMembership.org_id == 1,
+        .where(ChamberMembership.person_id == congresista.id)
+        .order_by(
+            ChamberMembership.end_date.desc(), ChamberMembership.start_date.desc()
         )
-        .order_by(ChamberMembership.end_date.desc())
         .limit(1)
     ).scalar_one_or_none()
 
@@ -56,7 +163,107 @@ def _congresista_view(db, congresista: Congresista) -> SimpleNamespace:
         votes_in_election=(
             chamber_membership.votes_in_election if chamber_membership else 0
         ),
+        chamber_slug=(
+            CHAMBER_ORG_NAME_TO_UI_SLUG.get(
+                db.execute(
+                    select(Organization.org_name).where(
+                        Organization.org_id == chamber_membership.org_id
+                    )
+                ).scalar_one_or_none()
+            )
+            if chamber_membership
+            else None
+        ),
     )
+
+
+def _congresista_period_data(db, congresista_id: int) -> dict[str, SimpleNamespace]:
+    """One entry per leg_period this person has a ChamberMembership for,
+    each carrying that period's chamber/party/district/condicion/votes --
+    lets the detail page show a re-elected person's other term instead of
+    only ever showing their most recent one."""
+    chamber_rows = db.execute(
+        select(
+            ChamberMembership.leg_period,
+            ChamberMembership.condicion,
+            ChamberMembership.dist_electoral,
+            ChamberMembership.votes_in_election,
+            Organization.org_name.label("chamber_org_name"),
+        )
+        .join(Organization, Organization.org_id == ChamberMembership.org_id)
+        .where(ChamberMembership.person_id == congresista_id)
+        .order_by(
+            ChamberMembership.end_date.desc(), ChamberMembership.start_date.desc()
+        )
+    ).all()
+
+    party_by_period: dict[str, str] = {}
+    for row in db.execute(
+        select(Membership.leg_period, Organization.org_name)
+        .join(Organization, Organization.org_id == Membership.org_id)
+        .where(
+            Membership.person_id == congresista_id,
+            Membership.org_type == TypeOrganization.PARTY,
+        )
+        .order_by(Membership.end_date.desc(), Membership.start_date.desc())
+    ).all():
+        party_by_period.setdefault(row.leg_period, row.org_name)
+
+    by_period: dict[str, SimpleNamespace] = {}
+    for row in chamber_rows:
+        # chamber_rows is already ordered most-recent-first, so setdefault
+        # keeps only the latest row within a period that has more than one
+        # (e.g. a mid-term district change).
+        by_period.setdefault(
+            row.leg_period,
+            SimpleNamespace(
+                chamber_slug=CHAMBER_ORG_NAME_TO_UI_SLUG.get(row.chamber_org_name),
+                party_name=party_by_period.get(row.leg_period),
+                dist_electoral=row.dist_electoral,
+                condicion=row.condicion,
+                votes_in_election=row.votes_in_election,
+            ),
+        )
+    return by_period
+
+
+def _leg_year_buckets(selected_period: str) -> list[tuple[str, str]]:
+    """Annual legislative-year buckets within a 5-year leg_period,
+    most-recent-first. Uses get_current_leg_year's own Jul-27 cutoff (the
+    definition already used to bucket committee reassignments elsewhere,
+    see _membership_dates) rather than a second, hand-rolled boundary --
+    a membership's start_date this way always lands in the same bucket
+    here as it would anywhere else in the codebase."""
+    period_start, period_end = leg_period_date_range(selected_period)
+    first_leg_year = get_current_leg_year(period_start)
+    num_years = period_end.year - period_start.year
+    buckets = [
+        (
+            f"{first_leg_year + i}-{first_leg_year + i + 1}",
+            f"{first_leg_year + i} - {first_leg_year + i + 1}",
+        )
+        for i in range(num_years)
+    ]
+    buckets.reverse()
+    return buckets
+
+
+def _leg_year_bucket_value(
+    buckets: list[tuple[str, str]], value_date: date
+) -> str | None:
+    """Bucket value for a membership's start_date, clamped to the nearest
+    edge bucket if the date falls slightly outside this leg_period's span
+    (e.g. a scraped date a day or two off the exact term boundary)."""
+    if not buckets:
+        return None
+    leg_year = get_current_leg_year(value_date)
+    value = f"{leg_year}-{leg_year + 1}"
+    if value in {v for v, _label in buckets}:
+        return value
+    # buckets is most-recent-first; clamp to whichever edge is nearer.
+    oldest_value = buckets[-1][0]
+    newest_value = buckets[0][0]
+    return oldest_value if leg_year < int(oldest_value.split("-")[0]) else newest_value
 
 
 def _photo_mimetype(photo_bytes: bytes) -> str:
@@ -69,20 +276,54 @@ def _photo_mimetype(photo_bytes: bytes) -> str:
     return "application/octet-stream"
 
 
-@congress_bp.route("/congress")
+@congress_bp.route("/congress", methods=["GET", "POST"])
 def index():
-    name_q = request.args.get("name_q", "").strip()
-    party_q = request.args.get("party_q", "").strip()
-    region_q = request.args.get("region_q", "").strip()
-    commission_q = request.args.get("commission_q", "").strip()
-    special_committee_q = request.args.get("special_committee_q", "").strip()
+    # request.values (not request.args) so this route works identically
+    # whether filters arrive via GET query string or POST form body -- the
+    # search form and all tab/pagination controls submit via POST so the
+    # browser's address bar never shows the filter state.
+    name_q = request.values.get("name_q", "").strip()
+    bancada_q = request.values.get("bancada_q", "").strip()
+    region_q = request.values.get("region_q", "").strip()
+    commission_q = request.values.get("commission_q", "").strip()
+    special_committee_q = request.values.get("special_committee_q", "").strip()
+    chamber_q = request.values.get("chamber_q", "").strip()
+    leg_period_q = request.values.get("leg_period_q", "").strip()
+    page = request.values.get("page", 1, type=int)
+    page = page if page and page > 0 else 1
+    per_page = 50
+
+    _allowed_chamber = {"", "senado", "diputados"}
+    if chamber_q not in _allowed_chamber:
+        chamber_q = ""
+    _allowed_leg_period = {v for v, _, _ in LEG_PERIOD_UI_OPTIONS}
+    if leg_period_q not in _allowed_leg_period:
+        leg_period_q = "2026-2031"
+    leg_period_display = next(
+        label for v, label, _ in LEG_PERIOD_UI_OPTIONS if v == leg_period_q
+    )
+    chamber_display = CHAMBER_UI_TO_ORG_NAME.get(chamber_q)
 
     congresistas = []
     filters = []
-    party_options = []
+    bancada_options = []
     region_options = []
     committee_options = []
     special_committee_options = []
+    total_count = 0
+    results_start = 0
+    results_end = 0
+    pagination_pages = []
+
+    search_params = dict(
+        name_q=name_q,
+        bancada_q=bancada_q,
+        region_q=region_q,
+        commission_q=commission_q,
+        special_committee_q=special_committee_q,
+        chamber_q=chamber_q,
+        leg_period_q=leg_period_q,
+    )
 
     if name_q:
         filters.append(
@@ -91,14 +332,15 @@ def index():
             )
         )
 
-    if party_q:
+    if bancada_q:
         filters.append(
             Congresista.id.in_(
                 select(Membership.person_id)
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
-                    Membership.org_type == TypeOrganization.PARTY,
-                    Organization.org_name == party_q,
+                    Membership.org_type == TypeOrganization.BANCADA,
+                    Organization.org_name == bancada_q,
+                    Membership.leg_period == leg_period_q,
                 )
             )
         )
@@ -119,8 +361,11 @@ def index():
                 .join(Organization, Organization.org_id == Membership.org_id)
                 .where(
                     Membership.org_type == TypeOrganization.COMMITTEE,
-                    Organization.org_subtype == TypeCommittee.COM_ORD,
+                    Organization.org_subtype.in_(
+                        ordinary_committee_subtypes_for_period(leg_period_q)
+                    ),
                     Organization.org_name == commission_q,
+                    Membership.leg_period == leg_period_q,
                 )
             )
         )
@@ -138,31 +383,92 @@ def index():
             )
         )
 
+    # Chamber + period as ONE combined subquery -- a person who held a
+    # different chamber/period combination in another term must not match.
+    # Always applied (not conditional on chamber_q): closes the previous
+    # unbounded/unfiltered default listing.
+    cm_filters = [ChamberMembership.leg_period == leg_period_q]
+    if chamber_q:
+        cm_filters.append(Organization.org_name == CHAMBER_UI_TO_ORG_NAME[chamber_q])
+    filters.append(
+        Congresista.id.in_(
+            select(ChamberMembership.person_id)
+            .join(Organization, Organization.org_id == ChamberMembership.org_id)
+            .where(*cm_filters)
+        )
+    )
+
     with SessionProcessed() as db:
-        party_options = create_party_option(db)
+        bancada_options = create_bancada_option(db, leg_period_q)
         region_options = create_region_option(db)
-        committee_options = create_committee_option(db)
+        committee_options = create_committee_option(db, leg_period_q)
         special_committee_options = create_special_committee_option(db)
 
-        query = select(Congresista).order_by(Congresista.full_name.asc())
-        if filters:
-            query = query.where(*filters).limit(50)
+        count_stmt = select(func.count()).select_from(
+            select(Congresista.id).where(*filters).subquery()
+        )
+        total_count = db.execute(count_stmt).scalar_one()
+        total_pages = ceil(total_count / per_page) if total_count else 0
+        if total_pages and page > total_pages:
+            page = total_pages
 
-        rows = db.execute(query).scalars()
-        congresistas = [_congresista_view(db, row) for row in rows]
+        if total_pages:
+            pagination_pages = [
+                SimpleNamespace(
+                    number=page_number,
+                    current=page_number == page,
+                )
+                for page_number in range(1, total_pages + 1)
+            ]
+
+        query = (
+            select(Congresista)
+            .where(*filters)
+            .order_by(Congresista.full_name.asc())
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+
+        rows = db.execute(query).scalars().all()
+        if rows:
+            results_start = (page - 1) * per_page + 1
+            results_end = results_start + len(rows) - 1
+
+        party_names, chamber_rows = _batch_congresista_extras(
+            db, [row.id for row in rows], leg_period_q
+        )
+        congresistas = [
+            _congresista_view_from_batch(
+                row, party_names.get(row.id), chamber_rows.get(row.id)
+            )
+            for row in rows
+        ]
 
     return render_template(
         "congress/search.html",
         name_q=name_q,
-        party_q=party_q,
+        bancada_q=bancada_q,
         region_q=region_q,
         commission_q=commission_q,
         special_committee_q=special_committee_q,
+        chamber_q=chamber_q,
+        chamber_display=chamber_display,
+        leg_period_q=leg_period_q,
+        leg_period_display=leg_period_display,
+        leg_period_options=LEG_PERIOD_UI_OPTIONS,
+        chamber_options=CHAMBER_UI_TO_ORG_NAME,
         congresistas=congresistas,
-        party_options=party_options,
+        bancada_options=bancada_options,
         region_options=region_options,
         committee_options=committee_options,
         special_committee_options=special_committee_options,
+        page=page,
+        per_page=per_page,
+        total_count=total_count,
+        results_start=results_start,
+        results_end=results_end,
+        pagination_pages=pagination_pages,
+        search_params=search_params,
     )
 
 
@@ -191,15 +497,51 @@ def congress_photo(congresista_id):
     abort(404)
 
 
-@congress_bp.route("/congress/<congresista_id>")
+@congress_bp.route("/congress/<int:congresista_id>", methods=["GET", "POST"])
 def congress_detail(congresista_id):
     with SessionProcessed() as db:
-        congresista_row = db.get(Congresista, int(congresista_id))
+        congresista_row = db.get(Congresista, congresista_id)
 
         if not congresista_row:
             abort(404)
 
-        congresista = _congresista_view(db, congresista_row)
+        period_data = _congresista_period_data(db, congresista_row.id)
+        available_periods = [
+            (value, label)
+            for value, label, _enum in LEG_PERIOD_UI_OPTIONS
+            if value in period_data
+        ]
+        # request.values (not request.args): the period tabs on this page
+        # submit via POST so the URL never carries leg_period_q.
+        requested_period = request.values.get("leg_period_q", "").strip()
+        selected_period = (
+            requested_period
+            if requested_period in period_data
+            else available_periods[0][0]
+            if available_periods
+            else None
+        )
+
+        if selected_period is None:
+            # Defensive fallback: a congresista with zero ChamberMembership
+            # rows at all (shouldn't happen in practice) keeps today's
+            # "most recent ever, or blank" behavior.
+            congresista = _congresista_view(db, congresista_row)
+        else:
+            period_info = period_data[selected_period]
+            congresista = SimpleNamespace(
+                id=congresista_row.id,
+                full_name=congresista_row.full_name,
+                first_name=congresista_row.first_name,
+                last_name=congresista_row.last_name,
+                photo_url=congresista_row.photo_url,
+                website=congresista_row.website,
+                party_name=period_info.party_name,
+                dist_electoral=period_info.dist_electoral,
+                condicion=period_info.condicion or _("No disponible"),
+                votes_in_election=period_info.votes_in_election or 0,
+                chamber_slug=period_info.chamber_slug,
+            )
 
         # To avoid duplicated bills
         latest_bill_dates = (
@@ -213,6 +555,24 @@ def congress_detail(congresista_id):
             .subquery()
         )
 
+        bill_in_selected_period = None
+        if selected_period is not None:
+            period_start, period_end = leg_period_date_range(selected_period)
+            bill_in_selected_period = (
+                select(BillOrganization.bill_id)
+                .where(
+                    BillOrganization.bill_id == Bill.id,
+                    BillOrganization.presentation_date.between(
+                        period_start, period_end
+                    ),
+                )
+                .exists()
+            )
+
+        bill_filters = [Bill.author_id == congresista.id]
+        if bill_in_selected_period is not None:
+            bill_filters.append(bill_in_selected_period)
+
         bills_authored = [
             SimpleNamespace(
                 id=bill.id,
@@ -223,27 +583,25 @@ def congress_detail(congresista_id):
             for bill, presentation_date in db.execute(
                 select(Bill, latest_bill_dates.c.latest_presentation_date)
                 .join(latest_bill_dates, latest_bill_dates.c.bill_id == Bill.id)
-                .where(Bill.author_id == congresista.id)
+                .where(*bill_filters)
                 .order_by(latest_bill_dates.c.latest_presentation_date.desc())
                 .limit(5)
             ).all()
         ]
 
         bills_authored_count = db.execute(
-            select(func.count())
-            .select_from(Bill)
-            .where(Bill.author_id == congresista.id)
+            select(func.count()).select_from(Bill).where(*bill_filters)
         ).scalar_one()
 
         successful_bills_count = db.execute(
             select(func.count())
             .select_from(Bill)
-            .where(
-                Bill.author_id == congresista.id,
-                Bill.bill_approved.is_(True),
-            )
+            .where(*bill_filters, Bill.bill_approved.is_(True))
         ).scalar_one()
 
+        approval_rate_filters = [Bill.author_id.is_not(None)]
+        if bill_in_selected_period is not None:
+            approval_rate_filters.append(bill_in_selected_period)
         approval_rate_rows = db.execute(
             select(
                 Bill.author_id,
@@ -252,7 +610,7 @@ def congress_detail(congresista_id):
                     "approved_bills"
                 ),
             )
-            .where(Bill.author_id.is_not(None))
+            .where(*approval_rate_filters)
             .group_by(Bill.author_id)
         ).all()
         average_success_rate = (
@@ -269,6 +627,19 @@ def congress_detail(congresista_id):
             else 0
         )
 
+        membership_filters = [
+            Membership.person_id == congresista.id,
+            func.lower(Membership.role) != "accesitario",
+            or_(
+                Membership.org_type == TypeOrganization.COMMITTEE,
+                Organization.org_type == TypeOrganization.COMMITTEE,
+            ),
+        ]
+        if selected_period is not None:
+            membership_filters.append(Membership.leg_period == selected_period)
+        else:
+            membership_filters.append(Membership.end_date >= date(2026, 7, 26))
+
         memberships = (
             db.execute(
                 select(
@@ -281,20 +652,42 @@ def congress_detail(congresista_id):
                     Organization.org_short_name,
                 )
                 .join(Organization, Organization.org_id == Membership.org_id)
-                .where(
-                    Membership.person_id == congresista.id,
-                    Membership.end_date >= date(2026, 7, 26),
-                    func.lower(Membership.role) != "accesitario",
-                    or_(
-                        Membership.org_type == TypeOrganization.COMMITTEE,
-                        Organization.org_type == TypeOrganization.COMMITTEE,
-                    ),
-                )
+                .where(*membership_filters)
                 .order_by(Membership.end_date.desc(), Membership.start_date.desc())
             )
             .mappings()
             .all()
         )
+
+        # Group committee memberships into year sub-tabs within the selected
+        # period -- see _leg_year_buckets for why bucketing by start_date
+        # lines up with the real per-legislative-year data.
+        available_years: list[tuple[str, str]] = []
+        selected_year = None
+        if selected_period is not None:
+            leg_year_buckets = _leg_year_buckets(selected_period)
+            memberships_by_year: dict[str, list] = {}
+            for membership in memberships:
+                year_value = _leg_year_bucket_value(
+                    leg_year_buckets, membership["start_date"]
+                )
+                memberships_by_year.setdefault(year_value, []).append(membership)
+
+            available_years = [
+                (value, label)
+                for value, label in leg_year_buckets
+                if value in memberships_by_year
+            ]
+            requested_year = request.values.get("leg_year_q", "").strip()
+            selected_year = (
+                requested_year
+                if requested_year in memberships_by_year
+                else available_years[0][0]
+                if available_years
+                else None
+            )
+            if selected_year is not None:
+                memberships = memberships_by_year[selected_year]
 
         profile_stats = {
             "assistance_rate": "45%",
@@ -327,6 +720,11 @@ def congress_detail(congresista_id):
             },
         ]
 
+        selected_period_label = next(
+            (label for value, label in available_periods if value == selected_period),
+            None,
+        )
+
         return render_template(
             "congress/congress_detail.html",
             congresista=congresista,
@@ -334,4 +732,9 @@ def congress_detail(congresista_id):
             bills_authored=bills_authored,
             profile_stats=profile_stats,
             recent_votes=recent_votes,
+            available_periods=available_periods,
+            selected_period=selected_period,
+            selected_period_label=selected_period_label,
+            available_years=available_years,
+            selected_year=selected_year,
         )
