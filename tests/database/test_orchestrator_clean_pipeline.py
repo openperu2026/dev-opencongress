@@ -699,7 +699,12 @@ def test_process_bancada_definitions_persists_earlier_rows_when_a_later_row_fail
     orchestrator, monkeypatch
 ):
     """Regression test for the transaction-boundary fix applied to
-    _process_bancada_definitions."""
+    _process_bancada_definitions. Successfully-defined rows stay
+    processed=False -- this stage only creates the bancada org rows, it
+    never resolves congresistas, so _process_bancada_memberships is the one
+    that marks a row fully processed once its memberships are loaded
+    (mirrors _process_organization_definitions/_process_admin_memberships'
+    split for RawOrganization)."""
     import backend.database.orchestrator as orch_module
 
     def flaky_process_bancada(raw_bancada):
@@ -742,9 +747,11 @@ def test_process_bancada_definitions_persists_earlier_rows_when_a_later_row_fail
             .all()
         }
         assert org_names == {"Bancada Prueba 1", "Bancada Prueba 3"}
-        assert db.get(RawBancada, 1).processed is True
+        # Definitions alone never marks processed=True -- only
+        # _process_bancada_memberships does, once members are resolved.
+        assert db.get(RawBancada, 1).processed is False
         assert db.get(RawBancada, 2).processed is False
-        assert db.get(RawBancada, 3).processed is True
+        assert db.get(RawBancada, 3).processed is False
 
 
 def test_process_bancada_memberships_persists_earlier_rows_when_a_later_row_fails(
@@ -788,6 +795,86 @@ def test_process_bancada_memberships_persists_earlier_rows_when_a_later_row_fail
         assert db.get(RawBancada, 1).processed is True
         assert db.get(RawBancada, 2).processed is False
         assert db.get(RawBancada, 3).processed is True
+
+
+def test_bancada_definitions_then_memberships_creates_membership_end_to_end(
+    orchestrator, monkeypatch
+):
+    """Regression for a real production bug (found 2026-09-09):
+    _process_bancada_definitions used to mark every row processed=True
+    unconditionally (a dead `missing` flag that could never become True,
+    since this stage never resolves congresistas). Since it runs before
+    _process_bancada_memberships in the same pipeline call, and both query
+    the same processed=False rows, memberships could never get a row to
+    work with -- confirmed live: zero Membership rows of org_type=Bancada
+    existed for the 2026-2031 term. Running both stages in the normal
+    pipeline order must now actually create the membership."""
+    import backend.database.orchestrator as orch_module
+
+    with orchestrator.DBSession() as db:
+        cong = db_models.Congresista(
+            full_name="Ana Torres", website="https://x/ana-torres", photo_url="p"
+        )
+        db.add(cong)
+        db.commit()
+        cong_id = cong.id
+
+    org_schema = schema.Organization(
+        org_name="Bancada Prueba", org_type=TypeOrganization.BANCADA
+    )
+    membership_schema = schema.Membership(
+        cong_name="Ana Torres",
+        org_name="Bancada Prueba",
+        org_type=TypeOrganization.BANCADA,
+        leg_period="2026-2031",
+        role="Miembro",
+        time_stamp=datetime(2026, 1, 1),
+        website="https://x/ana-torres",
+    )
+    monkeypatch.setattr(
+        orch_module,
+        "process_bancada",
+        lambda raw: ([org_schema], [membership_schema]),
+    )
+
+    with orchestrator.DBSession() as db:
+        db.add(
+            RawBancada(
+                id=1,
+                legislative_period="Parlamentario 2026 - 2031",
+                chamber="Diputados",
+                raw_html="<html></html>",
+                timestamp=datetime(2026, 1, 1),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    def_stats = orchestrator._process_bancada_definitions()
+    assert def_stats.processed == 1
+
+    with orchestrator.DBSession() as db:
+        # Definitions alone must not mark the row done -- memberships
+        # hasn't had a chance to link the congresista yet.
+        assert db.get(RawBancada, 1).processed is False
+
+    ms_stats = orchestrator._process_bancada_memberships()
+    assert ms_stats.errors == 0
+    assert ms_stats.skipped == 0
+
+    with orchestrator.DBSession() as db:
+        assert db.get(RawBancada, 1).processed is True
+        membership = (
+            db.query(db_models.Membership)
+            .filter(
+                db_models.Membership.person_id == cong_id,
+                db_models.Membership.org_type == "Bancada",
+            )
+            .one()
+        )
+        assert membership.org_id is not None
 
 
 def test_process_bills_senado_bill_links_committee_and_chamber(orchestrator):

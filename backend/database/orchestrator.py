@@ -1874,7 +1874,22 @@ class OpenPeruOrchestrator:
     def _process_bancada_definitions(
         self, *, leg_period: str | None = None
     ) -> ProcessStats:
-        """Upsert Organization rows for each bancada in a processable legislative period."""
+        """Upsert Organization rows for each bancada in a processable legislative period.
+
+        RawBancada is marked processed only after its memberships are loaded
+        by _process_bancada_memberships (mirrors _process_organization_definitions/
+        _process_admin_memberships' split for RawOrganization) -- this
+        function only creates the bancada org rows themselves, it never
+        resolves congresistas, so it has no basis to decide whether the row
+        is fully done. Found 2026-09: this function used to set
+        `raw_bancada.processed = not missing` with `missing` hardcoded False
+        (dead code, since this loop never looks up a congresista), which
+        unconditionally marked every row processed here -- since this stage
+        runs before _process_bancada_memberships in the same pipeline call
+        and both query the same `processed=False` rows, memberships could
+        never get a row to work with. Confirmed live: zero Membership rows
+        of org_type=Bancada existed for the 2026-2031 term as a result.
+        """
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -1895,7 +1910,6 @@ class OpenPeruOrchestrator:
                         stats.skipped += 1
                         continue
                     bancadas, _ = process_bancada(raw_bancada)
-                    missing = False
                     for bancada in bancadas:
                         org, inserted = self._upsert_organization_with_count(
                             db, bancada
@@ -1905,7 +1919,6 @@ class OpenPeruOrchestrator:
                         else:
                             clean_updated += 1
                     stats.processed += 1
-                    raw_bancada.processed = not missing
                     key = raw_bancada.chamber or "None"
                     chamber_tally[key] = chamber_tally.get(key, 0) + 1
                     db.commit()
