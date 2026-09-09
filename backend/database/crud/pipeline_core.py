@@ -7,7 +7,11 @@ from dataclasses import dataclass
 from typing import Type
 from enum import Enum
 
+from loguru import logger
+
 from backend import TypeOrganization
+from backend.config import settings
+from backend.core.constants import WHOLE_CONGRESS_ORG_NAME
 from backend.process.utils import normalize_name
 from backend.database import models as db_models
 from backend.process import schema
@@ -195,12 +199,25 @@ def save_alias(
     return False
 
 
+# Sentinel default for find_organization's parent_org_id: distinguishes
+# "caller doesn't care about parent, don't scope" (this sentinel) from
+# "caller wants a genuinely top-level org" (an explicit parent_org_id=None,
+# which now correctly compiles to a parent_org_id IS NULL filter). Before
+# this, None was overloaded to mean unscoped-search, so a caller couldn't
+# ask for a NULL-parent org without accidentally matching same-named orgs
+# under a real parent. Only chambers and parties are genuinely NULL-parent
+# today (joint/bicameral bodies are parented under WHOLE_CONGRESS_ORG_NAME,
+# see find_organization_with_congreso_fallback) -- NULL-parent joint-entity
+# rows may still exist transitionally from before that convention.
+_UNSCOPED = object()
+
+
 def find_organization(
     db: Session,
     org_name: str,
     org_type: TypeOrganization | str,
     threshold: float = 0.9,
-    parent_org_id: int | None = None,
+    parent_org_id: int | None | object = _UNSCOPED,
 ) -> db_models.Organization | None:
     """
     Find the closest organization by fuzzy name match and organization type.
@@ -208,10 +225,10 @@ def find_organization(
     parent_org_id: optionally scope the match to organizations under a specific
     parent. Needed because Organization.org_uniq is (org_name, org_type,
     parent_org_id) — two orgs can share a name+type under different parents
-    (e.g. a same-named committee under each chamber). Omit (or pass None) to
-    preserve prior unscoped behavior; None is never used to mean "match rows
-    with a NULL parent" since no two same-name/same-type orgs legitimately
-    share a NULL parent (top-level chambers and parties are each unique).
+    (e.g. a same-named committee under each chamber). Omit to search
+    unscoped (any parent). Pass an explicit org_id to require that parent, or
+    explicit None to require a NULL parent (genuinely top-level orgs, e.g.
+    joint/bicameral entities and chambers/parties themselves).
     """
 
     if isinstance(org_type, str):
@@ -228,7 +245,7 @@ def find_organization(
         db_models.Organization.org_type == org_type,
         score >= threshold,
     ]
-    if parent_org_id is not None:
+    if parent_org_id is not _UNSCOPED:
         filters.append(db_models.Organization.parent_org_id == parent_org_id)
 
     stmt = (
@@ -242,6 +259,47 @@ def find_organization(
     )
 
     return db.scalar(stmt)
+
+
+def find_organization_with_congreso_fallback(
+    db: Session,
+    org_name: str,
+    org_type: TypeOrganization | str,
+    *,
+    own_parent_org_id: int | None,
+) -> db_models.Organization | None:
+    """Look up an ADMINISTRATIVE/COMMITTEE organization scoped to its
+    caller-resolved own parent (e.g. a congresista's or bill's own chamber),
+    falling back to WHOLE_CONGRESS_ORG_NAME (the parent for joint/bicameral
+    bodies like "Comisión Permanente" and "Comisión Bicameral de
+    Presupuesto...", see CHAMBER_LABEL_TO_ORG_NAME) and finally to a bare
+    NULL parent (some joint-entity rows created before that convention was
+    unified may still be NULL-parent transitionally) when the scoped lookup
+    misses.
+
+    Never falls all the way back to an unscoped search: an unscoped retry
+    could cross-match a *different* chamber's same-named per-chamber org
+    (see test_find_organization_parent_org_id_scoping).
+    """
+    org = find_organization(
+        db, org_name=org_name, org_type=org_type, parent_org_id=own_parent_org_id
+    )
+    if org is not None:
+        return org
+
+    congreso = find_organization(
+        db, org_name=WHOLE_CONGRESS_ORG_NAME, org_type=TypeOrganization.CHAMBER
+    )
+    if congreso is not None:
+        org = find_organization(
+            db, org_name=org_name, org_type=org_type, parent_org_id=congreso.org_id
+        )
+        if org is not None:
+            return org
+
+    return find_organization(
+        db, org_name=org_name, org_type=org_type, parent_org_id=None
+    )
 
 
 def find_active_bancada_for_person(
@@ -282,6 +340,7 @@ def _upsert_model(
     | Type[db_models.Membership]
     | Type[db_models.Ley],
     payload: dict,
+    fields_set: set[str] | None = None,
 ) -> (
     db_models.Congresista
     | db_models.Organization
@@ -301,9 +360,18 @@ def _upsert_model(
     # Found 2026-09: this exact gap silently wiped dni/gender/first_name/
     # last_name for every reelected congresista matched against their
     # pre-existing legacy row.
+    #
+    # fields_set is the exception: a caller can pass the source schema's
+    # model_fields_set to assert "this field is None on purpose" (e.g. a
+    # committee reclassified as top-level, parent_org_id should become
+    # NULL) rather than "this field simply wasn't populated by this
+    # source" -- without it, a legitimate None could never be written once
+    # a row already has a non-null value.
     for key, value in payload.items():
         if value is not None:
             setattr(existing, key, value)
+        elif fields_set is not None and key in fields_set:
+            setattr(existing, key, None)
 
     db.flush()
     return existing
@@ -328,10 +396,71 @@ def upsert_congresista(
     )
 
 
+class MatchTier(str, Enum):
+    """How confidently an incoming Organization schema matches an existing
+    row, most to least confident. Drives whether upsert_organization is
+    willing to overwrite identity fields (org_name, parent_org_id) on that
+    row -- see resolve_organization_match."""
+
+    EXACT = "exact"
+    FUZZY_CORROBORATED = "fuzzy_corroborated"
+    FUZZY_UNCORROBORATED = "fuzzy_uncorroborated"
+    NO_MATCH = "no_match"
+
+
+def _organization_match_corroborates(
+    incoming: schema.Organization, existing: db_models.Organization
+) -> bool:
+    """A fuzzy name match is only as trustworthy as some second, independent
+    signal agreeing with it. org_link (the source page URL) and org_subtype
+    are both scraped/derived independently of the name text itself, so
+    either one matching is evidence this is genuinely the same organization
+    re-scraped, not a coincidentally-similar different one. Either side
+    being unset counts as "no evidence," never as a match."""
+    if incoming.org_link and existing.org_link:
+        if incoming.org_link.strip() == existing.org_link.strip():
+            return True
+    if incoming.org_subtype is not None and existing.org_subtype:
+        if _enum_value(incoming.org_subtype) == existing.org_subtype:
+            return True
+    return False
+
+
+def resolve_organization_match(
+    db: Session, schema: schema.Organization, parent_id: int | None
+) -> tuple[MatchTier, db_models.Organization | None]:
+    """Classify how confidently `schema` matches an existing Organization
+    row scoped to `parent_id` (the org_uniq-consistent parent already
+    resolved by the caller).
+
+    A slug/natural-key column was deliberately not introduced for this --
+    it would only move the fuzzy-matching problem to "map scraped text to a
+    slug" without eliminating it, and committees do get legitimately
+    renamed by Congress over time, so "identity = frozen name" isn't fully
+    correct either. This tiering is the alternative: trust an exact match
+    fully, trust a fuzzy match only with corroborating evidence, and never
+    silently guess otherwise.
+    """
+    match = find_organization(
+        db, schema.org_name, schema.org_type, parent_org_id=parent_id
+    )
+    if match is None:
+        return MatchTier.NO_MATCH, None
+
+    if schema.org_name.strip().lower() == match.org_name.strip().lower():
+        return MatchTier.EXACT, match
+
+    if _organization_match_corroborates(schema, match):
+        return MatchTier.FUZZY_CORROBORATED, match
+
+    return MatchTier.FUZZY_UNCORROBORATED, match
+
+
 def upsert_organization(
     db: Session, schema: schema.Organization
 ) -> db_models.Organization:
     payload = schema.model_dump()
+    fields_set = set(schema.model_fields_set)
 
     parent_name = payload.pop("parent_org_name", None)
     parent_type = payload.pop("parent_org_type", None)
@@ -352,25 +481,47 @@ def upsert_organization(
         parent_id = parent.org_id
 
     payload["parent_org_id"] = parent_id
+    # parent_org_id is always authoritatively resolved above (a real parent
+    # org_id, or None for a genuinely top-level org like a joint/bicameral
+    # entity) -- always treat it as explicitly set so a corrected NULL
+    # parent actually gets written to an existing row, rather than silently
+    # coalesced away by _upsert_model's None-skip rule.
+    fields_set.add("parent_org_id")
 
     payload["org_type"] = _enum_value(payload["org_type"])
     if payload.get("org_subtype") is not None:
         payload["org_subtype"] = _enum_value(payload["org_subtype"])
 
-    # Scope the existing-row check by parent_org_id, matching the real
-    # org_uniq constraint (org_name, org_type, parent_org_id) — without this,
-    # two same-named orgs under different parents (e.g. a same-named
-    # committee under each chamber) would collide and silently overwrite
-    # each other's parent_org_id.
-    existing = find_organization(
-        db, schema.org_name, schema.org_type, parent_org_id=parent_id
-    )
+    tier, existing = resolve_organization_match(db, schema, parent_id)
+
+    if tier == MatchTier.FUZZY_UNCORROBORATED:
+        logger.warning(
+            f"[org-upsert] fuzzy match with no corroborating signal: incoming "
+            f"org_name={schema.org_name!r} org_type={schema.org_type} "
+            f"parent_org_id={parent_id} matched existing org_id={existing.org_id} "
+            f"org_name={existing.org_name!r} -- "
+            + (
+                "identity fields (org_name, parent_org_id) not overwritten "
+                "(ORG_UPSERT_STRICT_IDENTITY=True)."
+                if settings.ORG_UPSERT_STRICT_IDENTITY
+                else "would NOT overwrite identity fields if "
+                "ORG_UPSERT_STRICT_IDENTITY were enabled (shadow mode)."
+            )
+        )
+        if settings.ORG_UPSERT_STRICT_IDENTITY:
+            # Don't touch identity fields on an unconfirmed match -- only
+            # non-identity fields (dates, subtype/link if newly learned)
+            # get updated. Still the same row, never a duplicate insert.
+            payload.pop("org_name", None)
+            payload.pop("parent_org_id", None)
+            fields_set.discard("parent_org_id")
 
     return _upsert_model(
         db,
         existing=existing,
         model=db_models.Organization,
         payload=payload,
+        fields_set=fields_set,
     )
 
 
@@ -413,7 +564,25 @@ def upsert_membership(
     start_date: date,
     end_date: date,
     extra_fields: dict | None = None,
+    dates_are_synthetic: bool = False,
 ) -> db_models.Membership:
+    """Upsert a Membership (or subtype) row.
+
+    dates_are_synthetic: True when start_date/end_date were derived by
+    _membership_dates' Jul-28-to-Jul-28 fallback rather than sourced from
+    the raw scrape (this is the case for chamber_mem/party_mem, which never
+    carry an explicit date). Matching on the exact date range is correct
+    for memberships whose dates ARE real per-stint data (e.g. committee
+    reassignments, which genuinely get a new row each legislative year with
+    real, source-confirmed dates) -- but for a synthetic fallback, the
+    derived window shifts forward every time the row is rescraped after a
+    Jul 28 boundary passes, even though nothing about the membership itself
+    changed, and matching on it created a spurious duplicate row every year
+    (found 2026-09-09: 274 such duplicate groups in production, entirely
+    Cámara/Partido/Administrativo memberships). For a synthetic-dates
+    match, drop start_date/end_date from the lookup so the SAME ongoing
+    membership updates in place instead.
+    """
     org_type_value = _enum_value(org_type)
     role_value = _enum_value(role)
     leg_period_value = _enum_value(leg_period)
@@ -432,16 +601,21 @@ def upsert_membership(
     if extra_fields:
         payload.update(extra_fields)
 
+    filters = [
+        db_models.Membership.person_id == person_id,
+        db_models.Membership.org_id == org_id,
+        db_models.Membership.leg_period == leg_period_value,
+        db_models.Membership.org_type == org_type_value,
+        db_models.Membership.role == role_value,
+    ]
+    if not dates_are_synthetic:
+        filters.append(db_models.Membership.start_date == start_date)
+        filters.append(db_models.Membership.end_date == end_date)
+
     existing = db.scalars(
-        select(db_models.Membership).where(
-            db_models.Membership.person_id == person_id,
-            db_models.Membership.org_id == org_id,
-            db_models.Membership.leg_period == leg_period_value,
-            db_models.Membership.org_type == org_type_value,
-            db_models.Membership.role == role_value,
-            db_models.Membership.start_date == start_date,
-            db_models.Membership.end_date == end_date,
-        )
+        select(db_models.Membership)
+        .where(*filters)
+        .order_by(db_models.Membership.start_date.desc())
     ).first()
 
     return _upsert_model(

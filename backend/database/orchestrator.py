@@ -89,6 +89,7 @@ from backend.core.constants import (
     LEG_PERIOD_TO_PER_PAR_ID,
 )
 from backend.core.parsers import (
+    get_leg_period_range,
     get_processable_year_range,
     resolve_processable_leg_periods,
     LEG_PERIOD_RANGES,
@@ -101,6 +102,19 @@ from backend.core.enums import LegPeriod
 # is a TypeOrganization enum member at this stage (backend/process/schema.py),
 # not yet converted to its string .value.
 _CHAMBER_UNSCOPED_ORG_TYPES = {
+    TypeOrganization.CHAMBER,
+    TypeOrganization.PARTY,
+}
+
+# Org types whose membership spans the ENTIRE legislative term when no
+# explicit date is given, rather than a single legislative year -- a
+# congresista's own chamber seat and party affiliation don't get reassigned
+# annually the way committee/bancada/admin memberships can. Happens to be
+# the same set as _CHAMBER_UNSCOPED_ORG_TYPES today (both are about "this
+# type tracks the person's overall term status, not an internal annual
+# assignment") but kept as its own constant since the two concerns are
+# conceptually distinct and could diverge. See _membership_dates.
+_TERM_LONG_ORG_TYPES = {
     TypeOrganization.CHAMBER,
     TypeOrganization.PARTY,
 }
@@ -1456,14 +1470,60 @@ class OpenPeruOrchestrator:
     def _membership_dates(
         self, membership: Membership, *, seed_override: date | None = None
     ) -> tuple[date, date]:
-        """Resolve a membership's start/end, falling back to the legislative-year window (Jul 28 → Jul 28).
+        """Resolve a membership's start/end.
+
+        Chamber/party memberships (_TERM_LONG_ORG_TYPES) span the ENTIRE
+        legislative term when no explicit date is given -- found 2026-09-09:
+        these previously fell through to the same single-legislative-year
+        (Jul 28 → Jul 28) fallback as everything else, which is wrong for a
+        5-year term membership and (combined with the seed being the scrape
+        timestamp, which advances every rescrape) is what caused a
+        duplicate-membership bug fixed the same day (see dates_are_synthetic
+        on upsert_membership). Every other membership type (committee,
+        bancada, admin) keeps the single-legislative-year fallback below,
+        since those genuinely get reassigned annually with real per-year
+        dates from the source.
 
         seed_override: when given, used instead of membership.time_stamp as
-        the seed for deriving the legislative-year window (still only when
-        membership.start_date itself is unset). See _upsert_membership_schema
-        for when this is the 2026-2031 term-start date rather than the scrape
+        the seed for deriving the single-legislative-year fallback window
+        (still only when membership.start_date itself is unset, and only for
+        non-term-long org types). See _upsert_membership_schema for when
+        this is the 2026-2031 term-start date rather than the scrape
         timestamp.
+
+        A term-long membership only gets the full term end date unless
+        condicion is a KNOWN early-departure status (found 2026-09-09 in
+        production: "Fallecido", "Destituído", "Suspendido por sanción"/
+        "por Acusación Constitucional", "Inactivo") -- deliberately a
+        denylist, not an allowlist of active values, since condicion has
+        real inconsistent casing/phrasing in production ("En Ejercicio" vs
+        "en Ejercicio", plus legacy-term values like "Titular") and an
+        unrecognized-but-genuinely-active value must never be mistaken for
+        an early departure. For a known early-departure status, we don't
+        know the exact departure date -- only that it was true as of this
+        scrape -- so end_date is capped at membership.time_stamp instead.
+        This self-corrects: if a later scrape shows condicion reverted to
+        active, dates_are_synthetic matching (see upsert_membership) updates
+        the SAME row back to the full term end rather than leaving it
+        permanently truncated.
         """
+        if (
+            membership.start_date is None
+            and membership.org_type in _TERM_LONG_ORG_TYPES
+        ):
+            term_start, term_end = get_leg_period_range(membership.leg_period)
+            condicion = (membership.condicion or "").strip().lower()
+            is_known_early_departure = any(
+                keyword in condicion
+                for keyword in ("fallecido", "destitu", "suspendido", "inactivo")
+            )
+            if not is_known_early_departure:
+                return term_start, term_end
+            end = membership.time_stamp
+            if isinstance(end, datetime):
+                end = end.date()
+            return term_start, end
+
         seed = membership.start_date or seed_override or membership.time_stamp
         leg_year = get_current_leg_year(seed)
         derived_start = date(leg_year, 7, 28)
@@ -1547,14 +1607,26 @@ class OpenPeruOrchestrator:
                     if period == LegPeriod.PERIODO_2026_2031
                 )
 
+        # Must be checked before _membership_dates runs -- it never mutates
+        # `membership`, but its whole job is filling in a fallback for
+        # exactly this case, so this is the only point where "did the
+        # source give us a real date" is still knowable.
+        dates_are_synthetic = membership.start_date is None
+
         start_date, end_date = self._membership_dates(
             membership, seed_override=seed_override
         )
         extra_fields = {
-            "condicion": membership.condicion,
             "votes_in_election": membership.votes_in_election,
             "dist_electoral": membership.dist_electoral,
         }
+        # condicion only exists as a column on ChamberMembership -- party_mem
+        # now carries it too (found 2026-09-09), but purely so
+        # _membership_dates above can read the same active/inactive signal;
+        # passing it through to a PartyMembership insert would raise
+        # ("'condicion' is an invalid keyword argument for PartyMembership").
+        if org.org_type == TypeOrganization.CHAMBER.value:
+            extra_fields["condicion"] = membership.condicion
         extra_fields = {k: v for k, v in extra_fields.items() if v is not None}
         return crud_core.upsert_membership(
             db=db,
@@ -1566,6 +1638,7 @@ class OpenPeruOrchestrator:
             start_date=start_date,
             end_date=end_date,
             extra_fields=extra_fields,
+            dates_are_synthetic=dates_are_synthetic,
         )
 
     def _process_congresistas(
@@ -1656,17 +1729,27 @@ class OpenPeruOrchestrator:
                         # scoped by chamber_org_id — only committee/admin/bancada
                         # memberships (from process_cong_memberships) are actually
                         # children of this congresista's chamber.
-                        ms_parent_org_id = (
-                            chamber_org_id
-                            if ms.org_type not in _CHAMBER_UNSCOPED_ORG_TYPES
-                            else None
-                        )
-                        org = crud_core.find_organization(
-                            db=db,
-                            org_name=ms.org_name,
-                            org_type=ms.org_type,
-                            parent_org_id=ms_parent_org_id,
-                        )
+                        if ms.org_type in _CHAMBER_UNSCOPED_ORG_TYPES:
+                            org = crud_core.find_organization(
+                                db=db,
+                                org_name=ms.org_name,
+                                org_type=ms.org_type,
+                                parent_org_id=None,
+                            )
+                        else:
+                            # Committee/admin/bancada memberships are usually
+                            # children of this congresista's own chamber, but
+                            # some are genuinely joint, whole-Congress bodies
+                            # (Comisión Permanente, Comisión Bicameral de
+                            # Presupuesto...) parented under
+                            # WHOLE_CONGRESS_ORG_NAME instead -- see
+                            # CHAMBER_LABEL_TO_ORG_NAME.
+                            org = crud_core.find_organization_with_congreso_fallback(
+                                db,
+                                org_name=ms.org_name,
+                                org_type=ms.org_type,
+                                own_parent_org_id=chamber_org_id,
+                            )
                         if org is None:
                             logger.warning(
                                 f"Skipping Membership org_name={ms.org_name} for org_type={ms.org_type} and Congresista={cong.full_name}"
@@ -1864,7 +1947,22 @@ class OpenPeruOrchestrator:
     def _process_bancada_definitions(
         self, *, leg_period: str | None = None
     ) -> ProcessStats:
-        """Upsert Organization rows for each bancada in a processable legislative period."""
+        """Upsert Organization rows for each bancada in a processable legislative period.
+
+        RawBancada is marked processed only after its memberships are loaded
+        by _process_bancada_memberships (mirrors _process_organization_definitions/
+        _process_admin_memberships' split for RawOrganization) -- this
+        function only creates the bancada org rows themselves, it never
+        resolves congresistas, so it has no basis to decide whether the row
+        is fully done. Found 2026-09: this function used to set
+        `raw_bancada.processed = not missing` with `missing` hardcoded False
+        (dead code, since this loop never looks up a congresista), which
+        unconditionally marked every row processed here -- since this stage
+        runs before _process_bancada_memberships in the same pipeline call
+        and both query the same `processed=False` rows, memberships could
+        never get a row to work with. Confirmed live: zero Membership rows
+        of org_type=Bancada existed for the 2026-2031 term as a result.
+        """
         stats = ProcessStats()
         clean_inserted = 0
         clean_updated = 0
@@ -1885,7 +1983,6 @@ class OpenPeruOrchestrator:
                         stats.skipped += 1
                         continue
                     bancadas, _ = process_bancada(raw_bancada)
-                    missing = False
                     for bancada in bancadas:
                         org, inserted = self._upsert_organization_with_count(
                             db, bancada
@@ -1895,7 +1992,6 @@ class OpenPeruOrchestrator:
                         else:
                             clean_updated += 1
                     stats.processed += 1
-                    raw_bancada.processed = not missing
                     key = raw_bancada.chamber or "None"
                     chamber_tally[key] = chamber_tally.get(key, 0) + 1
                     db.commit()
@@ -2074,17 +2170,26 @@ class OpenPeruOrchestrator:
                         # CHAMBER) must NOT be scoped by chamber.org_id as
                         # its own parent — only committee-type entries are
                         # actually children of this entity's chamber.
-                        org_parent_org_id = (
-                            chamber.org_id
-                            if org_schema.org_type != TypeOrganization.CHAMBER
-                            else None
-                        )
-                        org = crud_core.find_organization(
-                            db=db,
-                            org_name=org_schema.org_name,
-                            org_type=org_schema.org_type,
-                            parent_org_id=org_parent_org_id,
-                        )
+                        if org_schema.org_type == TypeOrganization.CHAMBER:
+                            org = crud_core.find_organization(
+                                db=db,
+                                org_name=org_schema.org_name,
+                                org_type=org_schema.org_type,
+                                parent_org_id=None,
+                            )
+                        else:
+                            # Usually a child of this bill/motion's own
+                            # chamber, but some committees are genuinely
+                            # joint, whole-Congress bodies (Comisión
+                            # Bicameral de Presupuesto...) parented under
+                            # WHOLE_CONGRESS_ORG_NAME instead -- see
+                            # CHAMBER_LABEL_TO_ORG_NAME.
+                            org = crud_core.find_organization_with_congreso_fallback(
+                                db,
+                                org_name=org_schema.org_name,
+                                org_type=org_schema.org_type,
+                                own_parent_org_id=chamber.org_id,
+                            )
                         if org is None:
                             logger.warning(
                                 f"Skipping {config.entity_label}Organization {config.id_field}={entity.id}, org={org_schema.org_name}, org_type={org_schema.org_type}: organization not found"
@@ -2128,10 +2233,17 @@ class OpenPeruOrchestrator:
                     stats.processed += 1
                     db.commit()
                 except Exception as exc:
+                    # Roll back before touching raw_row's attributes: a prior
+                    # iteration's db.commit() expires every object still
+                    # attached to this session (expire_on_commit defaults to
+                    # True), so accessing raw_row.id while the session is
+                    # still in "rollback required" state after a failed
+                    # flush fires a reload query and raises
+                    # PendingRollbackError instead of logging the real error.
+                    db.rollback()
                     logger.exception(
                         f"Error processing Raw{config.entity_label} id={raw_row.id}: {exc}"
                     )
-                    db.rollback()
                     stats.errors += 1
 
         logger.info(

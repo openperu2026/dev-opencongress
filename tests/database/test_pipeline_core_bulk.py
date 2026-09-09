@@ -191,6 +191,58 @@ def test_upsert_bancada_membership_is_idempotent(session, create_congresista):
     assert session.query(db_models.Membership).count() == 1
 
 
+def test_upsert_membership_synthetic_dates_updates_in_place_instead_of_duplicating(
+    session, create_congresista
+):
+    """Regression for a real production bug (found 2026-09-09): chamber_mem/
+    party_mem never carry an explicit start_date, so _membership_dates
+    always falls back to a synthetic Jul-28-to-Jul-28 window seeded from
+    the scrape timestamp. Re-scraping the SAME ongoing membership after a
+    Jul 28 boundary passes shifts that derived window forward a year --
+    matching on the exact (now different) date range treated it as a new
+    stint and inserted a duplicate row every year. Confirmed live: 274 such
+    duplicate groups existed (136 Cámara, 136 Partido, 2 Administrativo).
+    dates_are_synthetic=True must update the existing row's dates in place
+    instead."""
+    congresista = create_congresista()
+    chamber = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+
+    first = crud_core.upsert_membership(
+        session,
+        person_id=congresista.id,
+        org_id=chamber.org_id,
+        leg_period="2021-2026",
+        org_type=TypeOrganization.CHAMBER,
+        role="Diputado",
+        start_date=date(2025, 7, 28),
+        end_date=date(2026, 7, 28),
+        dates_are_synthetic=True,
+    )
+
+    # A later re-scrape: the synthetic window shifted forward one year, but
+    # this is the exact same ongoing membership.
+    second = crud_core.upsert_membership(
+        session,
+        person_id=congresista.id,
+        org_id=chamber.org_id,
+        leg_period="2021-2026",
+        org_type=TypeOrganization.CHAMBER,
+        role="Diputado",
+        start_date=date(2026, 7, 28),
+        end_date=date(2027, 7, 28),
+        dates_are_synthetic=True,
+    )
+
+    assert second.id == first.id
+    assert session.query(db_models.ChamberMembership).count() == 1
+    assert session.query(db_models.Membership).count() == 1
+    assert second.start_date == date(2026, 7, 28)
+    assert second.end_date == date(2027, 7, 28)
+
+
 def test_upsert_organization_same_name_type_different_parent_creates_two_rows(
     session,
 ):
@@ -349,6 +401,301 @@ def test_find_organization_parent_org_id_scoping(session):
         parent_org_id=senado.org_id + 999,
     )
     assert none_found is None
+
+
+def test_find_organization_explicit_none_parent_requires_null_parent(session):
+    """parent_org_id=None must mean "require a NULL parent" (a genuinely
+    top-level org, e.g. a joint/bicameral entity like Comisión Permanente),
+    never "unscoped" -- that overload previously let a top-level lookup
+    cross-match a per-chamber org sharing the same name+type under a real
+    parent (2026-09-08 regression: this is what made joint-entity membership
+    lookups impossible to express safely without risking a cross-chamber
+    false match)."""
+    crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    scoped_committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión Permanente",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+    joint_committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Comisión Permanente", org_type="Comisión"),
+    )
+
+    assert scoped_committee.org_id != joint_committee.org_id
+    assert joint_committee.parent_org_id is None
+
+    found = crud_core.find_organization(
+        session,
+        org_name="Comisión Permanente",
+        org_type="Comisión",
+        parent_org_id=None,
+    )
+    assert found.org_id == joint_committee.org_id
+
+
+def test_find_organization_with_congreso_fallback_own_scope_hit(session):
+    """Tier 1: the own-chamber-scoped lookup succeeds directly, no fallback
+    needed."""
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Salud",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    found = crud_core.find_organization_with_congreso_fallback(
+        session,
+        org_name="Comisión de Salud",
+        org_type="Comisión",
+        own_parent_org_id=diputados.org_id,
+    )
+    assert found.org_id == committee.org_id
+
+
+def test_find_organization_with_congreso_fallback_congreso_de_la_republica_hit(
+    session,
+):
+    """Tier 2: the own-chamber-scoped lookup misses, but the org is a child
+    of WHOLE_CONGRESS_ORG_NAME ("Congreso de la República") -- the current
+    convention for joint/bicameral bodies (see CHAMBER_LABEL_TO_ORG_NAME)."""
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Congreso de la República", org_type="Cámara"),
+    )
+    joint_committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión Bicameral de Presupuesto y Cuenta General de la República",
+            org_type="Comisión",
+            parent_org_name="Congreso de la República",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    found = crud_core.find_organization_with_congreso_fallback(
+        session,
+        org_name="Comisión Bicameral de Presupuesto y Cuenta General de la República",
+        org_type="Comisión",
+        own_parent_org_id=diputados.org_id,
+    )
+    assert found.org_id == joint_committee.org_id
+
+
+def test_find_organization_with_congreso_fallback_null_parent_hit(session):
+    """Tier 3 (transitional): both the own-chamber scope and the
+    "Congreso de la República" scope miss, but a NULL-parent row exists --
+    some joint-entity rows created before the WHOLE_CONGRESS_ORG_NAME
+    convention was unified may still be NULL-parent."""
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    orphan_joint_committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Comisión Permanente", org_type="Administrativo"),
+    )
+
+    found = crud_core.find_organization_with_congreso_fallback(
+        session,
+        org_name="Comisión Permanente",
+        org_type="Administrativo",
+        own_parent_org_id=diputados.org_id,
+    )
+    assert found.org_id == orphan_joint_committee.org_id
+
+
+def test_resolve_organization_match_tiers(session):
+    """All four MatchTier outcomes, directly against
+    resolve_organization_match. Accent differences are used to force a
+    fuzzy (not exact) match deterministically -- Jaro-Winkler + unaccent
+    scores these ~1.0, but the tier function's own exact check is a plain
+    strip().lower() (no unaccent), so it correctly falls through to the
+    fuzzy tiers."""
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    existing = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Salud",
+            org_type="Comisión",
+            org_link="https://congreso.gob.pe/comision-salud",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    exact_tier, exact_match = crud_core.resolve_organization_match(
+        session,
+        schema.Organization(org_name="Comisión de Salud", org_type="Comisión"),
+        diputados.org_id,
+    )
+    assert exact_tier == crud_core.MatchTier.EXACT
+    assert exact_match.org_id == existing.org_id
+
+    corroborated_tier, corroborated_match = crud_core.resolve_organization_match(
+        session,
+        schema.Organization(
+            org_name="Comision de Salud",  # missing accent -- fuzzy, not exact
+            org_type="Comisión",
+            org_link="https://congreso.gob.pe/comision-salud",  # matches existing
+        ),
+        diputados.org_id,
+    )
+    assert corroborated_tier == crud_core.MatchTier.FUZZY_CORROBORATED
+    assert corroborated_match.org_id == existing.org_id
+
+    uncorroborated_tier, uncorroborated_match = crud_core.resolve_organization_match(
+        session,
+        schema.Organization(org_name="Comision de Salud", org_type="Comisión"),
+        diputados.org_id,
+    )
+    assert uncorroborated_tier == crud_core.MatchTier.FUZZY_UNCORROBORATED
+    assert uncorroborated_match.org_id == existing.org_id
+
+    none_tier, none_match = crud_core.resolve_organization_match(
+        session,
+        schema.Organization(
+            org_name="Comisión Totalmente Distinta", org_type="Comisión"
+        ),
+        diputados.org_id,
+    )
+    assert none_tier == crud_core.MatchTier.NO_MATCH
+    assert none_match is None
+
+
+def test_upsert_organization_fuzzy_uncorroborated_still_renames_in_shadow_mode(
+    session,
+):
+    """Default (ORG_UPSERT_STRICT_IDENTITY=False): a fuzzy match with no
+    corroborating signal still gets the old unconditional-overwrite
+    behavior -- shadow mode only logs what the stricter tier would decide,
+    it doesn't change behavior yet."""
+    assert crud_core.settings.ORG_UPSERT_STRICT_IDENTITY is False
+
+    crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    first = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comision de Educacion",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+    second = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Educación",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    assert second.org_id == first.org_id
+    assert second.org_name == "Comisión de Educación"
+
+
+def test_upsert_organization_fuzzy_uncorroborated_protects_identity_when_strict(
+    session, monkeypatch
+):
+    """ORG_UPSERT_STRICT_IDENTITY=True: a fuzzy match with no corroborating
+    signal keeps its existing identity fields (org_name, parent_org_id)
+    untouched, but non-identity fields (org_link) still update -- and no
+    duplicate row gets created."""
+    monkeypatch.setattr(crud_core.settings, "ORG_UPSERT_STRICT_IDENTITY", True)
+
+    crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    first = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comision de Educacion",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+    second = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Educación",
+            org_type="Comisión",
+            org_link="https://new-link.example",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    assert second.org_id == first.org_id
+    assert second.org_name == "Comision de Educacion"
+    assert second.org_link == "https://new-link.example"
+    assert (
+        session.query(db_models.Organization)
+        .filter(db_models.Organization.org_type == "Comisión")
+        .count()
+        == 1
+    )
+
+
+def test_upsert_model_writes_explicit_none_when_field_in_fields_set(session):
+    """The coalesce-skips-None rule in _upsert_model (see its own docstring
+    comment) has one correct override: fields_set lets a caller assert a
+    field's new value is genuinely None, not merely absent from this
+    source -- without it, a legitimate correction to None could never be
+    written once a row already has a non-null value."""
+    org = db_models.Organization(
+        org_name="Comisión de Prueba",
+        org_type=TypeOrganization.COMMITTEE.value,
+        org_link="https://old-link.example",
+    )
+    session.add(org)
+    session.flush()
+
+    # Without fields_set: a None in the payload is coalesced away (unchanged).
+    crud_core._upsert_model(
+        session,
+        existing=org,
+        model=db_models.Organization,
+        payload={"org_link": None},
+    )
+    assert org.org_link == "https://old-link.example"
+
+    # With fields_set: an explicit None is honored and written.
+    crud_core._upsert_model(
+        session,
+        existing=org,
+        model=db_models.Organization,
+        payload={"org_link": None},
+        fields_set={"org_link"},
+    )
+    assert org.org_link is None
 
 
 def test_membership_exists(session, create_congresista):

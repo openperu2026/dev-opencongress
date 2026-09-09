@@ -36,6 +36,14 @@ _LEG_PERIOD_RANGE_BY_ENUM = {
 }
 
 
+def get_leg_period_range(leg_period: LegPeriod | str) -> tuple[date, date]:
+    """Full (start, end) date range for an entire legislative term/period,
+    e.g. (2026-07-28, 2031-07-27) for the 2026-2031 term."""
+    if isinstance(leg_period, str):
+        leg_period = LegPeriod(leg_period)
+    return _LEG_PERIOD_RANGE_BY_ENUM[leg_period]
+
+
 def resolve_processable_leg_periods(leg_period: str | None = None) -> list[str]:
     """Return the raw-label subset of PROCESSABLE_LEG_PERIODS to process.
 

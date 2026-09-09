@@ -233,6 +233,12 @@ def process_profile_content(
         )
 
     votes_text = xpath2('//*[@class="votacion"]/span[2]', html) or "0"
+    # condicion is carried on party_mem too (PartyMembership has no such
+    # column, so it's never persisted here) purely so _membership_dates can
+    # see the same active/inactive signal for the party membership that it
+    # sees for the chamber one -- a congresista who died/was removed has
+    # neither membership extend to the full term end, not just the chamber
+    # one (found 2026-09-09).
     party_mem = Membership(
         cong_name=cong.full_name,
         org_name=party.org_name,
@@ -240,6 +246,7 @@ def process_profile_content(
         leg_period=raw_cong.leg_period,
         role=normalize_membership_role("Miembro"),
         time_stamp=getattr(raw_cong, "timestamp", datetime.now()),
+        condicion=xpath2('//*[@class="condicion"]/span[2]', html),
     )
 
     region = xpath2('//*[@class="representa"]/span[2]', html)
