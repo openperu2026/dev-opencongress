@@ -1,0 +1,29 @@
+{#
+    Shared tab/pagination-link helper.
+
+    Every "link" that changes a search filter (period tabs, chamber tabs,
+    pagination) used to be a plain GET <a href="..."> carrying the entire
+    filter state in the URL's query string. To keep the address bar clean,
+    these are POST forms instead: one hidden input per currently-active
+    filter (from `search_params`), plus the one value being changed, styled
+    with CSS so a <button type="submit"> reads as a tab/link rather than a
+    form control. No JavaScript involved -- this works identically with
+    JavaScript disabled.
+#}
+{% macro tab_link(endpoint, search_params, overrides, label, is_active=False, css_class="tab-form-button", url_kwargs={}) %}
+    {% if is_active %}
+        <span class="is-active" aria-current="page">{{ label }}</span>
+    {% else %}
+        <form method="post" action="{{ url_for(endpoint, **url_kwargs) }}" class="tab-form">
+            {% for key, val in search_params.items() %}
+                {% if key not in overrides %}
+                    <input type="hidden" name="{{ key }}" value="{{ val }}">
+                {% endif %}
+            {% endfor %}
+            {% for key, val in overrides.items() %}
+                <input type="hidden" name="{{ key }}" value="{{ val }}">
+            {% endfor %}
+            <button type="submit" class="{{ css_class }}">{{ label }}</button>
+        </form>
+    {% endif %}
+{% endmacro %}

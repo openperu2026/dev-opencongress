@@ -1,10 +1,23 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
 <div class="congress-detail-page">
     <section class="congress-profile">
+        {% if available_periods|length > 1 %}
+            <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
+                {% for value, label in available_periods %}
+                    {{ macros.tab_link('congress.congress_detail', {}, {'leg_period_q': value}, label, is_active=(value == selected_period), url_kwargs={'congresista_id': congresista.id}) }}
+                {% endfor %}
+            </nav>
+        {% endif %}
         <header class="congress-profile-header">
-            <h1>{{ congresista.full_name }}</h1>
+            <h1>
+                {{ congresista.full_name }}
+                {% if congresista.chamber_slug %}
+                    <span class="chamber-badge chamber-badge--{{ congresista.chamber_slug }}">{{ _('Senado') if congresista.chamber_slug == 'senado' else _('Diputados') }}</span>
+                {% endif %}
+            </h1>
             <p>
                 {{ congresista.party_name }} &middot; 
                 {{ congresista.dist_electoral or _('No disponible') }} &middot; 
@@ -24,17 +37,36 @@
             </div>
 
             <section class="congress-section congress-committee-panel">
-                <h2>{{_('Membresía en comisiones')}}</h2>
+                <h2>{{_('Membresía en comisiones')}}{% if selected_period_label %} &mdash; {{ selected_period_label }}{% endif %}</h2>
+                {% if available_years %}
+                    <div class="year-tabs" aria-label="{{ _('Año legislativo') }}">
+                        {% for value, label in available_years %}
+                            {{ macros.tab_link('congress.congress_detail', {'leg_period_q': selected_period}, {'leg_year_q': value}, label, is_active=(value == selected_year), css_class="year-tab-button", url_kwargs={'congresista_id': congresista.id}) }}
+                        {% endfor %}
+                    </div>
+                {% endif %}
                 {% if memberships %}
+                    {% set spanish_months = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'] %}
                     <ul class="committee-membership-list">
                         {% for membership in memberships %}
                             <li>
-                                {% if membership.org_short_name %}
-                                    <span>{{ membership.org_short_name }}</span>
-                                {% else %}
-                                    <span>{{ membership.org_name }}</span>
-                                {% endif %}
-                                <strong>{{ membership.role }}</strong>
+                                <div class="committee-name">
+                                    {% if membership.org_short_name %}
+                                        {{ membership.org_short_name }}
+                                    {% else %}
+                                        {{ membership.org_name }}
+                                    {% endif %}
+                                </div>
+                                <div class="committee-meta">
+                                    <strong>{{ membership.role }}</strong>
+                                    {% if membership.start_date or membership.end_date %}
+                                        <span class="committee-dates">
+                                            {% if membership.start_date %}{{ spanish_months[membership.start_date.month - 1] }} {{ membership.start_date.year }}{% else %}&mdash;{% endif %}
+                                            &ndash;
+                                            {% if membership.end_date %}{{ spanish_months[membership.end_date.month - 1] }} {{ membership.end_date.year }}{% else %}{{ _('presente') }}{% endif %}
+                                        </span>
+                                    {% endif %}
+                                </div>
                             </li>
                         {% endfor %}
                     </ul>
@@ -100,11 +132,15 @@
             {% endif %}
         </section>
         <br>
-        <p class="congress-action">
-            <a href="{{ url_for('bills.index', author_q=congresista.full_name) }}">
-                {{_('Ver todos los proyectos de ley presentados')}}
-            </a>
-        </p>
+        <form method="post" action="{{ url_for('bills.index') }}" class="tab-form">
+            <input type="hidden" name="author_q" value="{{ congresista.full_name }}">
+            <input type="hidden" name="leg_period_q" value="{{ selected_period }}">
+            <p class="congress-action">
+                <button type="submit" class="link-button">
+                    {{_('Ver todos los proyectos de ley presentados')}}
+                </button>
+            </p>
+        </form>
 
 
         <p class="congress-source">

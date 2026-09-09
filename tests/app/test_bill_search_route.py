@@ -73,6 +73,18 @@ def client(monkeypatch, session_factory):
 
 def _seed_bills(session_factory, count: int) -> None:
     with session_factory() as db:
+        db.add(
+            Organization(
+                org_id=900,
+                org_name="Comisión Generica de Test",
+                org_type=TypeOrganization.COMMITTEE,
+                org_subtype=TypeCommittee.COM_ORD,
+                org_link=None,
+                parent_org_id=None,
+                date_founding=None,
+                date_dissolution=None,
+            )
+        )
         for index in range(1, count + 1):
             db.add(
                 Bill(
@@ -85,6 +97,15 @@ def _seed_bills(session_factory, count: int) -> None:
                     bill_approved=False,
                     summary_oc="",
                     pley_id=f"2021_{index:04d}",
+                )
+            )
+            db.add(
+                BillOrganization(
+                    bill_id=f"2021_{index:04d}",
+                    org_id=900,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 1, 1),
+                    decision_date=None,
                 )
             )
         db.commit()
@@ -266,33 +287,141 @@ def _seed_bill_search_data(session_factory) -> None:
 def test_search_results_are_paginated_by_50(client, session_factory):
     _seed_bills(session_factory, 55)
 
-    first_page = client.get("/bills?title_q=Bill")
+    first_page = client.get("/bills?title_q=Bill&leg_period_q=2021-2026")
     first_body = first_page.get_data(as_text=True)
     assert first_page.status_code == 200
     assert "Mostrando 1-50 de 55 proyectos de ley" in first_body
     assert "Bill 0001" in first_body
     assert "Bill 0050" in first_body
     assert "Bill 0051" not in first_body
-    assert "page=2" in first_body
+    # Pagination is a hidden-input POST form now (no query string exposed) --
+    # confirm the "page 2" control renders as a submit button, not a link.
+    assert '<input type="hidden" name="page" value="2">' in first_body
+    assert 'class="pagination-tab"' in first_body
 
-    second_page = client.get("/bills?title_q=Bill&page=2")
+    second_page = client.get("/bills?title_q=Bill&page=2&leg_period_q=2021-2026")
     second_body = second_page.get_data(as_text=True)
     assert second_page.status_code == 200
     assert "Mostrando 51-55 de 55 proyectos de ley" in second_body
     assert "Bill 0051" in second_body
     assert "Bill 0055" in second_body
     assert "Bill 0001" not in second_body
-    assert "page=1" in second_body
+    assert '<input type="hidden" name="page" value="1">' in second_body
+    assert 'class="pagination-prev"' in second_body
 
 
 def test_search_results_cap_at_500_plus(client, session_factory):
     _seed_bills(session_factory, 501)
 
-    first_page = client.get("/bills?title_q=Bill")
+    first_page = client.get("/bills?title_q=Bill&leg_period_q=2021-2026")
     body = first_page.get_data(as_text=True)
 
     assert first_page.status_code == 200
     assert "Mostrando 1-50 de 500+ proyectos de ley" in body
+
+
+def _seed_status_bills(db) -> None:
+    db.add_all(
+        [
+            Organization(
+                org_id=901,
+                org_name="Comisión Status Test",
+                org_type=TypeOrganization.COMMITTEE,
+                org_subtype=TypeCommittee.COM_ORD,
+                org_link=None,
+                parent_org_id=None,
+                date_founding=None,
+                date_dissolution=None,
+            ),
+            Bill(
+                id="2021_9001",
+                title="Approved bill",
+                summary_congreso="",
+                observations="",
+                status="presentado",
+                proponent=Proponents.CONGRESO,
+                bill_approved=True,
+                summary_oc="",
+                pley_id="2021_9001",
+            ),
+            Bill(
+                id="2021_9002",
+                title="Not approved bill",
+                summary_congreso="",
+                observations="",
+                status="presentado",
+                proponent=Proponents.CONGRESO,
+                bill_approved=False,
+                summary_oc="",
+                pley_id="2021_9002",
+            ),
+            BillOrganization(
+                bill_id="2021_9001",
+                org_id=901,
+                org_type=TypeOrganization.COMMITTEE,
+                presentation_date=real_date(2024, 1, 1),
+                decision_date=None,
+            ),
+            BillOrganization(
+                bill_id="2021_9002",
+                org_id=901,
+                org_type=TypeOrganization.COMMITTEE,
+                presentation_date=real_date(2024, 1, 1),
+                decision_date=None,
+            ),
+        ]
+    )
+    db.commit()
+
+
+def test_search_filters_by_status_approved_alone(client, session_factory):
+    with session_factory() as db:
+        _seed_status_bills(db)
+
+    response = client.get(
+        "/bills", query_string={"status": "approved", "leg_period_q": "2021-2026"}
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Mostrando" in body
+    assert "Approved bill" in body
+    assert "Not approved bill" not in body
+
+
+def test_search_filters_by_status_not_approved_alone(client, session_factory):
+    with session_factory() as db:
+        _seed_status_bills(db)
+
+    response = client.get(
+        "/bills", query_string={"status": "not-approved", "leg_period_q": "2021-2026"}
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Mostrando" in body
+    assert "Not approved bill" in body
+    assert "Approved bill" not in body
+
+
+def test_status_all_does_not_force_search_path(client, session_factory):
+    _seed_bill_search_data(session_factory)
+
+    response = client.get("/bills?status=all&leg_period_q=2021-2026")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Mostrando" not in body
+    assert "Bill 0001" in body
+
+
+def test_footer_contact_link_points_to_contact_section(client):
+    response = client.get("/bills")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert '<a href="/#contact">' in body
+    assert '<a href="#">' not in body
 
 
 def test_search_form_includes_new_filters(client):
@@ -340,6 +469,7 @@ def test_search_filters_by_native_date_inputs(client, session_factory):
         query_string={
             "presentation_date_from": "2024-01-10",
             "presentation_date_to": "2024-01-31",
+            "leg_period_q": "2021-2026",
         },
     )
     body = response.get_data(as_text=True)
@@ -361,6 +491,8 @@ def test_search_form_can_render_in_english(client):
     assert "Search the bill by:" in body
     assert "Presentation Date" in body
     assert "Author party" in body
+    assert 'placeholder="General search..."' in body
+    assert 'placeholder="Búsqueda general..."' not in body
 
 
 def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
@@ -395,7 +527,7 @@ def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
                     bill_id="2021_0100",
                     org_id=100,
                     org_type=TypeOrganization.COMMITTEE,
-                    presentation_date=real_date(2024, 3, 1),
+                    presentation_date=real_date(2026, 8, 1),
                     decision_date=None,
                 ),
             ]
@@ -410,10 +542,60 @@ def test_recent_bills_falls_back_to_proponent_when_author_is_missing(
     assert Proponents.CONGRESO.value in body
 
 
+def test_searched_results_fall_back_to_proponent_when_author_is_missing(
+    client, session_factory
+):
+    with session_factory() as db:
+        db.add_all(
+            [
+                Bill(
+                    id="2021_0200",
+                    title="Searchable bill without author",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=None,
+                    bill_approved=False,
+                    summary_oc="",
+                    pley_id="0200/2021-CR",
+                ),
+                Organization(
+                    org_id=200,
+                    org_name="Comisión Test 200",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ORD,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                BillOrganization(
+                    bill_id="2021_0200",
+                    org_id=200,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 3, 1),
+                    decision_date=None,
+                ),
+            ]
+        )
+        db.commit()
+
+    response = client.get("/bills?title_q=Searchable&leg_period_q=2021-2026")
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Searchable bill without author" in body
+    assert Proponents.CONGRESO.value in body
+    assert "None" not in body
+
+
 def test_search_filters_by_bill_diff(client, session_factory):
     _seed_bill_search_data(session_factory)
 
-    yes_response = client.get("/bills", query_string={"bill_diff_q": "yes"})
+    yes_response = client.get(
+        "/bills", query_string={"bill_diff_q": "yes", "leg_period_q": "2021-2026"}
+    )
     yes_body = yes_response.get_data(as_text=True)
 
     assert yes_response.status_code == 200
@@ -421,7 +603,9 @@ def test_search_filters_by_bill_diff(client, session_factory):
     assert "2021_0001" in yes_body
     assert "2021_0002" not in yes_body
 
-    no_response = client.get("/bills", query_string={"bill_diff_q": "no"})
+    no_response = client.get(
+        "/bills", query_string={"bill_diff_q": "no", "leg_period_q": "2021-2026"}
+    )
     no_body = no_response.get_data(as_text=True)
 
     assert no_response.status_code == 200
@@ -447,6 +631,7 @@ def test_search_filters_bill_id_law_id_step_date_and_committee(client, session_f
             "presentation_date_to_month": 1,
             "presentation_date_to_day": 31,
             "organization_name_q": "Comisión de Economía",
+            "leg_period_q": "2021-2026",
         },
     )
     body = response.get_data(as_text=True)
@@ -466,7 +651,10 @@ def test_search_filters_by_special_committee(client, session_factory):
 
     response = client.get(
         "/bills",
-        query_string={"special_committee_q": "Special Test"},
+        query_string={
+            "special_committee_q": "Special Test",
+            "leg_period_q": "2021-2026",
+        },
     )
     body = response.get_data(as_text=True)
 
@@ -521,13 +709,34 @@ def test_search_ignores_spanish_accents_for_text_filters(client, session_factory
                     start_date=real_date(2021, 1, 1),
                     end_date=real_date(2026, 12, 31),
                 ),
+                Organization(
+                    org_id=21,
+                    org_name="Comisión Accents Test",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ORD,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                BillOrganization(
+                    bill_id="2021_0099",
+                    org_id=21,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 1, 1),
+                    decision_date=None,
+                ),
             ]
         )
         db.commit()
 
     response = client.get(
         "/bills",
-        query_string={"title_q": "Analisis del cafe", "author_q": "Jose Alvarez"},
+        query_string={
+            "title_q": "Analisis del cafe",
+            "author_q": "Jose Alvarez",
+            "leg_period_q": "2021-2026",
+        },
     )
     body = response.get_data(as_text=True)
 
@@ -670,3 +879,358 @@ def test_search_semantic_bills_does_not_raise_nameerror(monkeypatch, session_fac
 
     assert results == []
     assert encode_calls == ["congreso"]
+
+
+def _seed_bicameral_bills(session_factory) -> None:
+    with session_factory() as db:
+        db.add_all(
+            [
+                Organization(
+                    org_id=500,
+                    org_name="Senado de la República",
+                    org_type=TypeOrganization.CHAMBER,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=501,
+                    org_name="Cámara de Diputados",
+                    org_type=TypeOrganization.CHAMBER,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=502,
+                    org_name="Comisión de Economía",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ORD,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=503,
+                    org_name="Comisión de Economía",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ORD_LEG,
+                    org_link=None,
+                    parent_org_id=501,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Bill(
+                    id="00001-2026-2031-S",
+                    title="Senado Bill",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    bill_approved=False,
+                    summary_oc="",
+                    pley_id="00001-2026-2031-S",
+                ),
+                Bill(
+                    id="00002-2026-2031-CD",
+                    title="Diputados Bill",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    bill_approved=False,
+                    summary_oc="",
+                    pley_id="00002-2026-2031-CD",
+                ),
+                Bill(
+                    id="2021_5001",
+                    title="Legacy Bill",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    bill_approved=False,
+                    summary_oc="",
+                    pley_id="2021_5001",
+                ),
+                BillOrganization(
+                    bill_id="00001-2026-2031-S",
+                    org_id=500,
+                    org_type=TypeOrganization.CHAMBER,
+                    presentation_date=real_date(2026, 8, 1),
+                    decision_date=None,
+                ),
+                BillOrganization(
+                    bill_id="00002-2026-2031-CD",
+                    org_id=501,
+                    org_type=TypeOrganization.CHAMBER,
+                    presentation_date=real_date(2026, 8, 2),
+                    decision_date=None,
+                ),
+                BillOrganization(
+                    bill_id="00002-2026-2031-CD",
+                    org_id=503,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2026, 8, 2),
+                    decision_date=None,
+                ),
+                BillOrganization(
+                    bill_id="2021_5001",
+                    org_id=502,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 6, 1),
+                    decision_date=None,
+                ),
+            ]
+        )
+        db.commit()
+
+
+def test_chamber_filter_isolates_senado_and_diputados(client, session_factory):
+    _seed_bicameral_bills(session_factory)
+
+    senado_body = client.get(
+        "/bills", query_string={"title_q": "Bill", "chamber_q": "senado"}
+    ).get_data(as_text=True)
+    assert "Senado Bill" in senado_body
+    assert "Diputados Bill" not in senado_body
+
+    diputados_body = client.get(
+        "/bills", query_string={"title_q": "Bill", "chamber_q": "diputados"}
+    ).get_data(as_text=True)
+    assert "Diputados Bill" in diputados_body
+    assert "Senado Bill" not in diputados_body
+
+    both_body = client.get("/bills", query_string={"title_q": "Bill"}).get_data(
+        as_text=True
+    )
+    assert "Senado Bill" in both_body
+    assert "Diputados Bill" in both_body
+
+
+def test_recent_bills_are_scoped_by_period(client, session_factory):
+    _seed_bicameral_bills(session_factory)
+
+    default_body = client.get("/bills").get_data(as_text=True)
+    assert "Senado Bill" in default_body
+    assert "Diputados Bill" in default_body
+    assert "Legacy Bill" not in default_body
+
+    legacy_body = client.get(
+        "/bills", query_string={"leg_period_q": "2021-2026"}
+    ).get_data(as_text=True)
+    assert "Legacy Bill" in legacy_body
+    assert "Senado Bill" not in legacy_body
+    assert "Diputados Bill" not in legacy_body
+
+
+def test_committee_filter_is_period_gated_regression(client, session_factory):
+    """CRITICAL regression: a 2021-2026 committee-name search must not match
+    a same-named 2026-2031 committee that carries the new COM_ORD_LEG
+    subtype -- this is the exact self-contradiction the outside-voice pass
+    caught in the first draft of the committee fix."""
+    _seed_bicameral_bills(session_factory)
+
+    body = client.get(
+        "/bills",
+        query_string={
+            "organization_name_q": "Comisión de Economía",
+            "leg_period_q": "2021-2026",
+        },
+    ).get_data(as_text=True)
+
+    assert "Legacy Bill" in body
+    assert "Diputados Bill" not in body
+
+
+def test_semantic_search_failure_falls_back_gracefully(client, monkeypatch):
+    import app.routes.bills as bills_module
+
+    def _raise(*args, **kwargs):
+        raise RuntimeError("embedding backend unavailable")
+
+    monkeypatch.setattr(bills_module, "_search_semantic_bills", _raise)
+
+    response = client.get("/bills", query_string={"semantic_query": "presupuesto"})
+
+    assert response.status_code == 200
+
+
+def test_author_party_q_actually_filters_results(client, session_factory):
+    with session_factory() as db:
+        db.add_all(
+            [
+                Congresista(
+                    id=50,
+                    full_name="Party Test Author",
+                    first_name="Party",
+                    last_name="Author",
+                    dni="00000050",
+                    gender="F",
+                    photo_url="",
+                    website="",
+                ),
+                Organization(
+                    org_id=510,
+                    org_name="Partido Naranja",
+                    org_type=TypeOrganization.PARTY,
+                    org_subtype=None,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                Organization(
+                    org_id=511,
+                    org_name="Comisión Party Test",
+                    org_type=TypeOrganization.COMMITTEE,
+                    org_subtype=TypeCommittee.COM_ORD,
+                    org_link=None,
+                    parent_org_id=None,
+                    date_founding=None,
+                    date_dissolution=None,
+                ),
+                PartyMembership(
+                    person_id=50,
+                    org_id=510,
+                    leg_period="2021-2026",
+                    role="member",
+                    start_date=real_date(2021, 1, 1),
+                    end_date=real_date(2026, 12, 31),
+                ),
+                Bill(
+                    id="2021_6001",
+                    title="Bill by Naranja author",
+                    summary_congreso="",
+                    observations="",
+                    status="presentado",
+                    proponent=Proponents.CONGRESO,
+                    author_id=50,
+                    bill_approved=False,
+                    summary_oc="",
+                    pley_id="2021_6001",
+                ),
+                BillOrganization(
+                    bill_id="2021_6001",
+                    org_id=511,
+                    org_type=TypeOrganization.COMMITTEE,
+                    presentation_date=real_date(2024, 6, 1),
+                    decision_date=None,
+                ),
+            ]
+        )
+        db.commit()
+
+    matching = client.get(
+        "/bills",
+        query_string={
+            "author_party_q": "Partido Naranja",
+            "leg_period_q": "2021-2026",
+        },
+    ).get_data(as_text=True)
+    assert "Bill by Naranja author" in matching
+
+    non_matching = client.get(
+        "/bills",
+        query_string={
+            "author_party_q": "Partido Verde",
+            "leg_period_q": "2021-2026",
+        },
+    ).get_data(as_text=True)
+    assert "Bill by Naranja author" not in non_matching
+
+
+def test_no_js_date_fallback_markup_present(client):
+    body = client.get("/bills").get_data(as_text=True)
+
+    assert "<noscript>" in body
+    assert 'name="presentation_date_from_year"' in body
+    assert 'name="presentation_date_from_month"' in body
+    assert 'name="presentation_date_from_day"' in body
+    assert 'name="presentation_date_to_year"' in body
+    assert 'name="presentation_date_to_month"' in body
+    assert 'name="presentation_date_to_day"' in body
+    # The noscript-wrapped legacy grid must close before the diff panel.
+    assert body.index("</noscript>") < body.index("Tiene diferencia de versiones")
+
+
+def test_chamber_badge_renders_on_result_rows(client, session_factory):
+    _seed_bicameral_bills(session_factory)
+
+    body = client.get("/bills", query_string={"title_q": "Bill"}).get_data(as_text=True)
+
+    assert "chamber-badge--senado" in body
+    assert "chamber-badge--diputados" in body
+
+
+def test_chamber_selector_hidden_for_legacy_period(client):
+    legacy_body = client.get(
+        "/bills", query_string={"leg_period_q": "2021-2026"}
+    ).get_data(as_text=True)
+    assert 'class="chamber-tabs"' not in legacy_body
+
+    modern_body = client.get(
+        "/bills", query_string={"leg_period_q": "2026-2031"}
+    ).get_data(as_text=True)
+    assert 'class="chamber-tabs"' in modern_body
+
+
+def test_chamber_column_hidden_for_legacy_period(client, session_factory):
+    _seed_bicameral_bills(session_factory)
+
+    legacy_body = client.get(
+        "/bills", query_string={"leg_period_q": "2021-2026"}
+    ).get_data(as_text=True)
+    assert "Cámara" not in legacy_body
+
+    modern_body = client.get(
+        "/bills", query_string={"title_q": "Bill", "leg_period_q": "2026-2031"}
+    ).get_data(as_text=True)
+    assert "Cámara" in modern_body
+
+
+def test_main_search_form_submits_via_post_with_no_query_string(
+    client, session_factory
+):
+    """The core ask: filters must not appear in the URL. The search form
+    itself posts to a bare /bills action -- no query string involved at
+    all, with or without JS."""
+    _seed_bill_search_data(session_factory)
+
+    response = client.post(
+        "/bills", data={"title_q": "Bill 0001", "leg_period_q": "2021-2026"}
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert 'method="post"' in body
+    assert "2021_0001" in body
+    assert "2021_0002" not in body
+
+
+def test_period_tab_is_a_post_form_not_a_link(client, session_factory):
+    """Tabs/pagination must never be plain <a href="?..."> GET links --
+    they're POST forms with hidden inputs replicating the active filters,
+    so clicking one never puts anything in the address bar."""
+    _seed_bicameral_bills(session_factory)
+
+    body = client.get(
+        "/bills", query_string={"title_q": "Bill", "leg_period_q": "2026-2031"}
+    ).get_data(as_text=True)
+
+    assert 'href="/bills?' not in body
+    assert '<form method="post" action="/bills"' in body
+    assert '<input type="hidden" name="title_q" value="Bill">' in body
+
+    # Simulate actually clicking the "2021-2026" tab: submit its exact
+    # hidden-input set.
+    switched = client.post(
+        "/bills", data={"title_q": "Bill", "leg_period_q": "2021-2026"}
+    ).get_data(as_text=True)
+    assert "Legacy Bill" in switched
+    assert "Senado Bill" not in switched

@@ -1,12 +1,32 @@
 {% extends "base.html" %}
+{% import "_macros.html" as macros %}
 
 {% block content %}
-<form class="bill-search-form" method="get" action="{{ url_for('bills.index') }}">
+<div class="bill-search-form">
     <h1 class="search-title">{{_('Busca el proyecto de ley por:')}}</h1>
+    <div class="period-tabs-row">
+        <nav class="period-tabs" aria-label="{{ _('Periodo') }}">
+            {% for value, label, _period_enum in leg_period_options %}
+                {{ macros.tab_link('bills.index', search_params, {'leg_period_q': value}, label, is_active=(value == leg_period_q)) }}
+            {% endfor %}
+        </nav>
+        {% if leg_period_q == "2026-2031" %}
+            <div class="chamber-tabs" aria-label="{{ _('Cámara') }}">
+                {{ macros.tab_link('bills.index', search_params, {'chamber_q': ''}, _('Ambas cámaras'), is_active=(not chamber_q), css_class="chamber-tab-button") }}
+                {% for value, org_name in chamber_options.items() %}
+                    {{ macros.tab_link('bills.index', search_params, {'chamber_q': value}, org_name, is_active=(chamber_q == value), css_class="chamber-tab-button") }}
+                {% endfor %}
+            </div>
+        {% endif %}
+    </div>
+    <form method="post" action="{{ url_for('bills.index') }}">
     <div class="bar-search">
         <div class="search-row search-row--general">
             <div class="searching-container">
                 <input type="text" name="semantic_query" value="{{ semantic_query or '' }}" placeholder="{{_('Búsqueda general...')}}">
+                {% if semantic_search_failed %}
+                    <p class="search-warning">{{ _('No pudimos completar la búsqueda semántica en este momento; se muestran los resultados de los demás filtros.') }}</p>
+                {% endif %}
             </div>
         </div>
         <div class="search-row search-row--primary">
@@ -130,7 +150,7 @@
                         </div>
                     </div>
                 </div>
-                <div class="search-date-grid search-date-legacy-grid">
+                <noscript><div class="search-date-grid search-date-legacy-grid">
                     <div class="search-date-group">
                         <span class="search-date-label">{{ _('Desde') }}</span>
                         <div class="search-date-selects">
@@ -178,7 +198,7 @@
                             </select>
                         </div>
                     </div>
-                </div>
+                </div></noscript>
             </div>
 
             <div class="search-diff-panel">
@@ -226,7 +246,8 @@
 
        
     </div>
-</form>
+    </form>
+</div>
 
 
 {% if recent_bills and not search_requested %}
@@ -239,6 +260,7 @@
             <tr>
                 <th>#</th>
                 <th>{{ _('ID') }}</th>
+                {% if leg_period_q == "2026-2031" %}<th>{{ _('Cámara') }}</th>{% endif %}
                 <th>{{ _('Título') }}</th>
                 <th>{{ _('Autor') }}</th>
                 <th>{{ _('Primera fecha de presentacion') }}</th>
@@ -249,17 +271,24 @@
         <tbody>
             {% for bill in recent_bills %}
             <tr>
-                <td>{{ loop.index }}</td>
-                <td>{{ bill.pley_id }}</td>
-                <td>{{ bill.title }}</td>
-                {% if bill.author_name %}
-                    <td>{{ bill.author_name }}</td>
-                {% else %}
-                    <td>{{ bill.proponent.value }}</td>
+                <td data-label="#">{{ loop.index }}</td>
+                <td data-label="{{ _('ID') }}">{{ bill.pley_id }}</td>
+                {% if leg_period_q == "2026-2031" %}
+                <td data-label="{{ _('Cámara') }}">
+                    {% if bill.chamber_slug %}
+                        <span class="chamber-badge chamber-badge--{{ bill.chamber_slug }}">{{ _('Senado') if bill.chamber_slug == 'senado' else _('Diputados') }}</span>
+                    {% endif %}
+                </td>
                 {% endif %}
-                <td>{{ bill.presentation_date }}</td>
-                <td>{{ bill.status }}</td>
-                <td>
+                <td data-label="{{ _('Título') }}">{{ bill.title }}</td>
+                {% if bill.author_name %}
+                    <td data-label="{{ _('Autor') }}">{{ bill.author_name }}</td>
+                {% else %}
+                    <td data-label="{{ _('Autor') }}">{{ bill.proponent.value }}</td>
+                {% endif %}
+                <td data-label="{{ _('Primera fecha de presentacion') }}">{{ bill.presentation_date }}</td>
+                <td data-label="{{ _('Estado') }}">{{ bill.status }}</td>
+                <td data-label="{{ _('Detalle') }}">
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
                         {{_('Ver detalles')}}
                     </a>
@@ -273,6 +302,10 @@
 {% if bills %}
     <div class = "search-criteria">
         <h3>{{_('Criterios de búsqueda')}}</h3>
+        <span>{{ _('Periodo') }}: {{ leg_period_display }}</span>
+        {% if chamber_display %}
+            <span>{{ _('Cámara') }}: {{ chamber_display }}</span>
+        {% endif %}
         {% if title_q %}
             <span>{{_('Título')}}: {{title_q}}</span>
         {% endif %}
@@ -321,6 +354,7 @@
             <tr>
                 <th>#</th>
                 <th>{{ _('ID') }}</th>
+                {% if leg_period_q == "2026-2031" %}<th>{{ _('Cámara') }}</th>{% endif %}
                 <th>{{ _('Título') }}</th>
                 <th>{{ _('Autor') }}</th>
                 <th>{{ _('Fecha de presentación') }}</th>
@@ -331,13 +365,24 @@
         <tbody>
             {% for bill in bills %}
             <tr>
-                <td>{{ results_start + loop.index0 }}</td>
-                <td>{{ bill.pley_id }}</td>
-                <td>{{ bill.title }}</td>
-                <td>{{ bill.author_name }}</td>
-                <td>{{ bill.presentation_date }}</td>
-                <td>{{ bill.status }}</td>
-                <td>
+                <td data-label="#">{{ results_start + loop.index0 }}</td>
+                <td data-label="{{ _('ID') }}">{{ bill.pley_id }}</td>
+                {% if leg_period_q == "2026-2031" %}
+                <td data-label="{{ _('Cámara') }}">
+                    {% if bill.chamber_slug %}
+                        <span class="chamber-badge chamber-badge--{{ bill.chamber_slug }}">{{ _('Senado') if bill.chamber_slug == 'senado' else _('Diputados') }}</span>
+                    {% endif %}
+                </td>
+                {% endif %}
+                <td data-label="{{ _('Título') }}">{{ bill.title }}</td>
+                {% if bill.author_name %}
+                    <td data-label="{{ _('Autor') }}">{{ bill.author_name }}</td>
+                {% else %}
+                    <td data-label="{{ _('Autor') }}">{{ bill.proponent.value }}</td>
+                {% endif %}
+                <td data-label="{{ _('Fecha de presentación') }}">{{ bill.presentation_date }}</td>
+                <td data-label="{{ _('Estado') }}">{{ bill.status }}</td>
+                <td data-label="{{ _('Detalle') }}">
                     <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
                         {{_('Ver detalles')}}
                     </a>
@@ -352,27 +397,29 @@
             <div class="search-pagination-label">{{ _('Página') }}</div>
             <div class="pagination-tabs">
                 {% for page_item in pagination_pages %}
-                    {% if page_item.current %}
-                        <span class="pagination-tab is-current">{{ page_item.number }}</span>
-                    {% else %}
-                        <a class="pagination-tab" href="{{ page_item.url }}">{{ page_item.number }}</a>
-                    {% endif %}
+                    {{ macros.tab_link('bills.index', search_params, {'page': page_item.number}, page_item.number, is_active=page_item.current, css_class="pagination-tab") }}
                 {% endfor %}
             </div>
 
             <div class="pagination-controls">
-                {% if prev_page_url %}
-                    <a class="pagination-prev" href="{{ prev_page_url }}">←{{ _('Anterior') }}</a>
+                {% if page > 1 %}
+                    {{ macros.tab_link('bills.index', search_params, {'page': page - 1}, '←' + _('Anterior'), css_class="pagination-prev") }}
                 {% endif %}
 
-                {% if next_page_url %}
-                    <a class="pagination-next" href="{{ next_page_url }}">{{ _('Siguiente') }}→</a>
+                {% if page < pagination_pages|length %}
+                    {{ macros.tab_link('bills.index', search_params, {'page': page + 1}, _('Siguiente') + '→', css_class="pagination-next") }}
                 {% endif %}
             </div>
         </nav>
     {% endif %}
 {% elif search_requested %}
-    <p>{{_('No se encontraron proyectos de ley.')}}</p>
+    <p>
+        {% if chamber_display %}
+            {{ _('No se encontraron proyectos de ley para %(chamber)s, periodo %(period)s.', chamber=chamber_display, period=leg_period_display) }}
+        {% else %}
+            {{ _('No se encontraron proyectos de ley para el periodo %(period)s.', period=leg_period_display) }}
+        {% endif %}
+    </p>
 {% endif %}
 
 <script>
