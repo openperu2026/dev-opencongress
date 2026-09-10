@@ -17,7 +17,7 @@ from flask import (
     session,
     url_for,
 )
-from sqlalchemy import func, select, desc
+from sqlalchemy import func, select, desc, Select
 from sqlalchemy.orm import Session
 from app.diff_render import (
     RENDERER_VERSION,
@@ -773,6 +773,38 @@ def _build_bill_filters(
     return filters
 
 
+def _paginate_rows(
+    db: Session, stmt: Select, page: int, per_page: int, max_search_results: int
+):
+    count_stmt = select(func.count()).select_from(
+        stmt.order_by(None).limit(max_search_results + 1).subquery()
+    )
+    total_count = db.execute(count_stmt).scalar_one()
+    total_count_display = (
+        f"{max_search_results}+"
+        if total_count > max_search_results
+        else str(total_count)
+    )
+
+    visible_total = min(total_count, max_search_results)
+    total_pages = ceil(visible_total / per_page) if visible_total else 0
+    if total_pages and page > total_pages:
+        page = total_pages
+
+    if total_pages:
+        pagination_pages = [
+            SimpleNamespace(
+                number=page_number,
+                current=page_number == page,
+            )
+            for page_number in range(1, total_pages + 1)
+        ]
+    else:
+        pagination_pages = []
+
+    return pagination_pages, total_count_display, total_count
+
+
 @bills_bp.route("/bills", methods=["GET", "POST"])
 def index():
     # request.values (not request.args) so this route works identically
@@ -996,29 +1028,9 @@ def index():
             )
 
             # Limit the number of displayed results, create pagination, and display the results in fixed-size pages.
-            count_stmt = select(func.count()).select_from(
-                stmt.order_by(None).limit(max_search_results + 1).subquery()
+            pagination_pages, total_count_display, total_count = _paginate_rows(
+                db, stmt, page, per_page, max_search_results
             )
-            total_count = db.execute(count_stmt).scalar_one()
-            total_count_display = (
-                f"{max_search_results}+"
-                if total_count > max_search_results
-                else str(total_count)
-            )
-
-            visible_total = min(total_count, max_search_results)
-            total_pages = ceil(visible_total / per_page) if visible_total else 0
-            if total_pages and page > total_pages:
-                page = total_pages
-
-            if total_pages:
-                pagination_pages = [
-                    SimpleNamespace(
-                        number=page_number,
-                        current=page_number == page,
-                    )
-                    for page_number in range(1, total_pages + 1)
-                ]
 
             result_stmt = (
                 stmt.order_by(
@@ -1077,11 +1089,28 @@ def index():
                     Bill.title.asc(),
                     Bill.id.asc(),
                 )
-                .limit(10)
             )
 
-            recent_rows = db.execute(recent_stmt).mappings().all()
-            recent_bills = _with_chamber_slug(recent_rows)
+            pagination_pages, total_count_display, total_count = _paginate_rows(
+                db, recent_stmt, page, per_page, max_search_results
+            )
+
+            result_stmt = (
+                recent_stmt.order_by(
+                    earliest_bill_dates.c.first_presentation_date.desc(),
+                    Bill.title.asc(),
+                    Bill.id.asc(),
+                )
+                .offset((page - 1) * per_page)
+                .limit(per_page)
+            )
+
+            recent_rows = db.execute(result_stmt).mappings().all()
+            if recent_rows:
+                results_start = (page - 1) * per_page + 1
+                results_end = results_start + len(recent_rows) - 1
+
+            bills = _with_chamber_slug(recent_rows)
 
     return render_template(
         "bills/search.html",
