@@ -176,6 +176,39 @@ def test_parse_motion_type_recognizes_2026_2031_senado_labels(raw_value, expecte
     assert parse_motion_type(raw_value) is expected
 
 
+@pytest.mark.parametrize(
+    "raw_value, expected",
+    [
+        ("Conformación de Comisiones de Investigación", TypeMotion.CREACION_COMISION),
+        ("Conformación de Comisiones Especiales", TypeMotion.CREACION_COMISION),
+        ("Mociones de Saludo", TypeMotion.SALUDO),
+        (
+            "Pedidos de Declaración de necesidad pública o interes nacional",
+            TypeMotion.INTERES,
+        ),
+        (
+            "Pedidos para que el pleno se pronuncie sobre interes nacional",
+            TypeMotion.INTERES,
+        ),
+        (
+            "Pedidos de Interpelación al Consejo de Ministros o Ministros",
+            TypeMotion.INTERPELACION,
+        ),
+        (
+            "Pedidos de Invitación a Consejo de Ministros o Ministros para "
+            "informar ante pleno o comisiones",
+            TypeMotion.INFORME_MINISTROS,
+        ),
+    ],
+)
+def test_parse_motion_type_recognizes_2026_2031_diputados_labels(raw_value, expected):
+    """Regression test: these 7 real Diputados desTipoMocion labels were missing
+    from MOTION_TYPE_ALIASES, causing 327 2026-2031 Diputados motions to fail
+    process_motion() with an unhandled Pydantic ValidationError
+    (logs/process/2026-09-10/motions.log)."""
+    assert parse_motion_type(raw_value) is expected
+
+
 def test_parse_motion_type_still_recognizes_legacy_exact_enum_values():
     assert parse_motion_type("Saludo") is TypeMotion.SALUDO
     assert parse_motion_type("Interés Nacional") is TypeMotion.INTERES

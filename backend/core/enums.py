@@ -52,6 +52,7 @@ class TypeMotion(str, Enum):
     VACANCIA = "Vacancia"
     COMISION_INVESTIGADORA = "Comisiones Investigadoras"
     COMISION_ESPECIAL = "Comisiones Especiales"
+    CREACION_COMISION = "Creación de Comisión"
     PESAR = "Pesar"
     OTRAS = "Otras"
 

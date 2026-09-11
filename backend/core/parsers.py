@@ -175,6 +175,16 @@ MOTION_TYPE_ALIASES = {
     "PEDIDO DE CONFORMACIÓN DE COMISIÓN ESPECIAL": TypeMotion.COMISION_ESPECIAL,
     "Pedido de invitación al Consejo de Ministros o a los ministros en forma individual para informar": TypeMotion.INFORME_MINISTROS,
     "DE INTERÉS NACIONAL": TypeMotion.INTERES,
+    # 2026-2031 Diputados labels (confirmed live 2026-09-10, logs/process/2026-09-10/motions.log):
+    # the Diputados site uses yet another distinct wording from both the legacy
+    # and the Senado 2026-2031 labels above.
+    "Conformación de Comisiones de Investigación": TypeMotion.CREACION_COMISION,
+    "Conformación de Comisiones Especiales": TypeMotion.CREACION_COMISION,
+    "Mociones de Saludo": TypeMotion.SALUDO,
+    "Pedidos de Declaración de necesidad pública o interes nacional": TypeMotion.INTERES,
+    "Pedidos para que el pleno se pronuncie sobre interes nacional": TypeMotion.INTERES,
+    "Pedidos de Interpelación al Consejo de Ministros o Ministros": TypeMotion.INTERPELACION,
+    "Pedidos de Invitación a Consejo de Ministros o Ministros para informar ante pleno o comisiones": TypeMotion.INFORME_MINISTROS,
 }
 
 
