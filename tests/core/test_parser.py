@@ -254,9 +254,16 @@ def test_parse_proponent_raises_on_null():
         parse_proponent(None)
 
 
+def test_parse_proponent_recognizes_otros_poderes_generic_bucket():
+    """Regression test: 'Otros Poderes del Estado' is Congreso's own generic
+    catch-all desProponente label (confirmed live 2026-09-10, RawBill
+    id=00089-2026-2031-CD), not a mislabeled specific institution."""
+    assert parse_proponent("Otros Poderes del Estado") is Proponents.OTROS_PODERES
+
+
 def test_parse_proponent_raises_on_unrecognized_value():
     with pytest.raises(ValueError, match="Unknown proponent"):
-        parse_proponent("Otros Poderes del Estado")
+        parse_proponent("Not a real proponent")
 
 
 def test_normalize_membership_role_maps_presidency_encargado_variant():

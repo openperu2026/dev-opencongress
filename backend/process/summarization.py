@@ -73,9 +73,16 @@ INSISTENCE_TYPES = {
 }
 
 
+_engine = None
+_session_maker = None
+
+
 def _session_factory():
-    engine = create_engine(settings.DB_URL)
-    return sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    global _engine, _session_maker
+    if _session_maker is None:
+        _engine = create_engine(settings.DB_URL, pool_pre_ping=True)
+        _session_maker = sessionmaker(bind=_engine, autocommit=False, autoflush=False)
+    return _session_maker
 
 
 def _enum_text(value) -> str:
