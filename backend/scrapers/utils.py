@@ -158,6 +158,9 @@ def get_url(
     timeout: httpx.Timeout = DEFAULT_TIMEOUT,
     verify: bool = True,
 ) -> httpx.Response:
+    if not url:
+        return None
+
     method = "POST" if data is not None else "GET"
     try:
         with httpx.Client(
@@ -195,22 +198,20 @@ def get_cong_website(profile_content: str) -> str | None:
 
 
 def get_url_text(url: str, data: str | None = None) -> str | None:
-    try:
-        response = get_url(url, data)
-        return response.text
-    except (AttributeError, TypeError) as e:
-        logger.warning(f"Request error: {e}")
+    response = get_url(url, data)
+    if response is None:
         return None
+    return response.text
 
 
 def parse_url(url: str, *args) -> HtmlElement | None:
     """
     Returns the html of the url parse ready to use
     """
-    if args:
-        return fromstring(get_url_text(url, args[0]))
-    else:
-        return fromstring(get_url_text(url))
+    text = get_url_text(url, args[0]) if args else get_url_text(url)
+    if text is None:
+        return None
+    return fromstring(text)
 
 
 async def get_url_text_async(client: httpx.AsyncClient, url: str, data: dict = None):

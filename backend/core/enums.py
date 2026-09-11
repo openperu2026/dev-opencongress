@@ -52,6 +52,7 @@ class TypeMotion(str, Enum):
     VACANCIA = "Vacancia"
     COMISION_INVESTIGADORA = "Comisiones Investigadoras"
     COMISION_ESPECIAL = "Comisiones Especiales"
+    CREACION_COMISION = "Creación de Comisión"
     PESAR = "Pesar"
     OTRAS = "Otras"
 
@@ -137,6 +138,7 @@ class Proponents(str, Enum):
     GORES = "Gobiernos Regionales"
     GOLOS = "Gobiernos Locales"
     JNJ = "Junta Nacional de Justicia"
+    OTROS_PODERES = "Otros Poderes del Estado"
 
 
 class LegPeriod(str, Enum):

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from types import ModuleType
 from typing import Type, Callable, Literal
+import contextvars
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from tqdm import tqdm
@@ -439,7 +440,7 @@ class OpenPeruOrchestrator:
         with self.DBSession() as db:
             upsert_scraper_run(db, scraper_name, stats)
         log_manager.console_logger().info(
-            f"Results for scraper/{scraper_name}: Time: {(stats.end_time - stats.start_time).seconds}s | Rows scraped: {stats.scrapped}"
+            f"Results for scraper/{scraper_name}: Time: {(stats.end_time - stats.start_time).seconds}s | Rows scraped (new/changed): {stats.scrapped}"
         )
 
     def _log_stage_summary(self, stage: str, stats: ProcessStats) -> None:
@@ -1297,7 +1298,9 @@ class OpenPeruOrchestrator:
 
         with ThreadPoolExecutor(max_workers=15) as executor:
             future_to_doc = {
-                executor.submit(scraper.upload_s3, document): document
+                executor.submit(
+                    contextvars.copy_context().run, scraper.upload_s3, document
+                ): document
                 for document in documents
             }
 

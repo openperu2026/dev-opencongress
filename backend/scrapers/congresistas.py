@@ -429,9 +429,7 @@ class RawCongresistasScraper(SharedRawScraperBase):
             congresistas.extend(
                 self.update_tracking(self.create_chamber_congresista(chamber, entry))
             )
-            logger.success(
-                f"Congresista successfully extracted from {entry.get('url')}"
-            )
+            logger.success(f"Congresista fetched from {entry.get('url')}")
 
         self.raw_congresistas = congresistas
         return congresistas
