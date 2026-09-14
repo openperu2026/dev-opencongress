@@ -283,13 +283,14 @@ class RawMotionDocumentScraper:
         else:
             client = boto3.client("s3", region_name=settings.AWS_REGION)
 
-        pdf = BytesIO(response.content)
-        client.upload_fileobj(pdf, bucket, key)
+        content = response.content
+        num_pages = len(PdfReader(BytesIO(content)).pages)
 
-        pdf.seek(0)
+        client.upload_fileobj(BytesIO(content), bucket, key)
+
         return True, {
-            "size_bytes": pdf.getbuffer().nbytes,
-            "num_pages": len(PdfReader(pdf).pages),
+            "size_bytes": len(content),
+            "num_pages": num_pages,
         }
 
     @staticmethod

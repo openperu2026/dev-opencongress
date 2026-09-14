@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from sqlalchemy import select, or_, func
+from sqlalchemy import select, or_, func, case
 from sqlalchemy.orm import Session
 from datetime import datetime, date
 from dataclasses import dataclass
@@ -212,6 +212,33 @@ def save_alias(
 _UNSCOPED = object()
 
 
+# Real Organization.org_name prefixes seen for committee-shaped orgs
+# (backend/scrapers/committees.py, backend/core/constants.py
+# COMISION_SHORT_NAMES keys) that don't exist in the short names bills.py
+# gets from step_committees (spley-portal-service) -- e.g. "Salud" vs
+# "Comisión de Salud". Longest/most-specific first so "Comisión Bicameral
+# de " isn't shadowed by a broader check.
+_COMMITTEE_NAME_PREFIXES = (
+    "comision bicameral de ",
+    "comision especial de ",
+    "sub comision de ",
+    "subcomision de ",
+    "comision de ",
+)
+
+
+def _strip_committee_prefix(name_expr):
+    """Strip a known leading committee-name prefix from a normalized
+    (unaccented, lowercased) org-name SQL expression, if present."""
+    return case(
+        *[
+            (name_expr.like(f"{prefix}%"), func.substr(name_expr, len(prefix) + 1))
+            for prefix in _COMMITTEE_NAME_PREFIXES
+        ],
+        else_=name_expr,
+    )
+
+
 def find_organization(
     db: Session,
     org_name: str,
@@ -236,9 +263,12 @@ def find_organization(
 
     normalized_name = org_name.strip().lower()
 
+    db_name_norm = func.unaccent(func.lower(db_models.Organization.org_name))
+    query_name_norm = func.unaccent(normalized_name)
+
     score = func.jarowinkler(
-        func.unaccent(func.lower(db_models.Organization.org_name)),
-        func.unaccent(normalized_name),
+        _strip_committee_prefix(db_name_norm),
+        _strip_committee_prefix(query_name_norm),
     )
 
     filters = [
