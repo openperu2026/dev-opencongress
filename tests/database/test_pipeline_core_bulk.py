@@ -403,6 +403,58 @@ def test_find_organization_parent_org_id_scoping(session):
     assert none_found is None
 
 
+def test_find_organization_matches_short_name_against_prefixed_org_name(session):
+    """Regression test: bills.py's step_committees gives short committee
+    names off spley-portal-service ("Salud"), but committees.py seeds
+    Organization.org_name with a "Comisión de " prefix ("Comisión de
+    Salud") -- Jaro-Winkler alone can't bridge that prefix gap (2026-09-14,
+    logs/process/*/bills.log, 10 committees skipped as "organization not
+    found")."""
+    diputados = crud_core.upsert_organization(
+        session,
+        schema.Organization(org_name="Cámara de Diputados", org_type="Cámara"),
+    )
+    committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión de Salud",
+            org_type="Comisión",
+            parent_org_name="Cámara de Diputados",
+            parent_org_type="Cámara",
+        ),
+    )
+
+    found = crud_core.find_organization(
+        session,
+        org_name="Salud",
+        org_type="Comisión",
+        parent_org_id=diputados.org_id,
+    )
+    assert found is not None
+    assert found.org_id == committee.org_id
+
+
+def test_find_organization_matches_short_name_against_bicameral_prefix(session):
+    """Same prefix gap, "Comisión Bicameral de " variant (joint committees,
+    backend/scrapers/committees.py JOINT_COMMITTEE_URLS)."""
+    joint_committee = crud_core.upsert_organization(
+        session,
+        schema.Organization(
+            org_name="Comisión Bicameral de Presupuesto y Cuenta General de la República",
+            org_type="Comisión",
+        ),
+    )
+
+    found = crud_core.find_organization(
+        session,
+        org_name="Presupuesto y Cuenta General de la República",
+        org_type="Comisión",
+        parent_org_id=None,
+    )
+    assert found is not None
+    assert found.org_id == joint_committee.org_id
+
+
 def test_find_organization_explicit_none_parent_requires_null_parent(session):
     """parent_org_id=None must mean "require a NULL parent" (a genuinely
     top-level org, e.g. a joint/bicameral entity like Comisión Permanente),

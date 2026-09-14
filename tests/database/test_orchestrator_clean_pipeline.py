@@ -1050,6 +1050,92 @@ def test_process_bills_senado_bill_links_committee_and_chamber(orchestrator):
         )
 
 
+def test_process_bills_links_committee_when_raw_name_lacks_comision_prefix(
+    orchestrator,
+):
+    """Regression test: step_committees off spley-portal-service gives short
+    committee names ("Salud"), but Organization.org_name (seeded by
+    backend/scrapers/committees.py) carries a "Comisión de " prefix
+    ("Comisión de Salud") -- Jaro-Winkler alone can't bridge that prefix gap,
+    so the BillOrganization link was silently skipped as "organization not
+    found" (2026-09-14, logs/process/*/bills.log)."""
+    with orchestrator.DBSession() as db:
+        senado = db_models.Organization(
+            org_name="Senado de la República", org_type="Cámara"
+        )
+        db.add(senado)
+        db.flush()
+        db.add(
+            db_models.Organization(
+                org_name="Comisión de Salud",
+                org_type="Comisión",
+                parent_org_id=senado.org_id,
+            )
+        )
+        db.add(
+            RawBill(
+                id="00007-2026-2031-S",
+                timestamp=datetime(2026, 1, 10),
+                general=json.dumps(
+                    {
+                        "fecPresentacion": "2026-01-10",
+                        "titulo": "Proyecto de Ley Senado",
+                        "sumilla": "Resumen",
+                        "observaciones": "",
+                        "desEstado": "Presentado",
+                        "desProponente": "Ministerio Público",
+                        "desGpar": "Bancada Ausente",
+                        "proyectoLey": "00007-2026-2031-S",
+                    }
+                ),
+                congresistas=json.dumps([]),
+                steps=json.dumps(
+                    [
+                        {
+                            "seguimientoPleyId": 1,
+                            "fecha": "2026-01-01",
+                            "desEstado": "Presentado",
+                            "detalle": "Presentado",
+                        },
+                        {
+                            "seguimientoPleyId": 2,
+                            "fecha": "2026-01-02",
+                            "desEstado": "En Comisión",
+                            "detalle": "Pasa a comisión",
+                            "desComisiones": json.dumps(["Salud"]),
+                        },
+                    ]
+                ),
+                committees=json.dumps([]),
+                last_update=True,
+                processed=False,
+                changed=True,
+            )
+        )
+        db.commit()
+
+    stats = orchestrator._process_bills(limit=None)
+
+    assert stats.errors == 0
+    assert stats.skipped == 0
+    assert stats.processed == 1
+
+    with orchestrator.DBSession() as db:
+        bill_orgs = (
+            db.query(db_models.BillOrganization)
+            .filter(db_models.BillOrganization.bill_id == "00007-2026-2031-S")
+            .all()
+        )
+        orgs_by_org_id = {
+            org.org_id: org for org in db.query(db_models.Organization).all()
+        }
+        orgs_by_name = {
+            orgs_by_org_id[bo.org_id].org_name: orgs_by_org_id[bo.org_id]
+            for bo in bill_orgs
+        }
+        assert set(orgs_by_name) == {"Senado de la República", "Comisión de Salud"}
+
+
 def test_process_bills_loads_bill_when_author_and_bancada_are_missing(orchestrator):
     with orchestrator.DBSession() as db:
         db.add(
