@@ -442,3 +442,60 @@ def test_upload_url_to_s3_streams_response_bytes(monkeypatch):
             "documents/motions/motion.pdf",
         )
     ]
+
+
+def test_upload_url_to_s3_survives_client_closing_the_fileobj(monkeypatch):
+    """Regression test: boto3's real upload_fileobj (multipart, background
+    thread pool) closes the fileobj it was handed once the transfer
+    completes. Reusing that same object afterward for pdf.seek(0)/getbuffer()
+    raised ValueError: I/O operation on closed file. for ~every upload
+    since 2026-09-12 (logs/scrapers/*/documents.log)."""
+    test_pdf = create_test_pdf()
+
+    class FakeResponse:
+        content = test_pdf
+
+        def raise_for_status(self):
+            return None
+
+    class FakeClient:
+        def upload_fileobj(self, fileobj, bucket, key):
+            fileobj.read()
+            fileobj.close()
+
+    monkeypatch.setattr(
+        motions_documents_module,
+        "get_url",
+        lambda url: FakeResponse(),
+    )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_ACCESS_KEY_ID",
+        None,
+    )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_SECRET_ACCESS_KEY",
+        None,
+    )
+    monkeypatch.setattr(
+        motions_documents_module.boto3,
+        "client",
+        lambda *args, **kwargs: FakeClient(),
+    )
+    monkeypatch.setattr(
+        motions_documents_module.settings,
+        "AWS_S3_BUCKET_NAME",
+        "test-bucket",
+    )
+
+    success, metadata = RawMotionDocumentScraper._upload_url_to_s3(
+        "http://example.com/motion.pdf",
+        "documents/motions/motion.pdf",
+    )
+
+    assert success is True
+    assert metadata == {
+        "num_pages": 1,
+        "size_bytes": len(test_pdf),
+    }
