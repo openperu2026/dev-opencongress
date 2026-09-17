@@ -811,6 +811,11 @@ def index():
     _allowed_leg_period = {v for v, _, _ in LEG_PERIOD_UI_OPTIONS}
     if leg_period_q not in _allowed_leg_period:
         leg_period_q = "2026-2031"
+    # The 2021-2026 Congress is unicameral. Discard a chamber selection
+    # carried over from the bicameral 2026-2031 view so it cannot filter
+    # legacy results or remain in the displayed criteria.
+    if leg_period_q == "2021-2026":
+        chamber_q = ""
     period_start, period_end = leg_period_date_range(leg_period_q)
     leg_period_display = next(
         label for v, label, _ in LEG_PERIOD_UI_OPTIONS if v == leg_period_q
