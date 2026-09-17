@@ -1,14 +1,37 @@
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+@import url("https://fonts.cdnfonts.com/css/caleb-mono");
+@import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap");
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@300..700&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
 
 :root {
     --color-frame: #000000;
-    --color-background: #f9f3f3fa;
+
     --dark-orange: #5a1a1a;
-    --dark-pink: #C0076F;
-    --color-highlight: #B33951;
+    --neon-blue: #003cff;
+    /****Change dark-orange y dark-pink*/
+    
+    
+    --dark-pink: #5C1966;
+    --violet: #9201cb;
+    
     --color-black: #2A0800;
-    --color-black-transparency: #2A080030;
-    --color-hero: #f9f3f3fa;
+
+
+    /*base colors*/
+    --navy-blue: #070F34;
+    --hero-color: #49C5A5;
+    --atomic-tangerine: #ff9b6b;  
+    --red-crayola:#FA1649; 
+    --flirt:#94187C;
+    --dark-blue: #553c92;
+
+
+    --background-hero: var(--navy-blue);
+    --color-highlight: var(--red-crayola);
+    --color-background: #f2e0d8;
+
+
     --red: #AE0F13;
     --pink: #D63F9B;
     --yellow: #D9AE08;
@@ -44,7 +67,7 @@ body {
   margin: 0;
   background-color: var(--color-background);
   color: #344452;
-  font-family: "Roboto", sans-serif;
+  font-family: "Fira Code", monospace;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -65,10 +88,18 @@ main {
     justify-content: flex-start;
     gap: 20px;
     padding: 14px 24px;
-    background: var(--color-hero);
-    border-bottom: 1px solid var(--color-frame);
+    background: var(--background-hero);
+    /*border-bottom: 1px solid var(--color-frame);*/
 
-    font-size: 20px;
+    font-size: 14px;
+}
+
+.landing-page .site-navbar {
+    background: linear-gradient(
+        135deg,
+        var(--atomic-tangerine) 0%,
+        var(--hero-color) 100%
+    );
 }
 
 .language-links {
@@ -76,10 +107,11 @@ main {
     align-items: center;
     gap: 12px;
     margin-left: auto;
+    font-family: "Jen Brain", monospace
 }
 
 .language-links a {
-    color: #5a1a1a;
+    color: var(--background-hero);
     text-decoration: none;
     font-weight: 600;
 }
@@ -88,12 +120,38 @@ main {
     text-decoration: underline;
 }
 
-.header-divider {
-    width: 100%;
-    height: 12px;
-    flex: 0 0 auto;
 
-    /* Vertical stripe pattern.  */
+.header-divider {
+    display: none;
+}
+
+.site-navbar {
+    position: sticky;
+    /* el resto de tus reglas */
+}
+
+.site-navbar::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    width: 98%;
+    height: 1px;
+    transform: translateX(-50%);
+    background: var(--background-hero);
+}
+
+
+
+/*
+.header-divider {
+    display: none
+    width: 90%;
+    height: 1px;
+    flex: 0 0 auto;
+    background: var(--background-hero);
+
+    /* Vertical stripe pattern.  
     background: repeating-linear-gradient(
         90deg,
         var(--pink) 0 7px,
@@ -108,7 +166,7 @@ main {
         var(--light-green) 63px 70px,
         var(--green) 70px 77px
     );
-
+*/
 }
 
 .nav-brand {
@@ -126,26 +184,48 @@ main {
 
 .landing-logo {
     display: block;
-    width: 75%;
-    height: 200px;
-    object-fit: contain;
+    width: 120%;
+    height: 400px;
     margin: 0 auto 20px;
+    color: var(--background-hero);
+    background-color: currentColor;
+    -webkit-mask: url("../images/Isotipo.svg") center / contain no-repeat;
+    mask: url("../images/Isotipo.svg") center / contain no-repeat;
 }
 
 .nav-links {
     display: flex;
     align-items: center;
-    gap: 18px;
+    gap: 20px;
     list-style: none;
     margin: 0;
     padding: 0;
+    font-family: "Jet Brain", monospace;
+    
+}
+
+
+.nav-links > li:not(.menu-close):not(:last-child)::after {
+    content: "|";
+    color: var(--background-hero);
+    margin-left: 18px;
+    font-weight: 400;
 }
 
 .nav-links a,
 .menu-toggle {
-    color: #5a1a1a;
+    color:var(--background-hero);
     text-decoration: none;
     font-weight: 600;
+}
+
+body:not(.landing-page) .nav-links a,
+body:not(.landing-page) .language-links a {
+    color: var(--hero-color);
+}
+
+body:not(.landing-page) .nav-links > li:not(.menu-close):not(:last-child)::after {
+    color: var(--atomic-tangerine);
 }
 
 .menu-toggle,
@@ -191,7 +271,7 @@ main {
 
 .search-title {
     font-size: 24px;
-    color: #333;
+    color: var(--background-hero);
     margin-right: 10px;
 }
 
@@ -214,7 +294,7 @@ main {
     min-width: 0;
     height: 68px;
     padding: 0 18px;
-    border: 2px solid #b7b7b7;
+    border: 2px solid var(--background-hero);
     font-size: 17px;
     box-sizing: border-box;
     background-color: var(--color-background);
@@ -789,6 +869,44 @@ main {
   opacity: 0.9;
 }
 
+.bill-search-form .search-icon-button,
+.bill-search-form .bill-clean-button {
+  width: 100%;
+  min-height: 68px;
+  border: 2px solid var(--red-crayola);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--background-hero);
+  font-size: 16px;
+  font-weight: 600;
+  box-shadow: 3px 3px 0 var(--red-crayola);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+
+.bill-search-form .search-icon-button:hover,
+.bill-search-form .search-icon-button:focus,
+.bill-search-form .bill-clean-button:hover,
+.bill-search-form .bill-clean-button:focus {
+  background-color: var(--red-crayola);
+  border-color: var(--atomic-tangerine);
+  color: var(--background-hero);
+  opacity: 1;
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--red-crayola);
+}
+
+.bill-search-form .search-actions {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+}
+
+.bill-search-form .search-actions .search-icon-button,
+.bill-search-form .search-actions .bill-clean-button {
+  width: auto;
+  min-width: 130px;
+}
+
 .bar-search {
     display: flex;
     flex-direction: column;
@@ -856,6 +974,55 @@ span.pagination-tab.is-active {
 .search-results-table > :not(caption) > * > * {
     padding: 14px 16px;
     vertical-align: middle;
+}
+
+.search-results-table {
+    border-color: var(--background-hero);
+}
+
+.search-results-table > thead > tr > th {
+    background-color: var(--background-hero) !important;
+    color: var(--hero-color) !important;
+    border-color: var(--background-hero) !important;
+}
+
+.search-results-table > tbody > tr > * {
+    background-color: var(--color-background) !important;
+    color: var(--background-hero);
+    border-color: var (--background-hero) !important;
+}
+
+.search-results-table.table-striped > tbody > tr:nth-of-type(odd) > * {
+    background-color: rgb(255 155 107 / 16%) !important;
+}
+
+.search-results-table .btn.btn-primary {
+    background-color: transparent;
+    border: 2px solid var(--red-crayola);
+    color: var(--background-hero);
+    box-shadow: 3px 3px 0 var(--red-crayola);
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.search-results-table .btn.btn-primary:hover,
+.search-results-table .btn.btn-primary:focus {
+    background-color: var(--red-crayola);
+    border-color: var(--red-crayola);
+    color: var(--atomic-tangerine);
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--red-crayola);
+}
+
+
+
+.search-results-table th:first-child,
+.search-results-table td:first-child {
+    border-left: 1px solid var(--background-hero);
+}
+
+.search-results-table th:last-child,
+.search-results-table td:last-child {
+    border-right: 1px solid var(--background-hero);
 }
 
 .congress-mosaic {
@@ -1040,7 +1207,7 @@ button.congress-mosaic-card {
     flex: 1;
     /*this a gradeint pf colors*/
     background: var(--dark-pink);
-    color: white;
+    color: var(--divider-white);
     text-decoration: none;
     border-radius: 8px;
     font-weight: 500;
@@ -1048,6 +1215,30 @@ button.congress-mosaic-card {
     transition: all 0.2s ease;
     width: 180px;
 }
+
+
+.hero-buttom a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    flex: 1;
+    /*this a gradeint pf colors*/
+    background: var(--background-hero);
+    color: whitesmoke;
+    text-decoration: none;
+    border-radius: 8px;
+    font-weight: 500;
+    text-align: center;
+    transition: all 0.2s ease;
+    width: 180px;
+    font-family: "Jet Brain", monospace;
+    /*border: 3px solid  #ff9b6b;*/
+}
+
+
+
+
 /*effect when put the mouse overt a button*/
 .menu-card a:hover {
     opacity: 0.9;
@@ -1792,7 +1983,12 @@ svg#seatsSvg circle { cursor: default; }
     gap: 48px;
     text-align: center;
     /*background-image: url("../images/hero1.jpg");*/
-    background-color: var(--color-hero);
+    background: linear-gradient(
+        90deg,
+        var(--atomic-tangerine) 0%,
+        var(--hero-color) 100%
+    );
+    /*background: var(--background-hero);*/
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
@@ -1804,6 +2000,7 @@ svg#seatsSvg circle { cursor: default; }
     flex-direction: column;
     align-items: center;
     max-width: 560px;
+
 }
 
 .hero-text {
@@ -1819,17 +2016,19 @@ svg#seatsSvg circle { cursor: default; }
 
 .hero-title {
     margin: 0 0 24px;
-    color: var(--dark-orange);
+    color: var(--background-hero);
     font-size: 76px;
     font-weight: 700;
     line-height: 1.08;
+    font-family: "Space Mono", monospace;
 }
 
 .hero-description {
     margin: 0 0 28px;
-    color: #111827;
+    color: var(--background-hero);
     font-size: 20px;
     line-height: 1.55;
+    font-family: "Jet Brains", monospace;
 }
 
 .hero-list {
@@ -1849,6 +2048,8 @@ svg#seatsSvg circle { cursor: default; }
   font-size: 18px;
   line-height: 1.6;
   margin: 0 0 28px 0;
+  color: var(--hero-color);
+  font-family:"Jet Brains", monospace;
 }
 
 @media (max-width: 800px) {
@@ -1867,7 +2068,7 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .about-section {
-    background-color: var(--color-background);
+    background: var(--background-hero);
     min-height: 100vh;
     box-sizing: border-box;
     padding: 72px 24px;
@@ -1878,11 +2079,12 @@ svg#seatsSvg circle { cursor: default; }
 .about-content {
     max-width: 900px;
     margin: 0 auto;
+    font-family: "Caleb Mono", monospace;
 }
 
 .about-content h2 {
     margin: 0 0 24px;
-    color: var(--dark-orange);
+    color: var(--atomic-tangerine);
     font-size: 76px;
     font-weight: 700;
     line-height: 1.08;
@@ -1890,7 +2092,7 @@ svg#seatsSvg circle { cursor: default; }
 
 .about-content p {
     margin: 0;
-    color: #344452;
+    color:var(--hero-color);
     font-size: 18px;
     line-height: 1.7;
     text-align: justify;
@@ -1910,9 +2112,9 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .about-step {
-  border: 1px solid #d6d6d6;
+  border: 1px solid var(--hero-color);
   border-radius: 8px;
-  background: #ffffff;
+  background: none;
   padding: 20px;
 }
 
@@ -1931,7 +2133,7 @@ svg#seatsSvg circle { cursor: default; }
 
 .about-step h3 {
   margin: 0 0 10px;
-  color: #222222;
+  color: var(--atomic-tangerine);
   font-size: 22px;
   font-weight: 700;
 }
@@ -1953,7 +2155,7 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .whats-next-section {
-    background-color: var(--color-background);
+    background: var(--hero-color);
     box-sizing: border-box;
     padding: 72px 24px;
 }
@@ -1965,18 +2167,20 @@ svg#seatsSvg circle { cursor: default; }
 
 .whats-next-content h2 {
     margin: 0 0 20px;
-    color: var(--dark-orange);
+    color:var(--red-crayola);
     font-size: 64px;
     font-weight: 700;
     line-height: 1.08;
+    font-family:"Jet Brain", monospace
 }
 
 .whats-next-content > p {
     max-width: 760px;
     margin: 0;
-    color: #344452;
+    color: var(--background-hero);
     font-size: 18px;
     line-height: 1.7;
+    font-family: "Jet Brains", monospace;
 }
 
 .whats-next-grid {
@@ -1987,16 +2191,18 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .whats-next-grid article {
-    border-left: 4px solid var(--dark-orange);
-    background: #f8f8f8;
-    padding: 18px;
+    border: 1px solid var(--background-hero);
+    border-radius: 12px;
+    background: none;
+    padding: 20px;
 }
 
 .whats-next-grid h3 {
     margin: 0 0 10px;
-    color: #222222;
+    color: var(--red-crayola);
     font-size: 20px;
     font-weight: 700;
+    font-family:"Jet Brain", monospace
 }
 
 .whats-next-grid p {
@@ -2004,6 +2210,7 @@ svg#seatsSvg circle { cursor: default; }
     color: #344452;
     font-size: 15px;
     line-height: 1.55;
+    font-family:"Jet Brain", monospace
 }
 
 .whats-next-content .whats-next-contact {
