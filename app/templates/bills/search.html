@@ -20,6 +20,8 @@
         {% endif %}
     </div>
     <form method="post" action="{{ url_for('bills.index') }}">
+    <input type="hidden" name="leg_period_q" value="{{ leg_period_q }}">
+    <input type="hidden" name="chamber_q" value="{{ chamber_q }}">
     <div class="bar-search">
         <div class="search-row search-row--general">
             <div class="searching-container">
