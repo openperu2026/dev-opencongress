@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700&display=swap");
 @import url("https://fonts.cdnfonts.com/css/caleb-mono");
 @import url("https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap");
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Mono:ital,wght@0,400;0,700;1,400;1,700&display=swap');
@@ -66,8 +66,8 @@ body {
   /*Format of the body*/
   margin: 0;
   background-color: var(--color-background);
-  color: #344452;
-  font-family: "Fira Code", monospace;
+  color: var(--background-hero);
+  font-family: "Roboto Slab", serif;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
@@ -1252,9 +1252,10 @@ button.congress-mosaic-card {
   grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr);
   grid-template-areas:
     "details timeline";
-  max-width: 1500px;
-  margin: 0 auto;
-  padding: 20px 36px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 0px;
 }
 
 .bill-details {
@@ -1262,7 +1263,7 @@ button.congress-mosaic-card {
 }
 
 .bill-hero {
-  padding: 0 36px;
+  padding: 28px 36px;
   border-left: 5px solid var(--dark-pink);
 }
 
@@ -1277,7 +1278,7 @@ button.congress-mosaic-card {
     color: #5a1a1a;
     font-family: "Roboto", sans-serif;
     font-size: 20px;
-    font-weight: 900;
+    font-weight: 400;
     letter-spacing: 1px;
 }
 
@@ -1286,7 +1287,7 @@ button.congress-mosaic-card {
     color: #043f2e;
     font-family: "Roboto", sans-serif;
     font-size: 16px;
-    font-weight: 900;
+    font-weight: 700;
     padding: 8px 18px;
     border-radius: 500px;
 }
@@ -1305,7 +1306,7 @@ button.congress-mosaic-card {
     font-family: "Roboto", sans-serif;
     font-size: clamp(27px, 3vw, 30px);
     line-height: 1.12;
-    font-weight: 800;
+    font-weight: 700;
 }
 
 .bill-topic {
@@ -1313,7 +1314,7 @@ button.congress-mosaic-card {
     color: #344452;
     font-family: "Roboto", sans-serif;
     font-size: 16px;
-    font-weight: 900;
+    font-weight: 700;
     padding: 8px 10px;
     border-radius: 9px;
 }
@@ -1364,26 +1365,45 @@ button.congress-mosaic-card {
   color: var(--color-muted, #6b7280);
 }
 
+
+
+
+/*los bordes del timeline*/
+
 .timeline-shell {
   grid-area: timeline;
   position: relative;
   width: 100%;
   margin: 0 auto;
-  background: #ffffff;
-  border-radius: 18px;
+  /*Este es el elemento que controla el shadown*/
+  background: var(--background-hero);
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid #e5e7eb;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--background-hero);
+  /*box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);*/
 }
 
+.timeline-heading {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: 16px 28px;
+  background: var(--background-hero);
+  border-bottom: 1px solid var(--hero-color);
+  color: var(--atomic-tangerine);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+/*contenedor de todo del timeliner*/
 .timeline-container {
   max-height: 650px;
   padding: 48px 28px 90px;
   overflow-y: auto;
-  background: #ffffff;
+  background: var(--background-hero);
   box-sizing: border-box;
 
-  -webkit-mask-image: linear-gradient(
+  /*-webkit-mask-image: linear-gradient(
     to bottom,
     transparent 0,
     black 42px,
@@ -1398,40 +1418,26 @@ button.congress-mosaic-card {
     black calc(100% - 42px),
     transparent 100%
   );
-
+*/
   scrollbar-width: thin;
-  scrollbar-color: #9ca3af #f3f4f6;
+  scrollbar-color: var(--atomic-tangerine) var(--background-hero);
 }
 
 .timeline-shell::before,
 .timeline-shell::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 10px;
-  height: 52px;
-  z-index: 10;
-  pointer-events: none;
+  display: none;
 }
+
 
 .timeline-shell::before {
   top: 0;
-  background: linear-gradient(
-    to bottom,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.85) 45%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  background: var(--hero-color);
+
 }
 
 .timeline-shell::after {
   bottom: 0;
-  background: linear-gradient(
-    to top,
-    rgba(255, 255, 255, 1) 0%,
-    rgba(255, 255, 255, 0.85) 45%,
-    rgba(255, 255, 255, 0) 100%
-  );
+  background: var(--hero-color)
 }
 
 .timeline-container::-webkit-scrollbar {
@@ -1439,18 +1445,20 @@ button.congress-mosaic-card {
 }
 
 .timeline-container::-webkit-scrollbar-track {
-  background: #f3f4f6;
-  border-radius: 999px;
+  background: var(--color-background);
+  border-radius: 0;
 }
 
 .timeline-container::-webkit-scrollbar-thumb {
-  background: #9ca3af;
-  border-radius: 999px;
-  border: 2px solid #f3f4f6;
+  background: var(--atomic-tangerine);
+  border-radius: 0;
+  border: none;
 }
 
+
+
 .timeline-container::-webkit-scrollbar-thumb:hover {
-  background: #6b7280;
+  background: var(--color-background);
 }
 
 .timeline {
@@ -1458,6 +1466,8 @@ button.congress-mosaic-card {
   padding-left: 28px;
 }
 
+
+/*linea que une los puntos de linea de tiempo*/
 .timeline::before {
   content: "";
   position: absolute;
@@ -1465,7 +1475,7 @@ button.congress-mosaic-card {
   top: 0;
   bottom: 0;
   width: 3px;
-  background: #d1d5db;
+  background: var(--hero-color);
   border-radius: 999px;
 }
 
@@ -1480,37 +1490,45 @@ button.congress-mosaic-card {
   top: 8px;
   width: 16px;
   height: 16px;
-  background: var(--color-black);
-  border: 3px solid #ffffff;
+  background: var(--background-hero);
+  border: 3px solid var(--hero-color);
   border-radius: 50%;
-  box-shadow: 0 0 0 4px var(--color-black-transparency);
+  /*box-shadow: 0 0 0 4px var(--color-black-transparency);*/
   z-index: 2;
 }
 
+
+/*Contenedores de tarjetas de linea de tiempo*/
 .timeline-content {
   padding: 14px 16px;
-  background: #fcfcfd;
-  border: 1px solid var(--divider-white);
+  background: var(--color-background);
+  border: 1px solid var(--background-hero);
   border-radius: 14px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  /*transition: transform 0.15s ease, box-shadow 0.15s ease;*/
 }
 
 .timeline-content:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);
+  /*box-shadow: 0 8px 20px rgba(0, 0, 0, 0.06);*/
 }
 
+/*Titulo de las tarjetas*/
 .timeline-type {
   font-weight: 700;
   font-size: 15px;
-  color: #111827;
+  color: var(--background-hero);
   margin-bottom: 8px;
 }
 
+/*Detalle de los steps tarjetas*/
 .step-detail {
   margin-top: 0;
+  color: var(--background-hero);
+
 }
 
+
+/*Botones de descarga*/
 .timeline-content a {
   display: inline-block;
   margin-right: 12px;
@@ -1518,8 +1536,9 @@ button.congress-mosaic-card {
   padding: 6px 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
-  background: var(--color-black);
+  color: var(--background-hero);
+  background: var(--hero-color);
+  /*border: 1px solid var(--atomic-tangerine);*/
   text-decoration: none;
   border-radius: 8px;
   transition: all 0.2s ease;
@@ -1537,6 +1556,7 @@ button.congress-mosaic-card {
     grid-template-areas:
       "details"
       "timeline";
+    padding: 0 0 20px;
   }
 
   .bill-heading {
@@ -2155,7 +2175,7 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .whats-next-section {
-    background: var(--hero-color);
+    background: var(--background-hero);
     box-sizing: border-box;
     padding: 72px 24px;
 }
@@ -2167,7 +2187,7 @@ svg#seatsSvg circle { cursor: default; }
 
 .whats-next-content h2 {
     margin: 0 0 20px;
-    color:var(--red-crayola);
+    color:var(--atomic-tangerine);
     font-size: 64px;
     font-weight: 700;
     line-height: 1.08;
@@ -2177,7 +2197,7 @@ svg#seatsSvg circle { cursor: default; }
 .whats-next-content > p {
     max-width: 760px;
     margin: 0;
-    color: var(--background-hero);
+    color: var(--hero-color);
     font-size: 18px;
     line-height: 1.7;
     font-family: "Jet Brains", monospace;
@@ -2191,15 +2211,16 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .whats-next-grid article {
-    border: 1px solid var(--background-hero);
+    border: 1px solid var(--hero-color);
     border-radius: 12px;
-    background: none;
+    /*Esto es hero color ligeramente opaco*/
+    background: rgb(73 197 165 / 80%);
     padding: 20px;
 }
 
 .whats-next-grid h3 {
     margin: 0 0 10px;
-    color: var(--red-crayola);
+    color: var(--background-hero);
     font-size: 20px;
     font-weight: 700;
     font-family:"Jet Brain", monospace
@@ -2207,7 +2228,7 @@ svg#seatsSvg circle { cursor: default; }
 
 .whats-next-grid p {
     margin: 0;
-    color: #344452;
+    color: var(--background-hero);
     font-size: 15px;
     line-height: 1.55;
     font-family:"Jet Brain", monospace
