@@ -51,16 +51,6 @@
             </div>
         </div>
 
-        <div class="congress-search-actions">
-            <button type="submit" class="search-icon-button" aria-label="{{ _('Buscar') }}">
-                <i class="fa-solid fa-magnifying-glass"></i>
-            </button>
-
-            <a href="{{ url_for('congress.index') }}" class="clear-button congress-clean-button">
-                {{ _('Limpiar') }}
-            </a>
-        </div>
-
         <details class="advanced-search" {% if commission_q or special_committee_q %}open{% endif %}>
             <summary class="search-section-title">
                 <span>{{ _('Opciones de búsqueda avanzada:') }}</span>
@@ -89,6 +79,11 @@
                 </div>
             </div>
         </details>
+
+        <div class="search-actions">
+            <button type="submit" class="search-icon-button">{{ _('Buscar') }}</button>
+            <a href="{{ url_for('congress.index') }}" class="clear-button congress-clean-button">{{ _('Limpiar') }}</a>
+        </div>
     </div>
     </form>
 </div>

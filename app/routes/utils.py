@@ -144,17 +144,21 @@ def create_committee_option(db, leg_period_q: str):
     ]
 
 
-def create_special_committee_option(db):
+def create_special_committee_option(db, leg_period_q: str | None = None):
+    filters = [
+        Organization.org_type == TypeOrganization.COMMITTEE,
+        Organization.org_subtype == TypeCommittee.COM_ESP,
+        Organization.org_short_name.is_not(None),
+    ]
+    if leg_period_q:
+        filters.append(Membership.leg_period == leg_period_q)
+
     return [
         org_short_name
         for org_short_name in db.execute(
             select(Organization.org_short_name)
             .join(Membership, Membership.org_id == Organization.org_id)
-            .where(
-                Organization.org_type == TypeOrganization.COMMITTEE,
-                Organization.org_subtype == TypeCommittee.COM_ESP,
-                Organization.org_short_name.is_not(None),
-            )
+            .where(*filters)
             .distinct()
             .order_by(Organization.org_short_name.asc())
         )
@@ -163,12 +167,16 @@ def create_special_committee_option(db):
     ]
 
 
-def create_region_option(db):
+def create_region_option(db, leg_period_q: str | None = None):
+    filters = [ChamberMembership.dist_electoral.is_not(None)]
+    if leg_period_q:
+        filters.append(ChamberMembership.leg_period == leg_period_q)
+
     return [
         dist_electoral
         for dist_electoral in db.execute(
             select(ChamberMembership.dist_electoral)
-            .where(ChamberMembership.dist_electoral.is_not(None))
+            .where(*filters)
             .distinct()
             .order_by(ChamberMembership.dist_electoral.asc())
         )

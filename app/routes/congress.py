@@ -299,6 +299,10 @@ def index():
     _allowed_leg_period = {v for v, _, _ in LEG_PERIOD_UI_OPTIONS}
     if leg_period_q not in _allowed_leg_period:
         leg_period_q = "2026-2031"
+    # The 2021-2026 Congress is unicameral. A chamber value carried by a
+    # period-tab POST must not keep filtering the legacy roster.
+    if leg_period_q == "2021-2026":
+        chamber_q = ""
     leg_period_display = next(
         label for v, label, _ in LEG_PERIOD_UI_OPTIONS if v == leg_period_q
     )
@@ -349,7 +353,10 @@ def index():
         filters.append(
             Congresista.id.in_(
                 select(ChamberMembership.person_id)
-                .where(ChamberMembership.dist_electoral == region_q)
+                .where(
+                    ChamberMembership.dist_electoral == region_q,
+                    ChamberMembership.leg_period == leg_period_q,
+                )
                 .distinct()
             )
         )
@@ -379,6 +386,7 @@ def index():
                     Membership.org_type == TypeOrganization.COMMITTEE,
                     Organization.org_subtype == TypeCommittee.COM_ESP,
                     Organization.org_short_name == special_committee_q,
+                    Membership.leg_period == leg_period_q,
                 )
             )
         )
@@ -400,9 +408,9 @@ def index():
 
     with SessionProcessed() as db:
         bancada_options = create_bancada_option(db, leg_period_q)
-        region_options = create_region_option(db)
+        region_options = create_region_option(db, leg_period_q)
         committee_options = create_committee_option(db, leg_period_q)
-        special_committee_options = create_special_committee_option(db)
+        special_committee_options = create_special_committee_option(db, leg_period_q)
 
         count_stmt = select(func.count()).select_from(
             select(Congresista.id).where(*filters).subquery()

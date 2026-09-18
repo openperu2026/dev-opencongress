@@ -615,6 +615,19 @@ def test_chamber_selector_hidden_for_legacy_period(client):
     assert 'class="chamber-tabs"' in modern_body
 
 
+def test_legacy_period_clears_a_carried_over_chamber_filter(client, session_factory):
+    """Changing to the unicameral period must discard a stale chamber tab."""
+    _seed_bicameral_congress_data(session_factory)
+
+    body = client.post(
+        "/congress",
+        data={"leg_period_q": "2021-2026", "chamber_q": "diputados"},
+    ).get_data(as_text=True)
+
+    assert "Senadora Test" in body
+    assert '<input type="hidden" name="chamber_q" value="">' in body
+
+
 def _seed_reelected_congresista(session_factory) -> None:
     with session_factory() as db:
         db.add_all(
