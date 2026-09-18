@@ -101,7 +101,7 @@
         <section class="congress-section congress-bills-preview">
             <h2>{{_('Proyectos de ley recientes presentados (últimos 5)')}}</h2>
             {% if bills_authored %}
-                <table class="table table-striped">
+                <table class="table table-striped search-results-table congress-bills-table">
                     <thead>
                         <tr>
                             <th>#</th>
@@ -114,11 +114,11 @@
                     <tbody>
                     {% for bill in bills_authored %}
                         <tr>
-                            <td>{{ loop.index }}</td>
-                            <td>{{ bill.pley_id }}</td>
-                            <td>{{ bill.title }}</td>
-                            <td>{{ bill.presentation_date.strftime('%d-%m-%Y') }}</td>
-                            <td>
+                            <td data-label="#">{{ loop.index }}</td>
+                            <td data-label="{{ _('ID') }}">{{ bill.pley_id }}</td>
+                            <td data-label="{{ _('Título') }}">{{ bill.title }}</td>
+                            <td data-label="{{ _('Fecha') }}">{{ bill.presentation_date.strftime('%d-%m-%Y') }}</td>
+                            <td data-label="{{ _('Detalle') }}">
                                 <a href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}" class="btn btn-primary btn-sm">
                                     {{_('Ver detalles')}}
                                 </a>

@@ -870,7 +870,9 @@ body:not(.landing-page) .nav-links > li:not(.menu-close):not(:last-child)::after
 }
 
 .bill-search-form .search-icon-button,
-.bill-search-form .bill-clean-button {
+.bill-search-form .bill-clean-button,
+.congress-search-form .search-icon-button,
+.congress-search-form .congress-clean-button {
   width: 100%;
   min-height: 68px;
   border: 2px solid var(--red-crayola);
@@ -886,7 +888,11 @@ body:not(.landing-page) .nav-links > li:not(.menu-close):not(:last-child)::after
 .bill-search-form .search-icon-button:hover,
 .bill-search-form .search-icon-button:focus,
 .bill-search-form .bill-clean-button:hover,
-.bill-search-form .bill-clean-button:focus {
+.bill-search-form .bill-clean-button:focus,
+.congress-search-form .search-icon-button:hover,
+.congress-search-form .search-icon-button:focus,
+.congress-search-form .congress-clean-button:hover,
+.congress-search-form .congress-clean-button:focus {
   background-color: var(--red-crayola);
   border-color: var(--atomic-tangerine);
   color: var(--background-hero);
@@ -895,14 +901,17 @@ body:not(.landing-page) .nav-links > li:not(.menu-close):not(:last-child)::after
   box-shadow: 1px 1px 0 var(--red-crayola);
 }
 
-.bill-search-form .search-actions {
+.bill-search-form .search-actions,
+.congress-search-form .search-actions {
   display: flex;
   gap: 18px;
   align-items: center;
 }
 
 .bill-search-form .search-actions .search-icon-button,
-.bill-search-form .search-actions .bill-clean-button {
+.bill-search-form .search-actions .bill-clean-button,
+.congress-search-form .search-actions .search-icon-button,
+.congress-search-form .search-actions .congress-clean-button {
   width: auto;
   min-width: 130px;
 }
@@ -989,7 +998,7 @@ span.pagination-tab.is-active {
 .search-results-table > tbody > tr > * {
     background-color: var(--color-background) !important;
     color: var(--background-hero);
-    border-color: var (--background-hero) !important;
+    border-color: var(--background-hero) !important;
 }
 
 .search-results-table.table-striped > tbody > tr:nth-of-type(odd) > * {
@@ -1133,6 +1142,16 @@ button.congress-mosaic-card {
     width: 100%;
   }
 
+  .congress-search-form .search-actions {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .congress-search-form .search-actions .search-icon-button,
+  .congress-search-form .search-actions .congress-clean-button {
+    width: 100%;
+  }
+
   .search-criteria,
   .search-results-summary,
   .search-results-table,
@@ -1264,7 +1283,7 @@ button.congress-mosaic-card {
 
 .bill-hero {
   padding: 28px 36px;
-  border-left: 5px solid var(--dark-pink);
+  border-left: 5px solid var(--flirt);
 }
 
 .bill-topline {
@@ -1272,20 +1291,19 @@ button.congress-mosaic-card {
   align-items: center;
   gap: 16px;
   margin-bottom: 18px;
+  color: var(--flirt)
 }
 
 .bill-code {
-    color: #5a1a1a;
-    font-family: "Roboto", sans-serif;
-    font-size: 20px;
-    font-weight: 400;
+    color: var(--flirt);
+    font-size: 16px;
+    font-weight: 700;
     letter-spacing: 1px;
 }
 
 .bill-status {
-    background-color: #bdf3cf;
-    color: #043f2e;
-    font-family: "Roboto", sans-serif;
+    background-color: var(--hero-color);
+    color: var(--background-hero);
     font-size: 16px;
     font-weight: 700;
     padding: 8px 18px;
@@ -1293,8 +1311,8 @@ button.congress-mosaic-card {
 }
 
 .bill-status.not-approved {
-  background-color: #f3bfbd;
-  color: #3f0404;
+  background-color: var(--red-crayola);
+  color: var(--color-background);
   border-radius: 999px;
 }
 
@@ -1302,18 +1320,16 @@ button.congress-mosaic-card {
     max-width: 950px;
     margin: 0 0 14px;
 
-    color: #000;
-    font-family: "Roboto", sans-serif;
-    font-size: clamp(27px, 3vw, 30px);
+    color: var(--background-hero);
+    font-size: 25px;
     line-height: 1.12;
     font-weight: 700;
 }
 
 .bill-topic {
-    background-color: #c9d5e1;
-    color: #344452;
-    font-family: "Roboto", sans-serif;
-    font-size: 16px;
+    background-color: var(--flirt);
+    color: var(--color-background);
+    font-size: 12px;
     font-weight: 700;
     padding: 8px 10px;
     border-radius: 9px;
@@ -1323,16 +1339,15 @@ button.congress-mosaic-card {
     display: flex;
     flex-wrap: wrap;
     gap: 28px;
-    color: #344452;
-    font-family: "Roboto", sans-serif;
-    font-size: 19px;
+    color: var(--background-color);
+    font-size: 16px;
     padding: 10px 0 0;
 }
 
 .bill-meta {
   background: var(--color-background);
   padding: 10px 36px 0;
-  font-size: 20px;
+  font-size: 16px;
   line-height: 1.55;
 }
 
@@ -1360,7 +1375,7 @@ button.congress-mosaic-card {
 .summary-untranslated-note {
   max-width: 900px;
   margin: 0 0 4px;
-  font-size: 13px;
+  font-size: 14px;
   font-style: italic;
   color: var(--color-muted, #6b7280);
 }
@@ -1560,7 +1575,7 @@ button.congress-mosaic-card {
   }
 
   .bill-heading {
-    font-size: 40px;
+    font-size: 25px;
   }
 
   .bill-topline {
@@ -2516,9 +2531,12 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .congress-stats article {
-    padding: 18px 20px;
-    border-top: 4px solid var(--dark-pink);
-    background: #f8fafc;
+    padding: 22px 24px;
+    border: 1px solid var(--hero-color);
+    border-left: 5px solid var(--atomic-tangerine);
+    border-radius: 8px;
+    background: var(--background-hero);
+    box-shadow: 3px 3px 0 var(--atomic-tangerine);
     text-align: left;
 }
 
@@ -2528,10 +2546,10 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .congress-stats .approval-rate-card:hover {
-    transform: translateY(-4px);
-    background: #ffffff;
-    border-top-color: var(--color-gold);
-    box-shadow: 0 12px 24px rgba(42, 8, 0, 0.12);
+    transform: translate(2px, 2px);
+    background: var(--dark-pink);
+    border-color: var(--atomic-tangerine);
+    box-shadow: 1px 1px 0 var(--atomic-tangerine);
 }
 
 .congress-stats .approval-rate-card::after {
@@ -2563,13 +2581,13 @@ svg#seatsSvg circle { cursor: default; }
 
 .congress-stats h2 {
     margin: 0 0 14px;
-    color: #536678;
+    color: var(--hero-color);
     font-size: 15px;
     text-transform: uppercase;
 }
 
 .congress-stats strong {
-    color: #15283b;
+    color: var(--atomic-tangerine);
     font-size: 28px;
     line-height: 1;
 }
@@ -2587,14 +2605,14 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .recent-bills-list a {
-    color: #174ea6;
+    color:var(--flirt);
     font-weight: 700;
     line-height: 1.4;
 }
 
 .congress-action a,
 .congress-action .link-button {
-    color: #2563eb;
+    color: var(--flirt);
     font-weight: 700;
 }
 
@@ -2626,7 +2644,13 @@ svg#seatsSvg circle { cursor: default; }
 
 .congress-source {
     margin-top: 26px;
+    color: var(--flirt);
 }
+
+.congress-source a {
+  color: var(--flirt);
+}
+
 
 @media (max-width: 640px) {
     .congress-detail-page {
@@ -2684,17 +2708,33 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 /* Bill difference page */
+.diff-bill-link {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.diff-bill-link:hover {
+    color: var(--dark-pink);
+}
+
 .diff-back-link {
     display: inline-block;
-    margin-top: 8px;
-    color: #888;
+    margin: 16px;
+    padding: 10px 14px;
+    border: 2px solid var(--background-hero);
+    border-radius: 8px;
+    background: var(--atomic-tangerine);
+    color: var(--background-hero);
     text-decoration: none;
-    font-size: 12px;
+    font-size: 14px;
+    font-weight: 700;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .diff-back-link:hover {
-    color: var(--color-frame);
-    text-decoration: underline;
+    background: var(--dark-pink);
+    color: var(--atomic-tangerine);
+    text-decoration: none;
 }
 
 .diff-versions {
@@ -2779,26 +2819,26 @@ svg#seatsSvg circle { cursor: default; }
     margin: 0 16px 14px;
 }
 .diff-summary-pill {
-    background: #fff;
-    border: 1px solid #d2d8d4;
+    background: var(--color-background);
+    border: 1px solid var(--background-hero);
     border-radius: 999px;
     padding: 3px 12px;
     font-size: 12px;
-    color: #4a5560;
+    color: var(--background-hero);
 }
 .diff-summary-changed   { background: #fff7e0; border-color: #e8c879; }
 .diff-summary-inserted  { background: #d9efd9; border-color: #80b780; color: #1f4d1f; }
-.diff-summary-deleted   { background: #ffd9d9; border-color: #d28080; color: #621f1f; }
+.diff-summary-deleted   { background: var(--red-crayola); border-color:var(--red-crayola); color: #621f1f; }
 .diff-summary-renamed   { background: #e6e9ff; border-color: #8590d0; color: #2b3380; }
 
 .diff-node {
     margin: 0 16px 16px;
-    background: #fff;
+    background: white;
     border: 1px solid #d2d8d4;
     border-radius: 8px;
     overflow: hidden;
 }
-.diff-node-inserted { border-left: 4px solid #4a8c4a; }
+.diff-node-inserted { border-left: 4px solid var(--hero-color); }
 .diff-node-deleted  { border-left: 4px solid #c25656; }
 .diff-node-matched  { border-left: 4px solid var(--blue); }
 
@@ -2906,8 +2946,8 @@ svg#seatsSvg circle { cursor: default; }
 .diff-summary-card {
     margin: 24px 16px;
     padding: 16px;
-    background: #fff;
-    border: 1px solid #d2d8d4;
+    background: var(--color-background);
+    border: 1px solid var(--background-hero);
     border-radius: 8px;
     overflow: hidden;
 }
@@ -2925,23 +2965,23 @@ svg#seatsSvg circle { cursor: default; }
 .diff-summary-card-body {
     margin: 0;
     font-size: 14px;
-    color: #4a5560;
+    color: var(--background-hero);
     line-height: 1.5;
 }
 
 .diff-panel {
     margin: 24px 16px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--background-hero);
     border-radius: 6px;
-    background: #fff;
+    background: var(--background-hero);
     overflow: hidden;
 }
 
 .diff-panel-header {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    border-bottom: 1px solid #ccc;
-    background: #f6f8f4;
+    border-bottom: 1px solid var(--background-hero);
+    background: var(--background-hero);
 }
 
 .diff-col-header {
@@ -2949,17 +2989,24 @@ svg#seatsSvg circle { cursor: default; }
     flex-direction: column;
     gap: 4px;
     padding: 12px;
-    border-right: 1px solid #ccc;
+    border-right: 1px solid var(--background-hero);
 }
 
 .diff-col-header:last-child {
     border-right: none;
 }
 
+.diff-col-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .diff-col-title {
+    order: 1;
     font-size: 15px;
     font-weight: 600;
-    color: var(--color-frame);
+    color: var(--hero-color);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -2970,17 +3017,27 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .diff-doc-link {
+    order: 2;
     display: inline-flex;
     align-items: center;
-    gap: 4px;
-    margin-top: 4px;
+    justify-content: center;
+    flex: 0 0 auto;
+    margin: 0 0 0 auto;
+    padding: 4px 8px;
+    border: 1px solid var(--atomic-tangerine);
+    border-radius: 8px;
+    background: var(--atomic-tangerine);
+    color: var(--background-hero);
     font-size: 13px;
-    color: var(--blue);
+    font-weight: 700;
     text-decoration: none;
+    transition: background-color 0.2s ease, color 0.2s ease;
 }
 
 .diff-doc-link:hover {
-    text-decoration: underline;
+    background: transparent;
+    color: var(--atomic-tangerine);
+    text-decoration: none;
 }
 
 .diff-doc-link .material-symbols-outlined {
@@ -3059,5 +3116,155 @@ svg#seatsSvg circle { cursor: default; }
     .diff-panel-col:first-child {
         border-right: none;
         border-bottom: 1px solid #ccc;
+    }
+}
+
+/* Responsive refinements for the bill, comparison, and congress-detail views. */
+@media (max-width: 900px) {
+    .bill-hero {
+        padding: 24px 20px;
+    }
+
+    .bill-heading-meta {
+        gap: 12px 20px;
+        font-size: 17px;
+    }
+
+    .timeline-heading {
+        padding: 14px 20px;
+        font-size: 18px;
+    }
+
+    .timeline-container {
+        padding: 32px 20px 64px;
+    }
+
+    .diff-panel-header,
+    .diff-panel-body {
+        grid-template-columns: 1fr;
+    }
+
+    .diff-col-header {
+        border-right: none;
+        border-bottom: 1px solid var(--hero-color);
+    }
+
+    .diff-col-header:last-child {
+        border-bottom: none;
+    }
+
+    .diff-panel-col:first-child {
+        border-right: none;
+        border-bottom: 1px solid var(--hero-color);
+    }
+}
+
+@media (max-width: 760px) {
+    .congress-detail-page {
+        padding: 28px 18px 44px;
+    }
+
+    .congress-profile-summary,
+    .congress-stats {
+        grid-template-columns: 1fr;
+    }
+
+    .congress-photo-wrap {
+        width: min(176px, 100%);
+    }
+
+    .congress-stats {
+        gap: 14px;
+        margin-bottom: 28px;
+    }
+
+    .congress-stats article {
+        padding: 18px 20px;
+    }
+
+    .diff-summary-card,
+    .diff-panel {
+        margin: 20px 12px;
+    }
+
+    .congress-bills-table thead {
+        display: none;
+    }
+
+    .congress-bills-table,
+    .congress-bills-table tbody,
+    .congress-bills-table tr {
+        display: block;
+        width: 100%;
+    }
+
+    .congress-bills-table tr {
+        margin-bottom: 16px;
+        border: 1px solid var(--background-hero);
+        border-radius: 8px;
+        overflow: hidden;
+    }
+
+    .congress-bills-table > :not(caption) > * > * {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 12px 14px;
+        text-align: right;
+        border-left: none;
+        border-right: none;
+    }
+
+    .congress-bills-table td::before {
+        content: attr(data-label);
+        color: var(--background-hero);
+        font-weight: 700;
+        text-align: left;
+    }
+}
+
+@media (max-width: 500px) {
+    .page-details {
+        padding-bottom: 0;
+    }
+
+    .bill-heading {
+        font-size: 27px;
+    }
+
+    .bill-topline {
+        gap: 10px;
+        margin-bottom: 14px;
+    }
+
+    .bill-code {
+        font-size: 17px;
+    }
+
+    .bill-status {
+        font-size: 14px;
+        padding: 7px 12px;
+    }
+
+    .timeline {
+        padding-left: 24px;
+    }
+
+    .timeline-dot {
+        left: -22px;
+    }
+
+    .timeline-content {
+        padding: 14px;
+    }
+
+    .diff-col-title-row {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .diff-doc-link {
+        margin-left: 0;
     }
 }

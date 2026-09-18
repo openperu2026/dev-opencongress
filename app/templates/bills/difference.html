@@ -5,7 +5,7 @@
   <section class="bill-hero">
     <div class="bill-content">
       <div class="bill-topline">
-        <span class="bill-code">{{ _('Proyecto de ley') }} Nº {{ bill.pley_id }}</span>
+        <a class="bill-code diff-bill-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">{{ _('Proyecto de ley') }} Nº {{ bill.pley_id }}</a>
       </div>
 
       <h1 class="bill-heading">
@@ -17,7 +17,6 @@
       </div>
     </div>
   </section>
-  <a class="diff-back-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">← {{_('Volver al proyecto de ley')}}</a>
 </div>
 
 {% if difference_type == 'no_change' %}
@@ -38,7 +37,7 @@
 
   <section class="diff-summary-card">
     <div class="diff-summary-card-heading">
-      <span class="material-symbols-outlined" style="color: var(--color-highlight);">auto_awesome</span>
+      <!--<span class="material-symbols-outlined" style="color: var(--color-highlight);">auto_awesome</span>-->
       {{ _('Resumen de impacto con IA') }}
     </div>
     <p class="diff-summary-card-body">
@@ -51,22 +50,22 @@
   <section class="diff-panel">
     <div class="diff-panel-header">
       <div class="diff-col-header">
-        <span class="diff-col-title">{{ _('Versión 1') }}: {{ prev_step.step_type.value if prev_step else '—' }}</span>
+        <div class="diff-col-title-row">
+          {% if old_doc_available %}
+            <a class="diff-doc-link" href="{{ old_doc_url }}" target="_blank" rel="noopener">{{ _('Documento') }}</a>
+          {% endif %}
+          <span class="diff-col-title">{{ _('Versión 1') }}: {{ prev_step.step_type.value if prev_step else '—' }}</span>
+        </div>
         <span class="diff-col-date">{{ prev_step.step_date if prev_step else '—' }}</span>
-        {% if old_doc_available %}
-          <a class="diff-doc-link" href="{{ old_doc_url }}" target="_blank" rel="noopener">
-            <span class="material-symbols-outlined">description</span> {{ _('Ver documento') }}
-          </a>
-        {% endif %}
       </div>
       <div class="diff-col-header">
-        <span class="diff-col-title">{{ _('Versión 2') }}: {{ step.step_type.value }}</span>
+        <div class="diff-col-title-row">
+          {% if new_doc_available %}
+            <a class="diff-doc-link" href="{{ new_doc_url }}" target="_blank" rel="noopener">{{ _('Documento') }}</a>
+          {% endif %}
+          <span class="diff-col-title">{{ _('Versión 2') }}: {{ step.step_type.value }}</span>
+        </div>
         <span class="diff-col-date">{{ step.step_date }}</span>
-        {% if new_doc_available %}
-          <a class="diff-doc-link" href="{{ new_doc_url }}" target="_blank" rel="noopener">
-            <span class="material-symbols-outlined">description</span> {{ _('Ver documento') }}
-          </a>
-        {% endif %}
       </div>
     </div>
     <div class="diff-panel-body">
