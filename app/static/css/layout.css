@@ -1291,11 +1291,11 @@ button.congress-mosaic-card {
   align-items: center;
   gap: 16px;
   margin-bottom: 18px;
-  color: var(--flirt)
+  color: var(--background-hero)
 }
 
 .bill-code {
-    color: var(--flirt);
+    color: var(--background-hero  );
     font-size: 16px;
     font-weight: 700;
     letter-spacing: 1px;
@@ -1316,6 +1316,27 @@ button.congress-mosaic-card {
   border-radius: 999px;
 }
 
+.ai-feature-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--flirt);
+  color: var(--color-background);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.ai-feature-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: currentColor;
+}
+
 .bill-heading {
     max-width: 950px;
     margin: 0 0 14px;
@@ -1327,12 +1348,19 @@ button.congress-mosaic-card {
 }
 
 .bill-topic {
-    background-color: var(--flirt);
+    display: inline-block;
+    background-color: var(--background-hero);
     color: var(--color-background);
     font-size: 12px;
     font-weight: 700;
     padding: 8px 10px;
     border-radius: 9px;
+}
+
+.bill-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
 }
 
 .bill-heading-meta {
@@ -1404,10 +1432,93 @@ button.congress-mosaic-card {
   margin: 0;
   padding: 16px 28px;
   background: var(--background-hero);
-  border-bottom: 1px solid var(--hero-color);
   color: var(--atomic-tangerine);
   font-size: 20px;
   font-weight: 700;
+}
+
+.timeline-actions-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 0 28px 14px;
+  background: var(--background-hero);
+  color: var(--color-background);
+  border-bottom: 1px solid var(--hero-color);
+}
+
+.timeline-legend-label {
+  margin-right: 2px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.timeline-legend-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.timeline-legend-download {
+  background: var(--hero-color);
+  color: var(--background-hero);
+}
+
+.timeline-legend-ai {
+  position: relative;
+  background: var(--flirt);
+  color: var(--color-background);
+  cursor: help;
+}
+
+.timeline-legend-ai-icon {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+.timeline-ai-legend-tooltip {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 9px);
+  left: 0;
+  width: min(240px, calc(100vw - 48px));
+  padding: 10px 12px;
+  border: 1px solid var(--hero-color);
+  border-radius: 6px;
+  background: var(--background-hero);
+  color: var(--color-background);
+  font-family: Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .15s ease, visibility .15s ease;
+}
+
+.timeline-legend-ai:hover .timeline-ai-legend-tooltip,
+.timeline-legend-ai:focus .timeline-ai-legend-tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+@media (max-width: 500px) {
+  .timeline-ai-legend-tooltip {
+    width: min(240px, calc(100vw - 48px));
+  }
 }
 
 /*contenedor de todo del timeliner*/
@@ -1539,6 +1650,7 @@ button.congress-mosaic-card {
 .step-detail {
   margin-top: 0;
   color: var(--background-hero);
+  font-size: 12px;
 
 }
 
@@ -1563,6 +1675,13 @@ button.congress-mosaic-card {
   background-color: var(--dark-pink);
   text-decoration: underline;
   transform: translateY(-1px);
+}
+
+.timeline-content a.timeline-view-changes,
+.timeline-content a.timeline-view-changes:hover,
+.timeline-content a.timeline-view-changes:focus {
+  background-color: var(--flirt);
+  color: var(--color-background);
 }
 
 @media (max-width: 900px) {
@@ -1596,27 +1715,169 @@ button.congress-mosaic-card {
 
 /* votes page */
 .page-votes {
-  max-width: 1500px;
+  max-width: none;
   margin: 0 auto;
-  padding: 20px 36px;
+  padding: 16px 32px 32px;
 }
 
+.page-votes .bill-hero {
+  padding: 20px 24px;
+}
 
-.vote-results {
+.page-votes .bill-topline {
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.page-votes .bill-code,
+.page-votes .bill-status {
+  font-size: 14px;
+}
+
+.vote-bill-link {
+  text-decoration: underline;
+}
+
+.vote-bill-link:hover,
+.vote-bill-link:focus {
+  color: var(--flirt);
+}
+
+.page-votes .bill-status {
+  padding: 6px 14px;
+}
+
+.page-votes .bill-heading {
+  max-width: none;
+  margin-bottom: 10px;
+}
+
+.page-votes .bill-topic {
+  font-size: 11px;
+  padding: 6px 8px;
+}
+
+.page-votes .bill-heading-meta {
+  flex-wrap: nowrap;
+  gap: 12px 24px;
+  padding-top: 8px;
+  color: var(--background-hero);
+  font-size: 14px;
+}
+
+.ai-feature-note {
+  margin: 8px 0 0;
+  color: var(--background-hero);
+  font: inherit;
+  font-size: 14px;
+}
+
+.vote-presentation-meta {
+  white-space: nowrap;
+}
+
+.vote-step-meta {
+  display: block;
+  color: var(--background-hero);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.vote-step-meta strong {
+  color: var(--background-hero);
+}
+
+.votes-overview {
+  --votes-overview-height: clamp(340px, 25vw, 470px);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: stretch;
   margin-top: 2rem;
 }
 
+.votes-overview-summary,
+.votes-overview-charts,
+.votes-individual {
+  min-width: 0;
+}
+
+.votes-overview-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: var(--votes-overview-height);
+}
+
+.votes-overview-charts {
+  display: grid;
+  gap: 16px;
+  height: var(--votes-overview-height);
+}
+
+.vote-results-title {
+  margin: 0;
+  color: var(--background-hero);
+  font-size: 1rem;
+  font-weight: 400;
+  line-height: 1.15;
+}
+
+.vote-results {
+  margin: 0;
+}
+
 .vote-summary {
-  border: 2px solid #999;
-  border-radius: 4px;
-  background-color: #f5f5f5;
-  padding: 1rem;
+  padding: 0;
+}
+
+.vote-summary-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.vote-summary-card {
+  display: grid;
+  gap: 8px;
+  min-height: 86px;
+  padding: 12px 14px;
+  border: 1px solid var(--hero-color);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--background-hero);
+  box-shadow: 3px 3px 0 var(--hero-color);
+}
+
+.vote-summary-label {
+  color: var(--color-background);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+}
+
+.vote-summary-card--yes {
+  border-color: var(--hero-color);
+  box-shadow: 3px 3px 0 var(--hero-color);
+}
+
+.vote-summary-card--no {
+  border-color: var(--red-crayola);
+  box-shadow: 3px 3px 0 var(--red-crayola);
+}
+
+.vote-summary-card--abstain {
+  border-color: var(--atomic-tangerine);
+  box-shadow: 3px 3px 0 var(--atomic-tangerine);
+}
+
+.vote-summary-card--others {
+  border-color: #b8b8b8;
+  box-shadow: 3px 3px 0 #b8b8b8;
 }
 
 .vote-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
+  display: none;
 }
 
 .vote-table th {
@@ -1643,15 +1904,15 @@ button.congress-mosaic-card {
 }
 
 .vote-count.in-favor {
-  color: #0f8f7c;
+  color: var(--hero-color);
 }
 
 .vote-count.against {
-  color: #cf294a;
+  color: var(--red-crayola);
 }
 
 .vote-count.abst {
-  color: #d29b00;
+  color: var(--atomic-tangerine);
 }
 
 .vote-count.others {
@@ -1659,18 +1920,27 @@ button.congress-mosaic-card {
 }
 
 .seats-wrapper {
-  margin-top: 13px;
-  background-color: white;
+  margin-top: 0;
+  flex: 1;
+  min-height: 0;
+  background-color: var(--color-background);
   display: flex;
   justify-content: center;
   gap: 32px;
-  padding-bottom: 50px;
-  align-items: flex-start;
+  padding-bottom: 0;
+  align-items: center;
 }
 
 .seats-container {
   position: relative;
   flex-shrink: 0;
+  width: 100%;
+}
+
+#seatsSvg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 .vote-legend {
@@ -1678,7 +1948,7 @@ button.congress-mosaic-card {
   gap: 16px;
   flex-wrap: wrap;
   justify-content: center;
-  margin: 18px 0 20px;
+  margin: 0;
   font-size: 12px;
   color: #546170;
 }
@@ -1697,22 +1967,68 @@ button.congress-mosaic-card {
   white-space: nowrap;
 }
 
-svg#seatsSvg circle { cursor: default; }
+#seatsSvg .seat {
+  cursor: default;
+}
+
+#seatsSvg .seat--yes {
+  fill: var(--hero-color);
+}
+
+#seatsSvg .seat--no {
+  fill: var(--red-crayola);
+}
+
+#seatsSvg .seat--abstain {
+  fill: var(--atomic-tangerine);
+}
+
+#seatsSvg .seat--others {
+  fill: #b8b8b8;
+}
 
 .bancada-chart {
-  background-color: white;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: 14px;
+  /*border: 1px solid var(--background-hero);*/
+  border-radius: 8px;
+  background-color: var(--color-background);
+  /*box-shadow: 3px 3px 0 var(--hero-color);*/
 }
 
 .bancada-chart-title {
-  margin: 18px auto 10px;
+  margin: 0 auto 10px;
   text-align: center;
-  font-size: 2rem;
+  font-size: 1rem;
   font-weight: 700;
-  color: #2f3a45;
+  color: var(--background-hero);
+}
+
+.bancada-chart-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-color: var(--atomic-tangerine) var(--background-hero);
+  scrollbar-width: thin;
+}
+
+.bancada-chart-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bancada-chart-scroll::-webkit-scrollbar-track {
+  background: var(--background-hero);
+}
+
+.bancada-chart-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: var(--atomic-tangerine);
 }
 
 #bancadaSvg {
-  width: 72%;
+  width: 100%;
   height: auto;
   display: block;
   margin: 0 auto;
@@ -1720,16 +2036,19 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .bancada-label {
+  font-family: "Roboto", sans-serif;
   font-size: 13px;
   font-weight: 600;
   dominant-baseline: middle; 
   alignment-baseline: middle;
-  fill: #2f3a45;
+  fill: var(--background-hero);
 }
 
 .bancada-total {
+  font-family: "Roboto", sans-serif;
   font-size: 13px;
-  fill: #73808f;
+  font-weight: 700;
+  fill: var(--background-hero);
 }
 
 .bancada-bar-segment text {
@@ -1753,15 +2072,15 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .vote-legend .legend-swatch--yes {
-  background-color: #0f8f7c;
+  background-color: var(--hero-color);
 }
 
 .vote-legend .legend-swatch--no {
-  background-color: #cf294a;
+  background-color: var(--red-crayola);
 }
 
 .vote-legend .legend-swatch--abstain {
-  background-color: #d29b00;
+  background-color: var(--atomic-tangerine);
 }
 
 .vote-legend .legend-swatch--others {
@@ -1769,39 +2088,246 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .bancada-legend .legend-swatch {
-  width: 24px;
-  height: 24px;
+  width: 14px;
+  height: 14px;
   border-radius: 2px;
   box-sizing: border-box;
   flex-shrink: 0;
 }
 
+.vote-document-link {
+  display: inline-block;
+  margin-left: auto;
+  padding: 7px 12px;
+  border: 1px solid var(--atomic-tangerine);
+  border-radius: 7px;
+  background: var(--background-hero);
+  color: var(--atomic-tangerine);
+  font-family: "Roboto", sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.vote-document-link:hover,
+.vote-document-link:focus {
+  background: var(--atomic-tangerine);
+  color: var(--background-hero);
+}
+
+.bancada-legend {
+  display: flex;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  color: var(--background-hero);
+  font-family: "Roboto", sans-serif;
+  font-size: 0.8rem;
+}
+
 .bancada-legend .legend-swatch--yes {
-  background-color: #d8f0ee;
-  border: 1.5px solid #2fa9a1;
+  background-color: var(--hero-color);
 }
 
 .bancada-legend .legend-swatch--no {
-  background-color: #f3d7dc;
-  border: 1.5px solid #d53f57;
+  background-color: var(--red-crayola);
 }
 
 .bancada-legend .legend-swatch--abstain {
-  background-color: #fff0c7;
-  border: 1.5px solid #f1c53a;
+  background-color: var(--atomic-tangerine);
+}
+
+.bancada-legend .legend-swatch--others {
+  background-color: #b8b8b8;
 }
 
 .vote-members-table-wrap {
-  margin-top: 28px;
+  margin-top: 32px;
   max-height: 420px;
   overflow-y: auto;
-  border: 1px solid #d8d8d8;
-  border-radius: 6px;
+  border: 1px solid var(--background-hero);
+  border-radius: 8px;
+  scrollbar-color: var(--atomic-tangerine) var(--background-hero);
+  scrollbar-width: thin;
+}
+
+.vote-members-table-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.vote-members-table-wrap::-webkit-scrollbar-track {
+  background: var(--background-hero);
+}
+
+.vote-members-table-wrap::-webkit-scrollbar-thumb {
+  border: 2px solid var(--background-hero);
+  border-radius: 999px;
+  background: var(--atomic-tangerine);
+}
+
+.vote-members-title {
+  margin: 32px 0 10px;
+  color: var(--background-hero);
+  font-family: "Roboto", sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-align: center;
 }
 
 .vote-members-table {
-  background-color: #ffffff;
+  width: 100%;
+  background-color: var(--color-background);
   margin-bottom: 0;
+}
+
+.vote-members-table.search-results-table {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.vote-members-table.search-results-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.vote-members-table .vote-filter-row th {
+  padding: 0 12px 12px;
+  background: var(--background-hero) !important;
+}
+
+.vote-filter {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 9px;
+  border: 1px solid var(--atomic-tangerine);
+  border-radius: 5px;
+  background: var(--color-background);
+  color: var(--background-hero);
+  font-family: "Roboto", sans-serif;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.vote-filter::placeholder {
+  color: color-mix(in srgb, var(--background-hero) 65%, transparent);
+}
+
+.vote-filter:focus {
+  outline: 2px solid var(--hero-color);
+  outline-offset: 1px;
+}
+
+#bancadaSvg .bancada-segment {
+  stroke: var(--color-background);
+  stroke-width: 1.5px;
+}
+
+#bancadaSvg .bancada-bar-track {
+  fill: rgb(7 15 52 / 8%);
+}
+
+#bancadaSvg .bancada-grid line {
+  stroke: rgb(7 15 52 / 16%);
+  stroke-width: 1px;
+  stroke-dasharray: 3 4;
+}
+
+#bancadaSvg .bancada-axis line {
+  stroke: var(--background-hero);
+  stroke-width: 1px;
+}
+
+#bancadaSvg .bancada-axis text {
+  fill: var(--background-hero);
+  font-family: "Roboto", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  text-anchor: middle;
+}
+
+#bancadaSvg .bancada-segment--yes {
+  fill: var(--hero-color);
+}
+
+#bancadaSvg .bancada-segment--no {
+  fill: var(--red-crayola);
+}
+
+#bancadaSvg .bancada-segment--abstain {
+  fill: var(--atomic-tangerine);
+}
+
+#bancadaSvg .bancada-segment--others {
+  fill: #b8b8b8;
+}
+
+@media (max-width: 900px) {
+  .votes-overview {
+    grid-template-columns: 1fr;
+    --votes-overview-height: auto;
+    gap: 28px;
+  }
+
+  .votes-overview-summary,
+  .votes-overview-charts {
+    height: auto;
+  }
+
+  .bancada-chart-scroll {
+    max-height: 360px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page-votes {
+    padding: 16px;
+  }
+
+  .page-votes .bill-hero {
+    padding: 16px;
+  }
+
+  .page-votes .bill-heading-meta {
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    font-size: 13px;
+  }
+
+  .vote-results-title {
+    font-size: 1.65rem;
+  }
+
+  .vote-summary {
+    padding: 0;
+  }
+
+  .vote-summary-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .vote-summary-card {
+    min-height: 76px;
+    padding: 10px 12px;
+  }
+
+  .vote-table th {
+    padding: 0.75rem 0.35rem;
+    font-size: 0.8rem;
+  }
+
+  .vote-table td {
+    padding: 1.25rem 0.35rem;
+  }
+
+  .vote-count {
+    font-size: 1.8rem;
+  }
 }
 
 .vote-members-table th {
@@ -1811,6 +2337,8 @@ svg#seatsSvg circle { cursor: default; }
 
 .vote-members-table tbody td {
   vertical-align: middle;
+  font-family: "Roboto", sans-serif;
+  font-size: 0.95rem;
 }
 
 .vote-sort-button {
@@ -1829,7 +2357,7 @@ svg#seatsSvg circle { cursor: default; }
 .vote-sort-button::after {
   content: "\2195";
   float: right;
-  color: #8b96a3;
+  color: var(--hero-color);
 }
 
 .vote-sort-button[data-direction="asc"]::after {
@@ -1841,13 +2369,56 @@ svg#seatsSvg circle { cursor: default; }
 }
 
 .vote-members-table td:first-child a {
-  color: #5a1a1a;
+  color: var(--background-hero);
   text-decoration: none;
   font-weight: 600;
 }
 
 .vote-members-table td:first-child a:hover {
+  color: var(--flirt);
   text-decoration: underline;
+}
+
+.vote-label {
+  color: var(--background-hero);
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .vote-members-table-wrap {
+    overflow-x: auto;
+  }
+
+  .vote-members-table.search-results-table {
+    display: table;
+    min-width: 680px;
+  }
+
+  .vote-members-table.search-results-table thead {
+    display: table-header-group;
+  }
+
+  .vote-members-table.search-results-table tbody {
+    display: table-row-group;
+  }
+
+  .vote-members-table.search-results-table tr {
+    display: table-row;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  .vote-members-table.search-results-table > :not(caption) > * > * {
+    display: table-cell;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--background-hero);
+  }
+
+  .vote-members-table.search-results-table td::before {
+    content: none;
+  }
 }
 
 /*footer and menu hamurger*/
@@ -2977,6 +3548,10 @@ svg#seatsSvg circle { cursor: default; }
     overflow: hidden;
 }
 
+.diff-panel-mobile {
+    display: none;
+}
+
 .diff-panel-header {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -3142,6 +3717,26 @@ svg#seatsSvg circle { cursor: default; }
     .diff-panel-header,
     .diff-panel-body {
         grid-template-columns: 1fr;
+    }
+
+    .diff-panel-desktop {
+        display: none;
+    }
+
+    .diff-panel-mobile {
+        display: block;
+    }
+
+    .diff-mobile-version + .diff-mobile-version {
+        border-top: 1px solid var(--hero-color);
+    }
+
+    .diff-panel-mobile .diff-col-header {
+        border-bottom: 1px solid var(--hero-color);
+    }
+
+    .diff-panel-mobile .diff-panel-col {
+        border: none;
     }
 
     .diff-col-header {

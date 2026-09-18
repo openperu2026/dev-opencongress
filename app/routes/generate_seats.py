@@ -10,7 +10,7 @@ def generate_seats(vote_counts, groups):
         groups: {'yes': [names], 'no': [names], 'abstain': [names]}
 
     Returns:
-        List of dicts with keys: x, y, r (radius of dot), color, label
+        List of dicts with keys: x, y, r (radius of dot), vote_key, label
     """
     # To arrange seats in a circular layout, specify the number of seats from
     # inner to outer row so that the total adds up to 130.
@@ -77,16 +77,10 @@ def generate_seats(vote_counts, groups):
 
             seats.append({"x": x, "y": y, "row": row, "theta": theta})
 
-    # Build color slots (gray others are placed last and do not get labels)
-    color_order = ["yes", "no", "abstain", "others"]
-    color_map = {
-        "yes": "#0f8f7c",
-        "no": "#cf294a",
-        "abstain": "#d29b00",
-        "others": "#b8b8b8",
-    }
+    # Build vote slots. Visual colors belong to the CSS layer.
+    vote_order = ["yes", "no", "abstain", "others"]
     slots = []
-    for key in color_order:
+    for key in vote_order:
         count = vote_counts.get(key, 0)
         slots.extend([key] * count)
 
@@ -94,7 +88,7 @@ def generate_seats(vote_counts, groups):
     indexed_seats = [(i, s) for i, s in enumerate(seats)]
     indexed_seats.sort(key=lambda p: (p[1]["x"], p[1]["y"]))
 
-    # Assign colors and labels
+    # Assign vote type and labels
     result = [None] * len(seats)
     queues = {
         "yes": groups.get("yes", [])[:],
@@ -105,14 +99,13 @@ def generate_seats(vote_counts, groups):
 
     for sorted_idx, (orig_idx, seat) in enumerate(indexed_seats):
         key = slots[sorted_idx]
-        color = color_map.get(key, "#ccc")
         label = queues[key].pop(0) if queues.get(key) else ""
 
         result[orig_idx] = {
             "x": round(seat["x"], 2),
             "y": round(seat["y"], 2),
             "r": round(dot_radius, 2),
-            "color": color,
+            "vote_key": key,
             "label": label,
         }
 

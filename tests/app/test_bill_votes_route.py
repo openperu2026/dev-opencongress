@@ -253,8 +253,8 @@ def test_generate_seats_adds_gray_others_without_labels():
     )
 
     assert len(seats) == 130
-    assert sum(1 for seat in seats if seat["color"] == "#b8b8b8") == 122
+    assert sum(1 for seat in seats if seat["vote_key"] == "others") == 122
     assert any(seat["label"] == "A" for seat in seats)
     assert any(seat["label"] == "B" for seat in seats)
     assert any(seat["label"] == "C" for seat in seats)
-    assert all(seat["label"] == "" for seat in seats if seat["color"] == "#b8b8b8")
+    assert all(seat["label"] == "" for seat in seats if seat["vote_key"] == "others")

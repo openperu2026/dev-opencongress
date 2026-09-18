@@ -24,6 +24,7 @@ from app.diff_render import (
     render_payload_html_split,
     render_summary_html,
 )
+
 import boto3
 from spellchecker import SpellChecker
 from backend.database.crud import pipeline_embeddings
@@ -65,6 +66,10 @@ import os
 import sqlite3
 from .generate_seats import generate_seats
 from flask_babel import gettext as _
+
+# Bump when the difference-page template changes: it is part of the response
+# represented by the ETag, even though it is not part of the diff payload.
+DIFFERENCE_TEMPLATE_VERSION = 4
 
 bills_bp = Blueprint("bills", __name__, template_folder="../templates")
 DATE_YEAR_MIN = 1900
@@ -292,7 +297,7 @@ def _vote_option_label(option) -> str:
         VoteOption.NO.value: _("En contra"),
         VoteOption.ABSTENCION.value: _("Abstención"),
     }
-    return labels.get(value, _("Otros"))
+    return labels.get(value, _("Otros*"))
 
 
 def _build_vote_summary_counts(vote_event: VoteEvent) -> dict[str, int]:
@@ -458,10 +463,12 @@ def _search_semantic_bills(
 
 
 def _build_bancada_bars(bancada_votes):
+    chart_width = 760
     bar_x = 220
-    bar_max_width = 520
+    chart_right_padding = 72
+    bar_max_width = chart_width - bar_x - chart_right_padding
     label_line_height = 13
-    row_gap = 12
+    row_gap = 6
 
     sorted_rows = sorted(
         bancada_votes.items(),
@@ -472,17 +479,17 @@ def _build_bancada_bars(bancada_votes):
     max_total = max((counts["total"] for _, counts in sorted_rows), default=0)
     width_scale = bar_max_width / max_total if max_total else 0
 
-    # Set the x and y coordinates of the bars for each yes, no, and abstain option in each bancada.
+    # Set the x and y coordinates of the bars for every vote option in each bancada.
     rows = []
-    current_y = 20
+    current_y = 16
     for index, (name, counts) in enumerate(sorted_rows):
         label_lines = _wrap_bancada_label(name)
         label_height = max(label_line_height, len(label_lines) * label_line_height)
-        bar_y = current_y + label_height + 18
+        bar_y = current_y + label_height + 10
 
         segments = []
         offset = 0
-        for key in ("yes", "no", "abstain"):
+        for key in ("yes", "no", "abstain", "others"):
             width = counts[key] * width_scale
             if width <= 0:
                 continue
@@ -503,17 +510,34 @@ def _build_bancada_bars(bancada_votes):
                 "yes": counts["yes"],
                 "no": counts["no"],
                 "abstain": counts["abstain"],
+                "others": counts["others"],
                 "total": counts["total"],
                 "bar_y": bar_y,
                 "bar_x": bar_x,
+                "bar_max_width": bar_max_width,
                 "total_x": bar_x + total_width + 10,
                 "segments": segments,
             }
         )
-        current_y += label_height + 34 + row_gap
+        current_y += label_height + 28 + row_gap
 
-    chart_height = max(10, current_y + 10)
-    return rows, chart_height
+    axis_y = current_y + 4
+    tick_values = []
+    for index in range(5):
+        value = round(max_total * index / 4) if max_total else 0
+        if value not in tick_values:
+            tick_values.append(value)
+
+    axis = {
+        "x": bar_x,
+        "y": axis_y,
+        "width": bar_max_width,
+        "ticks": [
+            {"value": value, "x": bar_x + value * width_scale} for value in tick_values
+        ],
+    }
+    chart_height = max(10, axis_y + 26)
+    return rows, chart_height, axis
 
 
 def _build_vote_bancada_rows(db: Session, vote_event_id: str):
@@ -538,7 +562,7 @@ def _build_vote_bancada_rows(db: Session, vote_event_id: str):
     for bancada_id, bancada_name, option, count in rows:
         bucket = bancada_votes.setdefault(
             bancada_name,
-            {"yes": 0, "no": 0, "abstain": 0, "total": 0},
+            {"yes": 0, "no": 0, "abstain": 0, "others": 0, "total": 0},
         )
         option_key = _vote_option_key(option)
         if option_key in bucket:
@@ -1291,6 +1315,30 @@ def votes(bill_id, vote_event_id):
             )
         )
 
+        vote_document_url = None
+        if vote_step is not None:
+            documents = db.execute(
+                select(RawBillDocument)
+                .where(
+                    RawBillDocument.bill_id == bill_id,
+                    RawBillDocument.step_id == vote_step.step_id,
+                )
+                .order_by(RawBillDocument.file_id)
+            ).scalars()
+            for document in documents:
+                if document.s3_key and settings.AWS_S3_BUCKET_NAME:
+                    vote_document_url = url_for(
+                        "bills.bill_document",
+                        bill_id=bill_id,
+                        step_id=vote_step.step_id,
+                        file_id=document.file_id,
+                    )
+                elif document.url and document.url.startswith(("https://", "http://")):
+                    vote_document_url = document.url
+
+                if vote_document_url:
+                    break
+
         # Generate all the information needed to visualize the vote page
         # (such as each member’s voting status and the coordinates for positioning
         # circles) in Python and send it to the HTML template.
@@ -1306,7 +1354,9 @@ def votes(bill_id, vote_event_id):
             seat_groups,
         )
 
-        bancada_rows, bancada_chart_height = _build_vote_bancada_rows(db, vote_event_id)
+        bancada_rows, bancada_chart_height, bancada_axis = _build_vote_bancada_rows(
+            db, vote_event_id
+        )
 
         bill_status = _("No aprobado")
         if bill.bill_approved:
@@ -1327,10 +1377,12 @@ def votes(bill_id, vote_event_id):
             vote_step=vote_step,
             vote_date=vote_date,
             organization_name=organization_name,
+            vote_document_url=vote_document_url,
             vote_counts=vote_counts,
             seats=seats,
             bancada_rows=bancada_rows,
             bancada_chart_height=bancada_chart_height,
+            bancada_axis=bancada_axis,
             bill_is_approved=bill.bill_approved,
             bill_status=bill_status,
             presentation_date=presentation_date,
@@ -1446,7 +1498,7 @@ def bill_difference(bill_id, step_id):
         locale = session.get("lang") or request.args.get("lang") or "en"
         etag = (
             f"bd-{bill_id}-{step_id}-{locale}-{difference_type}-{content_hash}"
-            f"-r{RENDERER_VERSION}"
+            f"-r{RENDERER_VERSION}-t{DIFFERENCE_TEMPLATE_VERSION}"
         )
 
         if request.if_none_match.contains(etag):

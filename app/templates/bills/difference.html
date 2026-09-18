@@ -6,6 +6,13 @@
     <div class="bill-content">
       <div class="bill-topline">
         <a class="bill-code diff-bill-link" href="{{ url_for('bills.bill_detail', bill_id=bill.id) }}">{{ _('Proyecto de ley') }} Nº {{ bill.pley_id }}</a>
+        <span class="ai-feature-tag">
+          <svg class="ai-feature-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M12 1.5c.95 5.8 3.7 8.55 9.5 9.5-5.8.95-8.55 3.7-9.5 9.5C11.05 14.7 8.3 11.95 2.5 11 8.3 10.05 11.05 7.3 12 1.5Z" />
+            <path d="M19.25 15.25c.35 2.15 1.35 3.15 3.5 3.5-2.15.35-3.15 1.35-3.5 3.5-.35-2.15-1.35-3.15-3.5-3.5 2.15-.35 3.15-1.35 3.5-3.5Z" />
+          </svg>
+          <span>{{ _('Funcionalidad IA') }}</span>
+        </span>
       </div>
 
       <h1 class="bill-heading">
@@ -15,6 +22,7 @@
       <div class="bill-heading-meta">
         <span><strong>{{_('Paso')}}:</strong> {{ step.step_type.value }}</span>
       </div>
+      <p class="ai-feature-note"><strong>{{ _('Nota') }}:</strong> {{ _('Esta funcionalidad usa modelos de Inteligencia Artificial y puede cometer errores. Instamos a verificar la información importante con la documentación oficial.') }}</p>
     </div>
   </section>
 </div>
@@ -47,7 +55,7 @@
 
   {% if summary_html %}{{ summary_html | safe }}{% endif %}
 
-  <section class="diff-panel">
+  <section class="diff-panel diff-panel-desktop">
     <div class="diff-panel-header">
       <div class="diff-col-header">
         <div class="diff-col-title-row">
@@ -78,6 +86,39 @@
         {% else %}<p class="diff-unavailable">{{ _('No hay texto disponible') }}</p>{% endif %}
       </div>
     </div>
+  </section>
+
+  <section class="diff-panel diff-panel-mobile">
+    <article class="diff-mobile-version">
+      <div class="diff-col-header">
+        <div class="diff-col-title-row">
+          {% if old_doc_available %}
+            <a class="diff-doc-link" href="{{ old_doc_url }}" target="_blank" rel="noopener">{{ _('Documento') }}</a>
+          {% endif %}
+          <span class="diff-col-title">{{ _('Versión 1') }}: {{ prev_step.step_type.value if prev_step else '—' }}</span>
+        </div>
+        <span class="diff-col-date">{{ prev_step.step_date if prev_step else '—' }}</span>
+      </div>
+      <div class="diff-panel-col diff-panel-col-old">
+        {% if old_diff_html %}{{ old_diff_html | safe }}
+        {% else %}<p class="diff-unavailable">{{ _('No hay texto disponible') }}</p>{% endif %}
+      </div>
+    </article>
+    <article class="diff-mobile-version">
+      <div class="diff-col-header">
+        <div class="diff-col-title-row">
+          {% if new_doc_available %}
+            <a class="diff-doc-link" href="{{ new_doc_url }}" target="_blank" rel="noopener">{{ _('Documento') }}</a>
+          {% endif %}
+          <span class="diff-col-title">{{ _('Versión 2') }}: {{ step.step_type.value }}</span>
+        </div>
+        <span class="diff-col-date">{{ step.step_date }}</span>
+      </div>
+      <div class="diff-panel-col diff-panel-col-new">
+        {% if new_diff_html %}{{ new_diff_html | safe }}
+        {% else %}<p class="diff-unavailable">{{ _('No hay texto disponible') }}</p>{% endif %}
+      </div>
+    </article>
   </section>
 
 {% else %}

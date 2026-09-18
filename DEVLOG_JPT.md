@@ -85,6 +85,40 @@
 - `git diff --check` reported no whitespace errors for the changed files (only existing line-ending warnings).
 - Targeted `pytest` execution for Congress search did not emit a result and remained blocked, so it was stopped. It must be rerun in a healthy test environment before treating the new regression test as passed.
 
+
+## 2026-09-18
+
+### Vista de resultados de votación
+
+- Reorganizada `/bills/<bill_id>/votes/<vote_event_id>` en dos columnas: a la izquierda el resumen de votos y el hemiciclo; a la derecha el gráfico apilado por bancada. La tabla de resultados individuales queda debajo de ambos paneles.
+- Reemplazado el resumen único por cuatro tarjetas compactas para A favor, En contra, Abstención y Otros, con colores semánticos de la paleta actual.
+- El hemiciclo, la leyenda y el gráfico por bancada usan clases CSS semánticas (`yes`, `no`, `abstain`, `others`); el backend entrega claves de voto y no colores de presentación.
+- El gráfico por bancada incorpora ejes, marcas, segmentos apilados para “Otros”, altura acotada y desplazamiento vertical para las bancadas que no entren en el panel.
+- La tabla “Resultados por congresista” adoptó la estética de las tablas de búsqueda, filtros/ordenamiento y comportamiento móvil. La etiqueta visible de voto usa color uniforme.
+- Se añadió el botón Documento en el encabezado de votación. Resuelve primero un documento del step de votación y reutiliza la lógica de descarga/fallback existente para los PDF.
+- El encabezado de votación fue compactado: código, estado, documento y metadatos se acomodan de forma responsiva; se añadió una nota de limitación de IA debajo de los metadatos.
+
+### Diferencias y funcionalidades de IA
+
+- El identificador del proyecto en `/difference` enlaza al detalle del proyecto.
+- Se añadió el tag visual “Funcionalidad IA” con icono de destello en votos y diferencias. La explicación de limitaciones se muestra como nota textual, no dentro del tag.
+- En `/difference`, la nota queda debajo de Paso con el mismo formato usado en votos.
+- El ETag de diferencias ahora incluye una versión de template, para evitar que el navegador conserve HTML anterior después de cambios visuales.
+- Corregido el orden móvil de comparación: Versión 1 con su contenido se muestra completa antes de Versión 2 y su contenido.
+
+### Línea de tiempo y responsive
+
+- El botón “Ver cambios” de la línea de tiempo usa `--flirt` exclusivamente; los botones de descarga mantienen `--hero-color`.
+- Añadida una leyenda debajo de “Línea de tiempo” para identificar Descarga de documentos y Funcionalidad IA. El tooltip de IA se limita y ajusta en pantallas angostas.
+- Los tags de tema de las fichas de proyecto ahora usan un contenedor flexible con salto de línea para no superponerse ni desbordar en móvil.
+
+### Validación
+
+- `python -m py_compile app/routes/bills.py` y el parseo Jinja de las plantillas modificadas se completaron correctamente.
+- La prueba aislada de generación de seats pasó: `1 passed, 1 deselected`.
+- `git diff --check` no reportó errores de espacios; mantiene advertencias de fin de línea existentes.
+
+
 ## backlog or riew
  - Top news of last scrapping view
  - Add a real email
@@ -92,4 +126,9 @@
  - make a review of UX (specially in mobile version)
  - its pendant to recognize what kind of documention is for each one each step (we can look the ViT of DSC project )
  - Create a new difference between version view, so we can compare freely betrween diferent documents (for this we need to see what is the flag for the version). Ask cesar how this is made, and probably would be realted to previous bullet. This might open another feature in the pipeline of the database
+ -Cambiar textos y que sea bilingua
+ -Agrega funciones de IA (listo)
+ -Hacer revision de como funciona el buscador sem'antico
+ - Incluir una nueva fuente de busqueda que diga, opciones powered by AI y resaltarla
+ puede ir dentro de b;usqueda avanzada.
 
