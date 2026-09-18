@@ -22,7 +22,7 @@ RUN apt-get update \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 
 COPY pyproject.toml uv.lock /app/
-RUN uv sync --locked --no-dev \
+RUN uv sync --locked --no-dev --all-extras \
     && uv run playwright install --with-deps chromium
 
 COPY backend /app/backend
