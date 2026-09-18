@@ -228,7 +228,7 @@ def test_vote_page_uses_real_vote_data(client, session_factory):
     body = client.get("/bills/2021_0001/votes/VE-1").get_data(as_text=True)
 
     assert "Bill with votes" in body
-    assert "Fecha de votacion:" in body
+    assert "Fecha de votación:" in body
     assert "15-01-2024" in body
     assert "Organización:" in body
     assert "Comisión de Economía" in body
