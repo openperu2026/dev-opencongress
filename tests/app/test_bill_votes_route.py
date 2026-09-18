@@ -228,7 +228,7 @@ def test_vote_page_uses_real_vote_data(client, session_factory):
     body = client.get("/bills/2021_0001/votes/VE-1").get_data(as_text=True)
 
     assert "Bill with votes" in body
-    assert "Fecha de votacion:" in body
+    assert "Fecha de votación:" in body
     assert "15-01-2024" in body
     assert "Organización:" in body
     assert "Comisión de Economía" in body
@@ -253,8 +253,8 @@ def test_generate_seats_adds_gray_others_without_labels():
     )
 
     assert len(seats) == 130
-    assert sum(1 for seat in seats if seat["color"] == "#b8b8b8") == 122
+    assert sum(1 for seat in seats if seat["vote_key"] == "others") == 122
     assert any(seat["label"] == "A" for seat in seats)
     assert any(seat["label"] == "B" for seat in seats)
     assert any(seat["label"] == "C" for seat in seats)
-    assert all(seat["label"] == "" for seat in seats if seat["color"] == "#b8b8b8")
+    assert all(seat["label"] == "" for seat in seats if seat["vote_key"] == "others")

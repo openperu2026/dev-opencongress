@@ -58,6 +58,18 @@
   </div>
   <div class="timeline-shell">
     <h2 class="timeline-heading">{{ _('Línea de tiempo') }}</h2>
+    <div class="timeline-actions-legend" aria-label="{{ _('Leyenda de acciones') }}">
+      <span class="timeline-legend-label">{{ _('Leyenda') }}:</span>
+      <span class="timeline-legend-button timeline-legend-download">{{ _('Descarga de documentos') }}</span>
+      <span class="timeline-legend-button timeline-legend-ai" tabindex="0" aria-describedby="timeline-ai-legend-help">
+        <svg class="timeline-legend-ai-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path d="M12 1.5c.95 5.8 3.7 8.55 9.5 9.5-5.8.95-8.55 3.7-9.5 9.5C11.05 14.7 8.3 11.95 2.5 11 8.3 10.05 11.05 7.3 12 1.5Z" />
+          <path d="M19.25 15.25c.35 2.15 1.35 3.15 3.5 3.5-2.15.35-3.15 1.35-3.5 3.5-.35-2.15-1.35-3.15-3.5-3.5 2.15-.35 3.15-1.35 3.5-3.5Z" />
+        </svg>
+        {{ _('Funcionalidad IA') }}
+        <span class="timeline-ai-legend-tooltip" id="timeline-ai-legend-help" role="tooltip">{{ _('Estas funcionalidades usan modelos de Inteligencia Artificial y puede cometer errores. Instamos a verificar la información importante con la documentación oficial.') }}</span>
+      </span>
+    </div>
     <div class="timeline-container">
       <div class="timeline">
         {% if all_steps %}
@@ -75,7 +87,7 @@
                   -->
                 {% endif %}
                 {% if step.step_id in view_change_step_ids %}
-                  <a href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('Ver cambios')}}</a>
+                  <a class="timeline-view-changes" href="{{ url_for('bills.bill_difference', bill_id=bill.id, step_id=step.step_id) }}">{{_('Ver cambios')}}</a>
                 {% endif %}
                 {% for document_url in documents_by_step.get(step.step_id, []) %}
                   <a href="{{ document_url }}" target="_blank" rel="noopener" download>{{ _('Descargar PDF') }}{% if loop.length > 1 %} {{ loop.index }}{% endif %}</a>
