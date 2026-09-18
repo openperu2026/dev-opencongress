@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block body_class %}bill-detail-page{% endblock %}
+
 {% block content %}
 
 <div class="page-details">
@@ -55,6 +57,7 @@
     </div>
   </div>
   <div class="timeline-shell">
+    <h2 class="timeline-heading">{{ _('Línea de tiempo') }}</h2>
     <div class="timeline-container">
       <div class="timeline">
         {% if all_steps %}

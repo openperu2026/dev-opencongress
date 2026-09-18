@@ -1016,6 +1016,25 @@ def test_chamber_filter_isolates_senado_and_diputados(client, session_factory):
     assert "Diputados Bill" in both_body
 
 
+def test_main_search_post_preserves_selected_chamber(client, session_factory):
+    _seed_bicameral_bills(session_factory)
+
+    response = client.post(
+        "/bills",
+        data={
+            "title_q": "Bill",
+            "chamber_q": "senado",
+            "leg_period_q": "2026-2031",
+        },
+    )
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert "Senado Bill" in body
+    assert "Diputados Bill" not in body
+    assert 'name="chamber_q" value="senado"' in body
+
+
 def test_recent_bills_are_scoped_by_period(client, session_factory):
     _seed_bicameral_bills(session_factory)
 
@@ -1030,6 +1049,23 @@ def test_recent_bills_are_scoped_by_period(client, session_factory):
     assert "Legacy Bill" in legacy_body
     assert "Senado Bill" not in legacy_body
     assert "Diputados Bill" not in legacy_body
+
+
+def test_legacy_period_clears_carried_over_chamber_filter(client, session_factory):
+    _seed_bicameral_bills(session_factory)
+
+    body = client.post(
+        "/bills",
+        data={
+            "title_q": "Bill",
+            "leg_period_q": "2021-2026",
+            "chamber_q": "diputados",
+        },
+    ).get_data(as_text=True)
+
+    assert "Legacy Bill" in body
+    assert "Diputados Bill" not in body
+    assert 'name="chamber_q" value=""' in body
 
 
 def test_committee_filter_is_period_gated_regression(client, session_factory):

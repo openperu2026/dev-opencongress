@@ -49,13 +49,7 @@
                 </select>
             </div>
 
-            <button type="submit" class="search-icon-button" aria-label="{{ _('Buscar') }}">
-                <i class="fa-solid fa-magnifying-glass"></i>
-            </button>
 
-            <a href="{{ url_for('bills.index') }}" class="clear-button bill-clean-button">
-                {{ _('Limpiar') }}
-            </a>
         </div>
 
         <details class="advanced-search" {% if pley_id_q or bill_id_q or law_id_q or current_step_q or author_party_q or special_committee_q or bill_diff_q or presentation_date_from_provided or presentation_date_to_provided or radio_status != "all" %}open{% endif %}>
@@ -235,22 +229,21 @@
                     <input type="radio" name="status" value="not-approved" {% if radio_status == "not-approved" %}checked{% endif %}>{{_('Proyectos de ley no aprobados')}}
                 </label>
            
-                <button type="submit" class="search-icon-button" aria-label="{{ _('Buscar') }}">
-                    <i class="fa-solid fa-magnifying-glass"></i>
-                </button>
-
-                <a href="{{ url_for('bills.index') }}" class="clear-button bill-clean-button">
-                    {{ _('Limpiar') }}
-                </a>           
             </div>
 
         </details>
 
-       
+        <div class="search-actions">
+            <button type="submit" class="search-icon-button">
+                {{ _('Buscar') }}
+            </button>
+            <a href="{{ url_for('bills.index') }}" class="clear-button bill-clean-button">
+                {{ _('Limpiar') }}
+            </a>
+        </div>
     </div>
     </form>
 </div>
-
 
 {% if recent_bills and not search_requested %}
     <div class="search-results-summary recent-bills-heading">

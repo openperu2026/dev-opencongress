@@ -1,5 +1,7 @@
 {% extends "base.html" %}
 
+{% block body_class %}landing-page{% endblock %}
+
 {% block content %}
 
 <div class="hero">
@@ -14,7 +16,7 @@
 
         <div class="menu-landing">
             {% for item in menu_items %}
-                <div class="menu-card">
+                <div class="hero-buttom">
                     <a href="{{ item.url }}">
                         {{ item.name }}
                     </a>
@@ -24,10 +26,10 @@
     </div>
 
     <div class="hero-container">
-        <img class="landing-logo" src="{{ url_for('static', filename='images/Imagotipo.svg') }}" alt="{{ _('Logo de Open Congress') }}">
-        <p class="page-subtitle">
+        <div class="landing-logo" role="img" aria-label="{{ _('Logo de Open Congress') }}"></div>
+        <!--<p class="page-subtitle">
             {{ _('Transparencia y rendición de cuentas para una democracia más fuerte') }}
-        </p>
+        </p>-->
     </div>
 </div>
 
@@ -43,7 +45,7 @@
 
         <div class="about-steps">
             <article class="about-step">
-                <span class="about-step-number">1</span>
+                
                 <h3>{{ _('Busca un proyecto de ley') }}</h3>
                 <p>
                     {{ _('Encuentra proyectos por título, autor, comisión, fecha, estado o si tienen diferencias entre versiones.') }}
@@ -51,7 +53,6 @@
             </article>
 
             <article class="about-step">
-                <span class="about-step-number">2</span>
                 <h3>{{ _('Revisa su recorrido') }}</h3>
                 <p>
                     {{ _('Abre un proyecto para ver su línea de tiempo: presentación, revisión en comisiones, votaciones, decisiones de archivo, aprobación y revisiones de texto.') }}
@@ -59,7 +60,7 @@
             </article>
 
             <article class="about-step">
-                <span class="about-step-number">3</span>
+               
                 <h3>{{ _('Explora quién está detrás') }}</h3>
                 <p>
                     {{ _('Pasa de un proyecto a su autor, partido, membresías en comisiones, proyectos recientes y métricas de aprobación.') }}
@@ -100,6 +101,7 @@
         </p>
     </div>
 </section>
+
 <!--
 <section id="team" class="team-section">
     <div class="team-content">
